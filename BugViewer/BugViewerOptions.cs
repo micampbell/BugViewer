@@ -31,10 +31,10 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoCameraSphereBuffer = 0.2,
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 3.0,
-        ClearColor = "rgb(233,233,255)",
-        LineColor = "rgb(215, 215, 215)",
+        ClearColor = "#f2f2ff",
+        LineColor = "#d2d2d2",
         LineTransparency = 0.8f,
-        BaseColor = "rgb(0, 0, 0)",
+        BaseColor = "#000000",
         BaseTransparency = 0f,
         LineWidthX = 0.1,
         LineWidthY = 0.1,
@@ -695,12 +695,14 @@ public class BugViewerOptions : INotifyPropertyChanged
     };
     internal static IEnumerable<float> ColorToJavaScript(string c, double transparency)
     {
-        c = c.Substring(4);
-        c = c.TrimEnd(')');
-        var cArray = c.Split(',');
-        yield return int.Parse(cArray[0]) / 255f;
-        yield return int.Parse(cArray[1]) / 255f;
-        yield return int.Parse(cArray[2]) / 255f;
+        c = c.Substring(1).Trim().ToLower();
+        byte r = 0, g = 0, b = 0;
+        r = Convert.ToByte(c[0..2], 16);
+        g = Convert.ToByte(c[2..4], 16);
+        b = Convert.ToByte(c[4..6], 16);
+        yield return r / 255f;
+        yield return g / 255f;
+        yield return b / 255f;
         yield return (float)transparency;
     }
 }

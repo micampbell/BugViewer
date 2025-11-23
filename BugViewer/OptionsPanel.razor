@@ -1,147 +1,136 @@
-﻿@using System.Drawing
-@using Bit.BlazorUI
+﻿@using Microsoft.FluentUI.AspNetCore.Components
 
 <div class="options-panel-container @(IsExpanded ? "expanded" : "collapsed")">
-	<BitButton OnClick="ToggleExpanded"
-			   Variant="BitVariant.Text"
+	<FluentButton OnClick="ToggleExpanded"
+			   Appearance="Appearance.Stealth"
 			   Class="toggle-btn">
 		@(IsExpanded ? "⚙️ Viewer Settings ▼" : "⚙️")
-	</BitButton>
+	</FluentButton>
 
 	@if (IsExpanded)
 	{
 		<div class="options-content">
-			<BitAccordion Title="Lighting">
-				<!-- Use a single column so the picker can consume the panel width -->
-				<BitGrid Columns="1">
-					<BitGridItem><BitLabel>Clear Color (Sky)</BitLabel></BitGridItem>
-					<BitGridItem>
-						<BitColorPicker Style="width:100%; max-width:100%;"
-										@bind-Color="Options.ClearColor" />
-					</BitGridItem>
-				</BitGrid>
-				<BitSlider Label="Light Polar Angle" @bind-Value="Options.LightPolarAngle" Min="0" Max="3.14" Step="0.01" />
-				<BitSlider Label="Light Azimuthal" @bind-Value="Options.LightAzimuthAngle" Min="1" Max="6.28" Step="0.01" />
-				<BitSlider Label="Ambient Light Factor" @bind-Value="Options.AmbientLight" Min="0" Max="1" Step="0.01" />
-				<BitSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
-			</BitAccordion>
+			<FluentAccordion>
+				<FluentAccordionItem Heading="Lighting">
+					<!-- Use a single column so the picker can consume the panel width -->
+					<FluentStack Orientation="Orientation.Vertical" Style="width:100%;">
+						<label>Clear Color (Sky)</label>
+						<input type="color" style="width:100%; max-width:100%;" @bind="Options.ClearColor" @bind:event="oninput" />
+					</FluentStack>
+					<FluentSlider Label="Light Polar Angle" @bind-Value="Options.LightPolarAngle" Min="0" Max="3.14" Step="0.01" />
+					<FluentSlider Label="Light Azimuthal" @bind-Value="Options.LightAzimuthAngle" Min="1" Max="6.28" Step="0.01" />
+					<FluentSlider Label="Ambient Light Factor" @bind-Value="Options.AmbientLight" Min="0" Max="1" Step="0.01" />
+					<FluentSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
+				</FluentAccordionItem>
+			</FluentAccordion>
 
-			<BitAccordion Title="📐 Grid">
-				<BitStack>
-					<BitSlider Label="Coordinate Thickness" @bind-Value="Options.CoordinateThickness" Min="0" Max="10" Step="0.1" />
-					<BitSlider Label="Grid Size" @bind-Value="Options.GridSize" Min="50" Max="1000" Step="1" />
-					<BitSlider Label="Grid Spacing" @bind-Value="Options.GridSpacing" Min="1" Max="100" Step="0.5" />
-					<BitSlider Label="Line Width X" @bind-Value="Options.LineWidthX" Min="0" Max="1" Step="0.01" />
-					<BitSlider Label="Line Width Y" @bind-Value="Options.LineWidthY" Min="0" Max="1" Step="0.01" />
+			<FluentAccordion>
+				<FluentAccordionItem Heading="📐 Grid">
+					<FluentStack Orientation="Orientation.Vertical">
+						<FluentSlider Label="Coordinate Thickness" @bind-Value="Options.CoordinateThickness" Min="0" Max="10" Step="0.1" />
+						<FluentSlider Label="Grid Size" @bind-Value="Options.GridSize" Min="50" Max="1000" Step="1" />
+						<FluentSlider Label="Grid Spacing" @bind-Value="Options.GridSpacing" Min="1" Max="100" Step="0.5" />
+						<FluentSlider Label="Line Width X" @bind-Value="Options.LineWidthX" Min="0" Max="1" Step="0.01" />
+						<FluentSlider Label="Line Width Y" @bind-Value="Options.LineWidthY" Min="0" Max="1" Step="0.01" />
 
-					<BitLabel>Grid Line Color</BitLabel>
-					<BitColorPicker  Style="width:100%; max-width:100%;"
-									@bind-Color="Options.LineColor"
-									@bind-Alpha="Options.LineTransparency"
-									ShowAlphaSlider="true" />
+						<label>Grid Line Color</label>
+						<input type="color" style="width:100%; max-width:100%;" @bind="Options.LineColor" @bind:event="oninput" />
+						<FluentSlider Label="Line Transparency" @bind-Value="Options.LineTransparency" Min="0" Max="1" Step="0.01" />
 
-					<BitLabel>Grid Base Color</BitLabel>
-					<BitColorPicker Style="width:100%; max-width:100%;"
-									@bind-Color="Options.BaseColor"
-									@bind-Alpha="Options.BaseTransparency"
-									ShowAlphaSlider="true" />
-				</BitStack>
-			</BitAccordion>
+						<label>Grid Base Color</label>
+						<input type="color" style="width:100%; max-width:100%;" @bind="Options.BaseColor" @bind:event="oninput" />
+						<FluentSlider Label="Base Transparency" @bind-Value="Options.BaseTransparency" Min="0" Max="1" Step="0.01" />
+					</FluentStack>
+				</FluentAccordionItem>
+			</FluentAccordion>
 
-			<BitAccordion Title="📷 Camera">
-				<BitStack>
-					<BitToggle Label="Which Coordinate is Up?" OnText="Z is Up" OffText="Y is Up" @bind-Value="Options.ZIsUp" />
-					<BitToggle Label="Is View Projectsion or Orthographic?" OnText="Projection" OffText="Orthographic" @bind-Value="Options.IsProjectionCamera" />
+			<FluentAccordion>
+				<FluentAccordionItem Heading="📷 Camera">
+					<FluentStack Orientation="Orientation.Vertical">
+						<FluentSwitch Label="Which Coordinate is Up?" CheckedMessage="Z is Up" UncheckedMessage="Y is Up" @bind-Value="Options.ZIsUp" />
+						<FluentSwitch Label="Is View Projectsion or Orthographic?" CheckedMessage="Projection" UncheckedMessage="Orthographic" @bind-Value="Options.IsProjectionCamera" />
 
-					@if (Options.IsProjectionCamera)
-					{
-						<BitSlider Label="Field of View" @bind-Value="Options.Fov" Min="1" Max="179" Step="0.5" />
-						<BitText Variant="BitTextVariant.Caption" Color="BitColor.SecondaryForeground">
-							Controls perspective distortion
-						</BitText>
-					}
-					else
-					{
-						<BitLabel>Orthographic Size: @Options.OrthoSize.ToString("F2")</BitLabel>
-						<BitSlider @bind-Value="Options.OrthoSize" Min="1" Max="999" Step="0.5" />
-						<BitText Variant="BitTextVariant.Caption" Color="BitColor.SecondaryForeground">
-							Half-height of visible area
-						</BitText>
-					}
+						@if (Options.IsProjectionCamera)
+						{
+							<FluentSlider Label="Field of View" @bind-Value="Options.Fov" Min="1" Max="179" Step="0.5" />
+							<FluentLabel>Controls perspective distortion</FluentLabel>
+						}
+						else
+						{
+							<FluentLabel>Orthographic Size: @Options.OrthoSize.ToString("F2")</FluentLabel>
+							<FluentSlider @bind-Value="Options.OrthoSize" Min="1" Max="999" Step="0.5" />
+							<FluentLabel>Half-height of visible area</FluentLabel>
+						}
 
-					<BitLabel>Near Clipping Plane: @Options.ZNear.ToString("F5")</BitLabel>
-					<BitSlider @bind-Value="Options.ZNear" Min="0.00001" Max="1" Step="0.001" />
+						<FluentLabel>Near Clipping Plane: @Options.ZNear.ToString("F5")</FluentLabel>
+						<FluentSlider @bind-Value="Options.ZNear" Min="0.00001" Max="1" Step="0.001" />
 
-					<BitLabel>Far Clipping Plane: @Options.ZFar.ToString("F0")</BitLabel>
-					<BitSlider @bind-Value="Options.ZFar" Min="10" Max="9999" Step="1" />
+						<FluentLabel>Far Clipping Plane: @Options.ZFar.ToString("F0")</FluentLabel>
+						<FluentSlider @bind-Value="Options.ZFar" Min="10" Max="9999" Step="1" />
 
-					<!-- Camera Controls Section -->
-					<BitText Variant="BitTextVariant.H6">Orbit Constraints</BitText>
-					<BitCheckbox @bind-Value="Options.ConstrainPolar" Label="Constrain Polar Angle" />
+						<FluentLabel Typo="Typography.H6">Orbit Constraints</FluentLabel>
+						<FluentCheckbox @bind-Value="Options.ConstrainPolar" Label="Constrain Polar Angle" />
 
-					@if (Options.ConstrainPolar)
-					{
-						<BitLabel>Max Polar Angle: @((Options.MaxPolar * 180 / Math.PI).ToString("F0"))°</BitLabel>
-						<BitSlider @bind-Value="Options.MaxPolar" Min="0" Max="@(Math.PI * 0.5)" Step="0.01" />
-						<BitLabel>Min Polar Angle: @((Options.MinPolar * 180 / Math.PI).ToString("F0"))°</BitLabel>
-						<BitSlider @bind-Value="Options.MinPolar" Min="@(-Math.PI * 0.5)" Max="0" Step="0.01" />
-					}
+						@if (Options.ConstrainPolar)
+						{
+							<FluentLabel>Max Polar Angle: @((Options.MaxPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+							<FluentSlider @bind-Value="Options.MaxPolar" Min="0" Max="@(Math.PI * 0.5)" Step="0.01" />
+							<FluentLabel>Min Polar Angle: @((Options.MinPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+							<FluentSlider @bind-Value="Options.MinPolar" Min="@(-Math.PI * 0.5)" Max="0" Step="0.01" />
+						}
 
-					<BitCheckbox @bind-Value="Options.ConstrainAzimuth" Label="Constrain Azimuth Angle" />
+						<FluentCheckbox @bind-Value="Options.ConstrainAzimuth" Label="Constrain Azimuth Angle" />
 
-					@if (Options.ConstrainAzimuth)
-					{
-						<BitLabel>Max Azimuth Angle: @((Options.MaxAzimuth * 180 / Math.PI).ToString("F0"))°</BitLabel>
-						<BitSlider @bind-Value="Options.MaxAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
-						<BitLabel>Min Azimuth Angle: @((Options.MinAzimuth * 180 / Math.PI).ToString("F0"))°</BitLabel>
-						<BitSlider @bind-Value="Options.MinAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
-					}
+						@if (Options.ConstrainAzimuth)
+						{
+							<FluentLabel>Max Azimuth Angle: @((Options.MaxAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+							<FluentSlider @bind-Value="Options.MaxAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
+							<FluentLabel>Min Azimuth Angle: @((Options.MinAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+							<FluentSlider @bind-Value="Options.MinAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
+						}
 
-					<!-- Distance Constraints -->
-					<BitText Variant="BitTextVariant.H6">Distance Constraints</BitText>
-					<BitCheckbox @bind-Value="Options.ConstrainDistance" Label="Constrain Distance" />
+						<FluentLabel Typo="Typography.H6">Distance Constraints</FluentLabel>
+						<FluentCheckbox @bind-Value="Options.ConstrainDistance" Label="Constrain Distance" />
 
-					@if (Options.ConstrainDistance)
-					{
-						<BitLabel>Max Distance: @Options.MaxDistance.ToString("F1")</BitLabel>
-						<BitSlider @bind-Value="Options.MaxDistance" Min="1" Max="1000" Step="0.5" />
-						<BitLabel>Min Distance: @Options.MinDistance.ToString("F2")</BitLabel>
-						<BitSlider @bind-Value="Options.MinDistance" Min="0.1" Max="10" Step="0.1" />
-					}
+						@if (Options.ConstrainDistance)
+						{
+							<FluentLabel>Max Distance: @Options.MaxDistance.ToString("F1")</FluentLabel>
+							<FluentSlider @bind-Value="Options.MaxDistance" Min="1" Max="1000" Step="0.5" />
+							<FluentLabel>Min Distance: @Options.MinDistance.ToString("F2")</FluentLabel>
+							<FluentSlider @bind-Value="Options.MinDistance" Min="0.1" Max="10" Step="0.1" />
+						}
 
-					<!-- Sensitivity Settings -->
-					<BitText Variant="BitTextVariant.H6">Sensitivity Settings</BitText>
-					<BitLabel>Orbit Sensitivity: @Options.OrbitSensitivity.ToString("F5")</BitLabel>
-					<BitSlider @bind-Value="Options.OrbitSensitivity" Min="0.001" Max="0.1" Step="0.001" />
-					<BitLabel>Zoom Sensitivity: @Options.ZoomSensitivity.ToString("F5")</BitLabel>
-					<BitSlider @bind-Value="Options.ZoomSensitivity" Min="0.0001" Max="0.01" Step="0.0001" />
-					<BitLabel>Pan Sensitivity: @Options.PanSensitivity.ToString("F5")</BitLabel>
-					<BitSlider @bind-Value="Options.PanSensitivity" Min="0.0001" Max="0.01" Step="0.001" />
-					<BitLabel>Pan Speed Multiplier (Shift): @Options.PanSpeedMultiplier.ToString("F1")</BitLabel>
-					<BitSlider @bind-Value="Options.PanSpeedMultiplier" Min="1" Max="10" Step="0.5" />
-				</BitStack>
-			</BitAccordion>
+						<FluentLabel Typo="Typography.H6">Sensitivity Settings</FluentLabel>
+						<FluentLabel>Orbit Sensitivity: @Options.OrbitSensitivity.ToString("F5")</FluentLabel>
+						<FluentSlider @bind-Value="Options.OrbitSensitivity" Min="0.001" Max="0.1" Step="0.001" />
+						<FluentLabel>Zoom Sensitivity: @Options.ZoomSensitivity.ToString("F5")</FluentLabel>
+						<FluentSlider @bind-Value="Options.ZoomSensitivity" Min="0.0001" Max="0.01" Step="0.0001" />
+						<FluentLabel>Pan Sensitivity: @Options.PanSensitivity.ToString("F5")</FluentLabel>
+						<FluentSlider @bind-Value="Options.PanSensitivity" Min="0.0001" Max="0.01" Step="0.001" />
+						<FluentLabel>Pan Speed Multiplier (Shift): @Options.PanSpeedMultiplier.ToString("F1")</FluentLabel>
+						<FluentSlider @bind-Value="Options.PanSpeedMultiplier" Min="1" Max="10" Step="0.5" />
+					</FluentStack>
+				</FluentAccordionItem>
+			</FluentAccordion>
 
-			<!-- Rendering Section -->
-			<BitAccordion Title="🎬 Rendering">
-				<BitStack>
-					<BitLabel>MSAA Sample Count</BitLabel>
-					<BitDropdown @bind-Value="Options.SampleCount" Items="_sampleCountItems" Placeholder="Select sample count" />
-					<BitText Variant="BitTextVariant.Caption" Color="BitColor.Warning">⚠️ Requires page refresh to take effect</BitText>
+			<FluentAccordion>
+				<FluentAccordionItem Heading="🎬 Rendering">
+					<FluentStack Orientation="Orientation.Vertical">
+						<FluentSelect @bind-Value="@SampleCountString" Label="MSAA Sample Count" Items="_sampleCountItems" />
+						<FluentLabel>⚠️ Requires page refresh to take effect</FluentLabel>
 
-					@if (_showMsaaRefreshPrompt)
-					{
-						<div class="refresh-prompt">
-							<BitText Variant="BitTextVariant.Body1" Color="BitColor.Warning">MSAA setting changed</BitText>
-							<BitButton OnClick="RefreshPage" Color="BitColor.Warning" Variant="BitVariant.Fill" Class="refresh-btn">
-								Refresh Page Now
-							</BitButton>
-						</div>
-					}
+						@if (_showMsaaRefreshPrompt)
+						{
+							<div class="refresh-prompt">
+								<FluentLabel Typo="Typography.Body">MSAA setting changed</FluentLabel>
+								<FluentButton OnClick="RefreshPage" Appearance="Appearance.Accent" Class="refresh-btn">Refresh Page Now</FluentButton>
+							</div>
+						}
 
-					<BitButton OnClick="ResetToDefaults" Variant="BitVariant.Outline" FullWidth="true">Reset to Defaults</BitButton>
-				</BitStack>
-			</BitAccordion>
+						<FluentButton OnClick="ResetToDefaults" Appearance="Appearance.Outline" Style="width: 100%;">Reset to Defaults</FluentButton>
+					</FluentStack>
+				</FluentAccordionItem>
+			</FluentAccordion>
 		</div>
 	}
 </div>
@@ -206,49 +195,15 @@
 
 @code {
 	[Parameter] public BugViewerOptions Options { get; set; }
-
 	[Parameter] public bool IsExpanded { get; set; } = true;
-
 	[Parameter] public EventCallback<bool> IsExpandedChanged { get; set; }
-
 	[Inject] private NavigationManager Navigation { get; set; } = default!;
-
 	private bool _showMsaaRefreshPrompt = false;
-
-	private List<BitDropdownItem<int>> _sampleCountItems = new()
-	{
-		new() { Value = 1, Text = "1x - No anti-aliasing (fastest)" },
-		new() { Value = 2, Text = "2x - Slight smoothing" },
-		new() { Value = 4, Text = "4x - Smooth (recommended)" },
-		new() { Value = 8, Text = "8x - Very smooth (slower)" }
-	};
-
-	protected override void OnInitialized()
-	{
-		base.OnInitialized();
-		Options.PropertyChanged += OnOptionsPropertyChanged;
-	}
-
-	private void OnOptionsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-	{
-		if (e.PropertyName == nameof(BugViewerOptions.SampleCount))
-		{
-			_showMsaaRefreshPrompt = true;
-			StateHasChanged();
-		}
-	}
-
-	private async Task ToggleExpanded()
-	{
-		IsExpanded = !IsExpanded;
-		await IsExpandedChanged.InvokeAsync(IsExpanded);
-	}
-
-	private void RefreshPage() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
-
-	private void ResetToDefaults()
-	{
-		Options.ResetToDefault();
-		_showMsaaRefreshPrompt = false;
-	}
+	private string SampleCountString { get => Options.SampleCount.ToString(); set { if (int.TryParse(value, out var v)) Options.SampleCount = v; } }
+	private List<Option<string>> _sampleCountItems = new() { new() { Value = "1", Text = "1x - No anti-aliasing (fastest)" }, new() { Value = "2", Text = "2x - Slight smoothing" }, new() { Value = "4", Text = "4x - Smooth (recommended)" }, new() { Value = "8", Text = "8x - Very smooth (slower)" } };
+	protected override void OnInitialized() { Options.PropertyChanged += OnOptionsPropertyChanged; }
+	private void OnOptionsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (e.PropertyName == nameof(BugViewerOptions.SampleCount)) { _showMsaaRefreshPrompt = true; StateHasChanged(); } }
+	private async Task ToggleExpanded() { IsExpanded = !IsExpanded; await IsExpandedChanged.InvokeAsync(IsExpanded); }
+	private void RefreshPage() => Navigation.NavigateTo(Navigation.Uri, true);
+	private void ResetToDefaults() { Options.ResetToDefault(); _showMsaaRefreshPrompt = false; }
 }

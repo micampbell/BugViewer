@@ -6,38 +6,38 @@
 <PageTitle>Home</PageTitle>
 
 <button class="add-cube-button" @onclick="AddCube">
-	➕ Add Cube
+    ➕ Add Cube
 </button>
 <button class="add-wire-button" @onclick="AddWire">
-	➕ Add Wire
+    ➕ Add Wire
 </button>
 <BugViewer @ref="viewer" />
 
 
 
 @code {
-	private BugViewer? viewer;
+    private BugViewer? viewer;
 
-	private async Task AddCube(MouseEventArgs args)
-	{
-		// Random Center and size for variety
-		var random = Random.Shared;
-		var size = (float)(random.NextDouble() * 2 + 1); // 1-3 units
-		var x = (float)(random.NextDouble() * 10 - 5); // -5 to +5
-		var z = (float)(random.NextDouble() * 10 - 5); // -5 to +5
-		var y = size / 2; // Sit on the grid
+    private async Task AddCube(MouseEventArgs args)
+    {
+        // Random Center and size for variety
+        var random = Random.Shared;
+        var size = (float)(random.NextDouble() * 2 + 1); // 1-3 units
+        var x = (float)(random.NextDouble() * 10 - 5); // -5 to +5
+        var z = (float)(random.NextDouble() * 10 - 5); // -5 to +5
+        var y = size / 2; // Sit on the grid
 
-		// The CreateCube method now includes a rainbow color array
-		var minX = x - size / 2;
-		var minY = y - size / 2;
-		var minZ = z - size / 2; // min
-		var maxX = x + size / 2;
-		var maxY = y + size / 2;
-		var maxZ = z + size / 2;  // max
+        // The CreateCube method now includes a rainbow color array
+        var minX = x - size / 2;
+        var minY = y - size / 2;
+        var minZ = z - size / 2; // min
+        var maxX = x + size / 2;
+        var maxY = y + size / 2;
+        var maxZ = z + size / 2;  // max
 
-		// 24 vertices (4 per face × 6 faces) for independent per-face geometry
-		var vertices = new Vector3[]
-		{
+        // 24 vertices (4 per face × 6 faces) for independent per-face geometry
+        var vertices = new Vector3[]
+        {
             // Bottom faces (4 vertices)
             new Vector3(minX, minY, minZ),  // 0
             new Vector3(maxX, minY, minZ),  // 1
@@ -51,9 +51,9 @@
             new Vector3(maxX, maxY, maxZ),  // 7
         };
 
-		// 12 triangles (2 per face × 6 faces) = 36 indices
-		var indices = new (int a, int b, int c)[]
-		{
+        // 12 triangles (2 per face × 6 faces) = 36 indices
+        var indices = new (int a, int b, int c)[]
+        {
             // Bottom faces (minz faces)
            ( 0, 3,1),  (0,2,3),
 
@@ -71,72 +71,72 @@
 
             // Right face (maxx)
             (1,3,5),  (5,3,7)
-		};
-
-		// 12 colors (one per triangle) - matches indices.Length / 3
-		// Each triangle gets its own solid color for engineering visualization
-		var colors = new Color[]
-		{
-            // Front face triangles (2 triangles)
-            Color.FromArgb(111,255, 0, 0),    // Triangle 0 - Bright Red
-            Color.FromArgb(111,200, 0, 0),    // Triangle 1 - Dark Red
-
-            // Back face triangles (2 triangles)
-            Color.FromArgb(111,0, 255, 0),    // Triangle 2 - Bright Green
-            Color.FromArgb(111,0, 200, 0),    // Triangle 3 - Dark Green
-
-            // Bottom face triangles (2 triangles)
-            Color.FromArgb(111,0, 0, 255),    // Triangle 4 - Bright Blue
-            Color.FromArgb(111,0, 0, 200),    // Triangle 5 - Dark Blue
-
-            // Top face triangles (2 triangles)
-            Color.FromArgb(111,255, 255, 0),    // Triangle 6 - Bright Yellow
-            Color.FromArgb(111,200, 200, 0),    // Triangle 7 - Dark Yellow
-
-            // Left face triangles (2 triangles)
-            Color.FromArgb(111,0, 255, 255),    // Triangle 8 - Bright Cyan
-            Color.FromArgb(111,0, 200, 200),    // Triangle 9 - Dark Cyan
-
-            // Right face triangles (2 triangles)
-            Color.FromArgb(111,255, 0, 255),    // Triangle 10 - Bright Magenta
-            Color.FromArgb(111,200, 0, 200),    // Triangle 11 - Dark Magenta
         };
 
-		var cube = new MeshData
-		{
-			Id = $"cube-{Guid.NewGuid()}",
-			Vertices = vertices,
-			Indices = indices,
-			Colors = colors,
-			ColorMode = MeshColoring.PerTriangle
-		};
+        // 12 colors (one per triangle) - matches indices.Length / 3
+        // Each triangle gets its own solid color for engineering visualization
+        var colors = new System.Drawing.Color[]
+        {
+            // Front face triangles (2 triangles)
+            System.Drawing.Color.FromArgb(111,255, 0, 0),    // Triangle 0 - Bright Red
+           System.Drawing. Color.FromArgb(111,200, 0, 0),    // Triangle 1 - Dark Red
+
+            // Back face triangles (2 triangles)
+           System.Drawing. Color.FromArgb(111,0, 255, 0),    // Triangle 2 - Bright Green
+           System.Drawing. Color.FromArgb(111,0, 200, 0),    // Triangle 3 - Dark Green
+
+            // Bottom face triangles (2 triangles)
+          System.Drawing.  Color.FromArgb(111,0, 0, 255),    // Triangle 4 - Bright Blue
+           System.Drawing.Color.FromArgb(111,0, 0, 200),    // Triangle 5 - Dark Blue
+
+            // Top face triangles (2 triangles)
+          System.Drawing.  Color.FromArgb(111,255, 255, 0),    // Triangle 6 - Bright Yellow
+          System.Drawing.  Color.FromArgb(111,200, 200, 0),    // Triangle 7 - Dark Yellow
+
+            // Left face triangles (2 triangles)
+           System.Drawing. Color.FromArgb(111,0, 255, 255),    // Triangle 8 - Bright Cyan
+           System.Drawing. Color.FromArgb(111,0, 200, 200),    // Triangle 9 - Dark Cyan
+
+            // Right face triangles (2 triangles)
+           System.Drawing. Color.FromArgb(111,255, 0, 255),    // Triangle 10 - Bright Magenta
+           System.Drawing. Color.FromArgb(111,200, 0, 200),    // Triangle 11 - Dark Magenta
+        };
+
+        var cube = new MeshData
+        {
+            Id = $"cube-{Guid.NewGuid()}",
+            Vertices = vertices,
+            Indices = indices,
+            Colors = colors,
+            ColorMode = MeshColoring.PerTriangle
+        };
 
 
-		// Add to WebGPU scene
-		await viewer.AddMeshAsync(cube);
-	}
+        // Add to WebGPU scene
+        await viewer.AddMeshAsync(cube);
+    }
 
-	private async Task AddWire(MouseEventArgs args)
-	{
-		if (viewer is null) return;
+    private async Task AddWire(MouseEventArgs args)
+    {
+        if (viewer is null) return;
 
-		// Random Center and size for variety
-		var random = Random.Shared;
-		var size = (float)(random.NextDouble() * 6 + 4); // 1-3 units
-		var x = (float)(random.NextDouble() * 10 - 5); // -5 to +5
-		var z = (float)(random.NextDouble() * 10 - 5); // -5 to +5
-		var y = size / 2; // Sit on the grid
+        // Random Center and size for variety
+        var random = Random.Shared;
+        var size = (float)(random.NextDouble() * 6 + 4); // 1-3 units
+        var x = (float)(random.NextDouble() * 10 - 5); // -5 to +5
+        var z = (float)(random.NextDouble() * 10 - 5); // -5 to +5
+        var y = size / 2; // Sit on the grid
 
-		// Create wire/line data
-		var wire = CreateWireTet(
-			$"wire-{Guid.NewGuid()}",
-			x - size / 2, y - size / 2, z - size / 2, // min
-			x + size / 2, y + size / 2, z + size / 2  // max
-		);
+        // Create wire/line data
+        var wire = CreateWireTet(
+            $"wire-{Guid.NewGuid()}",
+            x - size / 2, y - size / 2, z - size / 2, // min
+            x + size / 2, y + size / 2, z + size / 2  // max
+        );
 
-		// Add to WebGPU scene
-		await viewer.AddLinesAsync(wire);
-	}
+        // Add to WebGPU scene
+        await viewer.AddLinesAsync(wire);
+    }
 
     /// <summary>
     /// Creates a wire tetrahedron for testing.
@@ -155,13 +155,13 @@
 
         var thicks = new double[] { 0.5, 0.31, 0.25, 0.39, 0.65 };
 
-        var colors = new Color[]
+        var colors = new System.Drawing.Color[]
         {
-            Color.FromArgb(255, 0, 0),    // Bright Red
-            Color.FromArgb(0, 255, 0),    // Bright Green
-            Color.FromArgb(0, 0, 255),    // Bright Blue
-            Color.FromArgb(255, 255, 0),  // Bright Yellow
-            Color.FromArgb(255, 0, 255),  // Bright Magenta
+        System.Drawing.    Color.FromArgb(255, 0, 0),    // Bright Red
+       System.Drawing.     Color.FromArgb(0, 255, 0),    // Bright Green
+      System.Drawing.      Color.FromArgb(0, 0, 255),    // Bright Blue
+      System.Drawing.      Color.FromArgb(255, 255, 0),  // Bright Yellow
+     System.Drawing.       Color.FromArgb(255, 0, 255),  // Bright Magenta
         };
 
         return new LineData

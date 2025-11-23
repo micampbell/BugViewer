@@ -7,20 +7,6 @@
 
 <PageTitle>Home</PageTitle>
 <InputFile OnChange="OpenFile" />
-<BitDropdown Label="Single select"
-			 Placeholder="Select an item"
-			 TItem="BitDropdownOption<string>" TValue="string">
-	<BitDropdownOption ItemType="BitDropdownItemType.Header" Text="Fruits" Value="@string.Empty" />
-	<BitDropdownOption Text="Apple" Value="@("f-app")" />
-	<BitDropdownOption Text="Banana" Value="@("f-ban")" />
-	<BitDropdownOption Text="Orange" Value="@("f-org")" IsEnabled="false" />
-	<BitDropdownOption Text="Grape" Value="@("f-gra")" />
-	<BitDropdownOption ItemType="BitDropdownItemType.Divider" Value="@string.Empty" />
-	<BitDropdownOption ItemType="BitDropdownItemType.Header" Text="Vegetables" Value="@string.Empty" />
-	<BitDropdownOption Text="Broccoli" Value="@("v-bro")" />
-	<BitDropdownOption Text="Carrot" Value="@("v-car")" />
-	<BitDropdownOption Text="Lettuce" Value="@("v-let")" />
-</BitDropdown>
 <BugViewer @ref="viewer" />
 <LogViewer @ref="logViewer" />
 
