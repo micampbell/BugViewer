@@ -6,9 +6,8 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="page-container" style="width:@(Width > 0 ? Width + "px" : "100%");
-height:@(Height > 0 ? Height + "px" : "100vh");"
-     @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" tabindex="-1">
+<div class="page-container" style="width:@Width; height:@Height;">
+
     @* WebGPU canvas fills the viewport *@
 
     <canvas id="webgpu-canvas"
@@ -95,8 +94,7 @@ height:@(Height > 0 ? Height + "px" : "100vh");"
 <style>
     .page-container {
         position: relative;
-        width: 100%;
-        /* height is set via inline style so callers can constrain the component */
+        /* Removed width: 100%; - now uses inline style parameter */
         overflow: hidden;
     }
 
@@ -294,10 +292,10 @@ height:@(Height > 0 ? Height + "px" : "100vh");"
 @code {
 
     [Parameter]
-    public int Width { get; set; } = 0;
+    public string Width { get; set; } = "100%";
 
     [Parameter]
-    public int Height { get; set; } = 0;
+    public string Height { get; set; } = "100vh";
 
     private ElementReference? _canvasRef;
     private bool _showControls = false;

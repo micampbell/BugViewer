@@ -6,9 +6,20 @@
 @using TVGLPresenter.Components
 
 <PageTitle>Home</PageTitle>
-<InputFile OnChange="OpenFile" />
-<BugViewer @ref="viewer" />
-<LogViewer @ref="logViewer" />
+
+<div style="display: flex; flex-direction: column; height: 100vh;">
+    <div style="padding: 10px;">
+        <InputFile OnChange="OpenFile" />
+    </div>
+    
+    <div style="flex: 1; min-height: 0; position: relative;">
+        <BugViewer @ref="viewer" Height="30%" Width="80%" />
+    </div>
+    
+    <div style="height: 200px; overflow: auto;">
+        <LogViewer @ref="logViewer" />
+    </div>
+</div>
 
 @code {
 	private BugViewer? viewer;
