@@ -3,6 +3,8 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
+@using Microsoft.FluentUI.AspNetCore.Components
+@using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -23,38 +25,104 @@
             @onwheel:preventDefault="true"
             @onkeydown="OnKeyDown"
             @onkeyup="OnKeyUp"
-            @oncontextmenu:preventDefault="true">
+            @oncontextmenu:preventDefault="true"
+            @onmousemove="OnCanvasMouseMove">
     </canvas>
 
-    @* Settings panel overlays in top-right corner *@
-    <OptionsPanel Options="Options" @bind-IsExpanded="_isOptionsPanelExpanded" />
+    @* Unified vertical toolbar panel - dockable left or right *@
+    <div class="toolbar-panel @(_isToolbarVisible ? "visible" : "hidden") @(_toolbarDockSide)"
+         @onmouseenter="OnToolbarMouseEnter"
+         @onmouseleave="OnToolbarMouseLeave">
+        @* Vertical orientation didn't work here. *@
+        <FluentStack Style="display: flex; flex-direction: column; gap: 0px;">
+            @* Settings Toggle Button *@
+            <FluentButton OnClick="ToggleSettings"
+                          Appearance="Appearance.Stealth"
+                          Title="Settings"
+                          Class="toolbar-btn settings-btn">
+                <FluentIcon Value="@(new Icons.Settings())" />
+            </FluentButton>
 
-    @* Camera control buttons panel - below options panel *@
-    <div class="camera-controls-panel">
-        <button class="camera-btn reset-btn" @onclick="HandleCameraReset" title="Reset Camera">
-            🔄
-        </button>
-        <button class="camera-btn" @onclick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))" title="View from -X">
-            -X
-        </button>
-        <button class="camera-btn" @onclick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))" title="View from +X">
-            +X
-        </button>
-        <button class="camera-btn" @onclick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))" title="View from -Y">
-            -Y
-        </button>
-        <button class="camera-btn" @onclick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))" title="View from +Y">
-            +Y
-        </button>
-        <button class="camera-btn" @onclick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))" title="View from -Z">
-            -Z
-        </button>
-        <button class="camera-btn" @onclick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))" title="View from +Z">
-            +Z
-        </button>
+            @* Camera Reset Button *@
+            <FluentButton OnClick="HandleCameraReset"
+                          Appearance="Appearance.Stealth"
+                          Title="Reset Camera"
+                          Class="toolbar-btn reset-btn">
+                <FluentIcon Value="@(new Icons.CameraSparkles())" />
+            </FluentButton>
+
+            @* Cardinal View Buttons *@
+            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))"
+                          Appearance="Appearance.Stealth"
+                          Title="View from -X"
+                          Class="toolbar-btn cardinal-btn">
+                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Error" Typo="Typography.H4">-X</FluentLabel>
+            </FluentButton>
+
+            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))"
+                          Appearance="Appearance.Stealth"
+                          Title="View from +X"
+                          Class="toolbar-btn cardinal-btn">
+                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Error" Typo="Typography.H4">+X</FluentLabel>
+            </FluentButton>
+
+            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))"
+                          Appearance="Appearance.Stealth"
+                          Title="View from -Y"
+                          Class="toolbar-btn cardinal-btn">
+                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Green" Typo="Typography.H4">-Y</FluentLabel>
+            </FluentButton>
+
+            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))"
+                          Appearance="Appearance.Stealth"
+                          Title="View from +Y"
+                          Class="toolbar-btn cardinal-btn">
+                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Green" Typo="Typography.H4">+Y</FluentLabel>
+            </FluentButton>
+
+            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))"
+                          Appearance="Appearance.Stealth"
+                          Title="View from -Z"
+                          Class="toolbar-btn cardinal-btn">
+                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Blue" Typo="Typography.H4">-Z</FluentLabel>
+            </FluentButton>
+
+            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))"
+                          Appearance="Appearance.Stealth"
+                          Title="View from +Z"
+                          Class="toolbar-btn cardinal-btn">
+                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Blue" Typo="Typography.H4">+Z</FluentLabel>
+
+            </FluentButton>
+
+
+            @* Help Toggle Button *@
+            <FluentButton OnClick="ToggleHelp"
+                          Appearance="Appearance.Stealth"
+                          Title="Help - Keyboard Shortcuts"
+                          Class="toolbar-btn help-btn">
+                <FluentIcon Value="@(new Icons.Question())" />
+            </FluentButton>
+
+
+            @* Dock Side Toggle Button *@
+            <FluentButton OnClick="ToggleDockSide"
+                          Appearance="Appearance.Stealth"
+                          Title="Toggle Dock Side"
+                          Class="toolbar-btn dock-btn">
+                <FluentIcon Value="@(new Icons.ArrowBidirectionalLeftRight())" />
+            </FluentButton>
+
+        </FluentStack>
     </div>
 
-    @* Control instructions panel - shows when ? key is held *@
+    @* Settings panel (OptionsPanel) - shown when settings button is clicked *@
+    @if (_isOptionsPanelExpanded)
+    {
+        <OptionsPanel Options="Options" @bind-IsExpanded="_isOptionsPanelExpanded" />
+    }
+
+    @* Control instructions panel - shows when help is toggled *@
     @if (_showControls)
     {
         <div class="controls-panel">
@@ -75,17 +143,10 @@
                     <li><strong>A/D:</strong> Move left/right</li>
                     <li><strong>Q/E:</strong> Move down/up</li>
                     <li><strong>Shift:</strong> Hold for faster movement</li>
+                    <li><strong>. (period):</strong> Toggle toolbar</li>
                 </ul>
             </div>
-            <div class="hint">Press <strong>?</strong> to toggle this help</div>
-        </div>
-    }
-
-    @* Help hint indicator *@
-    @if (!_showControls)
-    {
-        <div class="help-hint">
-            Press <strong>?</strong> for controls
+            <div class="hint">Press <strong>?</strong> or click help to toggle</div>
         </div>
     }
 
@@ -107,7 +168,7 @@
         padding: 0;
     }
 
-    .controls-panel {
+/*     .controls-panel {
         position: absolute;
         bottom: 20px;
         right: 20px;
@@ -123,7 +184,7 @@
         max-width: 280px;
         backdrop-filter: blur(10px);
         animation: slideIn 0.2s ease-out;
-    }
+    } */
 
     @@keyframes slideIn {
         from {
@@ -193,98 +254,121 @@
             font-weight: 600;
         }
 
-    .help-hint {
+    /* Unified vertical toolbar panel */
+    .toolbar-panel {
         position: absolute;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(30, 30, 30, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 8px 12px;
-        color: rgba(255, 255, 255, 0.7);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        font-size: 12px;
-        z-index: 1000;
-        backdrop-filter: blur(5px);
-        animation: pulse 2s ease-in-out infinite;
-    }
-
-        .help-hint strong {
-            color: #4fc3f7;
-            font-weight: 600;
-        }
-
-    @@keyframes pulse {
-        0%, 100% {
-            opacity: 0.6;
-        }
-
-        50% {
-            opacity: 1;
-        }
-    }
-
-    /* Camera control buttons panel */
-    .camera-controls-panel {
-        position: absolute;
-        top: 70px;
-        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
         background: rgba(30, 30, 30, 0.95);
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 12px;
         backdrop-filter: blur(10px);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
         z-index: 999;
+        padding: 12px 8px;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+        .toolbar-panel.right {
+            right: 5px;
+        }
+
+        .toolbar-panel.left {
+            left: 5px;
+        }
+
+        .toolbar-panel.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .toolbar-panel.right.hidden {
+            transform: translateY(-50%) translateX(20px);
+        }
+
+        .toolbar-panel.left.hidden {
+            transform: translateY(-50%) translateX(-20px);
+        }
+
+        .toolbar-panel.visible {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(-50%) translateX(0);
+        }
+
+    .toolbar-btn {
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
         padding: 8px;
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 6px;
-        min-width: 200px;
-    }
-
-    .camera-btn {
-        background: rgba(79, 195, 247, 0.15);
-        border: 1px solid rgba(79, 195, 247, 0.3);
-        border-radius: 6px;
         color: #4fc3f7;
-        font-size: 12px;
         font-weight: 600;
-        padding: 8px 4px;
-        cursor: pointer;
+        font-size: 14px;
         transition: all 0.2s ease;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        white-space: nowrap;
     }
 
-        .camera-btn:hover {
-            background: rgba(79, 195, 247, 0.25);
-            border-color: rgba(79, 195, 247, 0.5);
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(79, 195, 247, 0.3);
+        .toolbar-btn:hover {
+            background: rgba(79, 195, 247, 0.25) !important;
+            transform: scale(1.05);
         }
 
-        .camera-btn:active {
-            transform: translateY(0);
-            box-shadow: 0 1px 4px rgba(79, 195, 247, 0.2);
+        .toolbar-btn:active {
+            transform: scale(0.95);
         }
 
-        .camera-btn.reset-btn {
-            background: rgba(255, 167, 38, 0.15);
-            border-color: rgba(255, 167, 38, 0.3);
+        .toolbar-btn.settings-btn {
+            color: #4fc3f7;
+        }
+
+        .toolbar-btn.reset-btn {
             color: #ffa726;
-            font-size: 16px;
         }
 
-            .camera-btn.reset-btn:hover {
-                background: rgba(255, 167, 38, 0.25);
-                border-color: rgba(255, 167, 38, 0.5);
-                box-shadow: 0 2px 8px rgba(255, 167, 38, 0.3);
-            }
+        .toolbar-btn.help-btn {
+            color: #81c784;
+        }
+
+        .toolbar-btn.dock-btn {
+            color: #ba68c8;
+        }
+
+        .toolbar-btn.cardinal-btn {
+            color: #64b5f6;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+    /* Scrollbar styling for toolbar */
+    .toolbar-panel::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .toolbar-panel::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+
+    .toolbar-panel::-webkit-scrollbar-thumb {
+        background: rgba(79, 195, 247, 0.3);
+        border-radius: 3px;
+    }
+
+        .toolbar-panel::-webkit-scrollbar-thumb:hover {
+            background: rgba(79, 195, 247, 0.5);
+        }
 
     @@media (max-width: 500px) {
-        .camera-controls-panel {
-            grid-template-columns: repeat(3, 1fr);
-            min-width: 150px;
+        .toolbar-panel {
+            padding: 8px 4px;
+        }
+
+        .toolbar-btn {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            font-size: 12px;
         }
     }
 </style>
@@ -300,6 +384,9 @@
     private ElementReference? _canvasRef;
     private bool _showControls = false;
     private bool _isOptionsPanelExpanded = false;
+    private bool _isToolbarVisible = false;
+    private bool _isMouseOverToolbar = false;
+    private string _toolbarDockSide = "right"; // "right" or "left"
 
 
     private BugViewerOptions _options;
@@ -460,7 +547,7 @@
     /// <summary>
     /// Adds a text billboard to the WebGPU scene for rendering.
     /// </summary>
-    public async Task AddTextBillboardAsync(string id, string text, Vector3 position, Color backgroundColor, Color textColor)
+    public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
     {
         if (_module is null || !_ready)
         {
@@ -498,8 +585,60 @@
     }
     #endregion
     #region Tasks and Events
+
+    private void OnCanvasMouseMove(MouseEventArgs e)
+    {
+        // Show toolbar when mouse moves over canvas (and no buttons are down)
+        if (e.Buttons == 0 && _isMouseOverToolbar && !_isToolbarVisible)
+        {
+            _isToolbarVisible = true;
+            StateHasChanged();
+        }
+        else if (e.Buttons == 0 && !_isMouseOverToolbar && _isToolbarVisible)
+        {
+            _isToolbarVisible = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnToolbarMouseEnter()
+    {
+        _isMouseOverToolbar = true;
+    }
+
+    private void OnToolbarMouseLeave()
+    {
+        _isMouseOverToolbar = false;
+        // Toolbar will fade out naturally unless mouse is over canvas
+    }
+
+    private void ToggleSettings()
+    {
+        _isOptionsPanelExpanded = !_isOptionsPanelExpanded;
+        StateHasChanged();
+    }
+
+    private void ToggleHelp()
+    {
+        _showControls = !_showControls;
+        StateHasChanged();
+    }
+
+    private void ToggleDockSide()
+    {
+        _toolbarDockSide = _toolbarDockSide == "right" ? "left" : "right";
+        StateHasChanged();
+    }
+
     private void OnPointerDown(PointerEventArgs e)
     {
+        // Hide toolbar when user starts interacting
+        if (!_isMouseOverToolbar)
+        {
+            _isToolbarVisible = false;
+            StateHasChanged();
+        }
+
         var currentTime = DateTime.Now;
         var timeSinceLastClick = (currentTime - _lastClickTime).TotalMilliseconds;
         var distanceFromLastClick = Math.Sqrt(
@@ -638,6 +777,14 @@
 
     private void OnKeyDown(KeyboardEventArgs e)
     {
+        // Toggle toolbar with period key
+        if (e.Key == ".")
+        {
+            _isToolbarVisible = !_isToolbarVisible;
+            StateHasChanged();
+            return;
+        }
+
         // Show controls when ? key is pressed (Shift + / or direct ?)
         if (e.Key == "?" || (e.Key == "/" && e.ShiftKey))
         {
