@@ -9,14 +9,10 @@
 @implements IAsyncDisposable
 
 <div class="page-container" style="width:@Width; height:@Height;">
-
-    @* WebGPU canvas fills the viewport *@
-
     <canvas id="webgpu-canvas"
             class="webgpu-canvas"
             style="height:100%; width:100%;"
             tabindex="0"
-            Options="_currentOptions"
             @ref="_canvasRef"
             @onpointerdown="OnPointerDown"
             @onpointermove="OnPointerMove"
@@ -25,1064 +21,306 @@
             @onwheel:preventDefault="true"
             @onkeydown="OnKeyDown"
             @onkeyup="OnKeyUp"
-            @oncontextmenu:preventDefault="true"
-            @onmousemove="OnCanvasMouseMove">
+            @oncontextmenu:preventDefault="true">
     </canvas>
 
-    @* Unified vertical toolbar panel - dockable left or right *@
-    <div class="toolbar-panel @(_isToolbarVisible ? "visible" : "hidden") @(_toolbarDockSide)"
-         @onmouseenter="OnToolbarMouseEnter"
-         @onmouseleave="OnToolbarMouseLeave">
-        @* Vertical orientation didn't work here. *@
-        <FluentStack Style="display: flex; flex-direction: column; gap: 0px;">
-            @* Settings Toggle Button *@
-            <FluentButton OnClick="ToggleSettings"
-                          Appearance="Appearance.Stealth"
-                          Title="Settings"
-                          Class="toolbar-btn settings-btn">
-                <FluentIcon Value="@(new Icons.Settings())" />
-            </FluentButton>
-
-            @* Camera Reset Button *@
-            <FluentButton OnClick="HandleCameraReset"
-                          Appearance="Appearance.Stealth"
-                          Title="Reset Camera"
-                          Class="toolbar-btn reset-btn">
-                <FluentIcon Value="@(new Icons.CameraSparkles())" />
-            </FluentButton>
-
-            @* Cardinal View Buttons *@
-            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))"
-                          Appearance="Appearance.Stealth"
-                          Title="View from -X"
-                          Class="toolbar-btn cardinal-btn">
-                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Error" Typo="Typography.H4">-X</FluentLabel>
-            </FluentButton>
-
-            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))"
-                          Appearance="Appearance.Stealth"
-                          Title="View from +X"
-                          Class="toolbar-btn cardinal-btn">
-                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Error" Typo="Typography.H4">+X</FluentLabel>
-            </FluentButton>
-
-            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))"
-                          Appearance="Appearance.Stealth"
-                          Title="View from -Y"
-                          Class="toolbar-btn cardinal-btn">
-                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Green" Typo="Typography.H4">-Y</FluentLabel>
-            </FluentButton>
-
-            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))"
-                          Appearance="Appearance.Stealth"
-                          Title="View from +Y"
-                          Class="toolbar-btn cardinal-btn">
-                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Green" Typo="Typography.H4">+Y</FluentLabel>
-            </FluentButton>
-
-            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))"
-                          Appearance="Appearance.Stealth"
-                          Title="View from -Z"
-                          Class="toolbar-btn cardinal-btn">
-                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Blue" Typo="Typography.H4">-Z</FluentLabel>
-            </FluentButton>
-
-            <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))"
-                          Appearance="Appearance.Stealth"
-                          Title="View from +Z"
-                          Class="toolbar-btn cardinal-btn">
-                <FluentLabel Color="@Microsoft.FluentUI.AspNetCore.Components.Color.Custom" CustomColor="Blue" Typo="Typography.H4">+Z</FluentLabel>
-
-            </FluentButton>
-
-
-            @* Help Toggle Button *@
-            <FluentButton OnClick="ToggleHelp"
-                          Appearance="Appearance.Stealth"
-                          Title="Help - Keyboard Shortcuts"
-                          Class="toolbar-btn help-btn">
-                <FluentIcon Value="@(new Icons.Question())" />
-            </FluentButton>
-
-
-            @* Dock Side Toggle Button *@
-            <FluentButton OnClick="ToggleDockSide"
-                          Appearance="Appearance.Stealth"
-                          Title="Toggle Dock Side"
-                          Class="toolbar-btn dock-btn">
-                <FluentIcon Value="@(new Icons.ArrowBidirectionalLeftRight())" />
-            </FluentButton>
-
-        </FluentStack>
-    </div>
-
-    @* Settings panel (OptionsPanel) - shown when settings button is clicked *@
-    @if (_isOptionsPanelExpanded)
-    {
-        <OptionsPanel Options="Options" @bind-IsExpanded="_isOptionsPanelExpanded" />
-    }
-
-    @* Control instructions panel - shows when help is toggled *@
-    @if (_showControls)
-    {
-        <div class="controls-panel">
-            <h4>🎮 Camera Controls</h4>
-            <div class="control-group">
-                <strong>🖱️ Mouse:</strong>
-                <ul>
-                    <li><strong>Left Drag:</strong> Rotate camera</li>
-                    <li><strong>Right Drag:</strong> Pan view</li>
-                    <li><strong>Scroll Wheel:</strong> Zoom in/out</li>
-                    <li><strong>Double-Click:</strong> Pick/select objects</li>
-                </ul>
-            </div>
-            <div class="control-group">
-                <strong>⌨️ Keyboard:</strong>
-                <ul>
-                    <li><strong>W/S:</strong> Move forward/backward</li>
-                    <li><strong>A/D:</strong> Move left/right</li>
-                    <li><strong>Q/E:</strong> Move down/up</li>
-                    <li><strong>Shift:</strong> Hold for faster movement</li>
-                    <li><strong>. (period):</strong> Toggle toolbar</li>
-                </ul>
-            </div>
-            <div class="hint">Press <strong>?</strong> or click help to toggle</div>
+    @* Unified panel hosting Toolbar / Options / Help *@
+    <div class="unified-panel @( _panelVisible ? "visible" : "hidden") @(_toolbarDockSide)">
+        <div class="panel-content">
+            @switch(_activePanelMode)
+            {
+                case PanelMode.Toolbar:
+                    <FluentStack Style="display:flex; flex-direction:column; gap:4px;">
+                        <FluentButton OnClick="HandleCameraReset" Appearance="Appearance.Stealth" Title="Reset Camera" Class="toolbar-btn reset-btn"><FluentIcon Value="@(new Icons.CameraSparkles())" /></FluentButton>
+                        <FluentButton OnClick="@(()=>HandleCameraCardinalView(CardinalDirection.NegativeX))" Appearance="Appearance.Stealth" Title="View -X" Class="toolbar-btn cardinal-btn">-X</FluentButton>
+                        <FluentButton OnClick="@(()=>HandleCameraCardinalView(CardinalDirection.PositiveX))" Appearance="Appearance.Stealth" Title="View +X" Class="toolbar-btn cardinal-btn">+X</FluentButton>
+                        <FluentButton OnClick="@(()=>HandleCameraCardinalView(CardinalDirection.NegativeY))" Appearance="Appearance.Stealth" Title="View -Y" Class="toolbar-btn cardinal-btn">-Y</FluentButton>
+                        <FluentButton OnClick="@(()=>HandleCameraCardinalView(CardinalDirection.PositiveY))" Appearance="Appearance.Stealth" Title="View +Y" Class="toolbar-btn cardinal-btn">+Y</FluentButton>
+                        <FluentButton OnClick="@(()=>HandleCameraCardinalView(CardinalDirection.NegativeZ))" Appearance="Appearance.Stealth" Title="View -Z" Class="toolbar-btn cardinal-btn">-Z</FluentButton>
+                        <FluentButton OnClick="@(()=>HandleCameraCardinalView(CardinalDirection.PositiveZ))" Appearance="Appearance.Stealth" Title="View +Z" Class="toolbar-btn cardinal-btn">+Z</FluentButton>
+                        <FluentButton OnClick="ToggleDockSide" Appearance="Appearance.Stealth" Title="Dock Side" Class="toolbar-btn dock-btn"><FluentIcon Value="@(new Icons.ArrowBidirectionalLeftRight())" /></FluentButton>
+                    </FluentStack>;
+                    break;
+                case PanelMode.Options:
+                    <div class="options-scroll">
+                        <FluentAccordion>
+                            <FluentAccordionItem Heading="Lighting">
+                                <FluentStack Orientation="Orientation.Vertical" Style="width:100%;">
+                                    <label>Clear Color</label>
+                                    <input type="color" style="width:100%;" @bind="Options.ClearColor" @bind:event="oninput" />
+                                </FluentStack>
+                                <FluentSlider Label="Light Polar Angle" @bind-Value="Options.LightPolarAngle" Min="0" Max="3.14" Step="0.01" />
+                                <FluentSlider Label="Light Azimuthal" @bind-Value="Options.LightAzimuthAngle" Min="1" Max="6.28" Step="0.01" />
+                                <FluentSlider Label="Ambient Light" @bind-Value="Options.AmbientLight" Min="0" Max="1" Step="0.01" />
+                                <FluentSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
+                            </FluentAccordionItem>
+                        </FluentAccordion>
+                        <FluentAccordion>
+                            <FluentAccordionItem Heading="📐 Grid">
+                                <FluentStack Orientation="Orientation.Vertical">
+                                    <FluentSlider Label="Coordinate Thickness" @bind-Value="Options.CoordinateThickness" Min="0" Max="10" Step="0.1" />
+                                    <FluentSlider Label="Grid Size" @bind-Value="Options.GridSize" Min="50" Max="1000" Step="1" />
+                                    <FluentSlider Label="Grid Spacing" @bind-Value="Options.GridSpacing" Min="1" Max="100" Step="0.5" />
+                                    <FluentSlider Label="Line Width X" @bind-Value="Options.LineWidthX" Min="0" Max="1" Step="0.01" />
+                                    <FluentSlider Label="Line Width Y" @bind-Value="Options.LineWidthY" Min="0" Max="1" Step="0.01" />
+                                    <label>Grid Line Color</label>
+                                    <input type="color" style="width:100%;" @bind="Options.LineColor" @bind:event="oninput" />
+                                    <FluentSlider Label="Line Transparency" @bind-Value="Options.LineTransparency" Min="0" Max="1" Step="0.01" />
+                                    <label>Grid Base Color</label>
+                                    <input type="color" style="width:100%;" @bind="Options.BaseColor" @bind:event="oninput" />
+                                    <FluentSlider Label="Base Transparency" @bind-Value="Options.BaseTransparency" Min="0" Max="1" Step="0.01" />
+                                </FluentStack>
+                            </FluentAccordionItem>
+                        </FluentAccordion>
+                        <FluentAccordion>
+                            <FluentAccordionItem Heading="📷 Camera">
+                                <FluentStack Orientation="Orientation.Vertical">
+                                    <FluentSwitch Label="Which Coordinate is Up?" CheckedMessage="Z is Up" UncheckedMessage="Y is Up" @bind-Value="Options.ZIsUp" />
+                                    <FluentSwitch Label="Projection vs Ortho" CheckedMessage="Projection" UncheckedMessage="Orthographic" @bind-Value="Options.IsProjectionCamera" />
+                                    @if (Options.IsProjectionCamera)
+                                    {
+                                        <FluentSlider Label="Field of View" @bind-Value="Options.Fov" Min="1" Max="179" Step="0.5" />
+                                    }
+                                    else
+                                    {
+                                        <FluentLabel>Orthographic Size: @Options.OrthoSize.ToString("F2")</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.OrthoSize" Min="1" Max="999" Step="0.5" />
+                                    }
+                                    <FluentLabel>Near: @Options.ZNear.ToString("F5")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.ZNear" Min="0.00001" Max="1" Step="0.001" />
+                                    <FluentLabel>Far: @Options.ZFar.ToString("F0")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.ZFar" Min="10" Max="9999" Step="1" />
+                                    <FluentCheckbox @bind-Value="Options.ConstrainPolar" Label="Constrain Polar" />
+                                    @if (Options.ConstrainPolar)
+                                    {
+                                        <FluentLabel>Max Polar: @((Options.MaxPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.MaxPolar" Min="0" Max="@(Math.PI * 0.5)" Step="0.01" />
+                                        <FluentLabel>Min Polar: @((Options.MinPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.MinPolar" Min="@(-Math.PI * 0.5)" Max="0" Step="0.01" />
+                                    }
+                                    <FluentCheckbox @bind-Value="Options.ConstrainAzimuth" Label="Constrain Azimuth" />
+                                    @if (Options.ConstrainAzimuth)
+                                    {
+                                        <FluentLabel>Max Azimuth: @((Options.MaxAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.MaxAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
+                                        <FluentLabel>Min Azimuth: @((Options.MinAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.MinAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
+                                    }
+                                    <FluentCheckbox @bind-Value="Options.ConstrainDistance" Label="Constrain Distance" />
+                                    @if (Options.ConstrainDistance)
+                                    {
+                                        <FluentLabel>Max Distance: @Options.MaxDistance.ToString("F1")</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.MaxDistance" Min="1" Max="1000" Step="0.5" />
+                                        <FluentLabel>Min Distance: @Options.MinDistance.ToString("F2")</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.MinDistance" Min="0.1" Max="10" Step="0.1" />
+                                    }
+                                    <FluentLabel>Orbit Sensitivity: @Options.OrbitSensitivity.ToString("F5")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.OrbitSensitivity" Min="0.001" Max="0.1" Step="0.001" />
+                                    <FluentLabel>Zoom Sensitivity: @Options.ZoomSensitivity.ToString("F5")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.ZoomSensitivity" Min="0.0001" Max="0.01" Step="0.0001" />
+                                    <FluentLabel>Pan Sensitivity: @Options.PanSensitivity.ToString("F5")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.PanSensitivity" Min="0.0001" Max="0.01" Step="0.001" />
+                                    <FluentLabel>Pan Speed (Shift): @Options.PanSpeedMultiplier.ToString("F1")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.PanSpeedMultiplier" Min="1" Max="10" Step="0.5" />
+                                </FluentStack>
+                            </FluentAccordionItem>
+                        </FluentAccordion>
+                        <FluentAccordion>
+                            <FluentAccordionItem Heading="🎬 Rendering">
+                                <FluentStack Orientation="Orientation.Vertical">
+                                    <FluentSelect @bind-Value="SampleCountString" Label="MSAA Sample Count" Items="_sampleCountItems" />
+                                    @if (_showMsaaRefreshPrompt)
+                                    {
+                                        <div class="refresh-prompt">
+                                            <FluentLabel Typo="Typography.Body">MSAA changed - refresh needed</FluentLabel>
+                                            <FluentButton OnClick="RefreshPage" Appearance="Appearance.Accent">Refresh</FluentButton>
+                                        </div>
+                                    }
+                                    <FluentButton OnClick="ResetToDefaults" Appearance="Appearance.Outline">Reset to Defaults</FluentButton>
+                                </FluentStack>
+                            </FluentAccordionItem>
+                        </FluentAccordion>
+                    </div>;
+                    break;
+                case PanelMode.Help:
+                    <div class="help-content">
+                        <h4>🎮 Camera Controls</h4>
+                        <div class="control-group">
+                            <strong>🖱️ Mouse:</strong>
+                            <ul>
+                                <li><strong>Left Drag:</strong> Rotate</li>
+                                <li><strong>Right Drag:</strong> Pan</li>
+                                <li><strong>Wheel:</strong> Zoom</li>
+                                <li><strong>Double-Click:</strong> Pick</li>
+                            </ul>
+                        </div>
+                        <div class="control-group">
+                            <strong>⌨️ Keyboard:</strong>
+                            <ul>
+                                <li><strong>W/S:</strong> Forward / Back</li>
+                                <li><strong>A/D:</strong> Left / Right</li>
+                                <li><strong>Q/E:</strong> Down / Up</li>
+                                <li><strong>Shift:</strong> Faster</li>
+                                <li><strong>.</strong> Toggle Panel</li>
+                            </ul>
+                        </div>
+                    </div>;
+                    break;
+            }
         </div>
-    }
-
+        <div class="panel-footer">
+            <FluentStack Style="display:flex; gap:6px; justify-content:center;">
+                <FluentButton Appearance="@( _activePanelMode==PanelMode.Toolbar?Appearance.Accent:Appearance.Stealth)" Size="Size.Small" Title="Toolbar" OnClick="@(()=>SetPanelMode(PanelMode.Toolbar))"><FluentIcon Value="@(new Icons.Grid())" /></FluentButton>
+                <FluentButton Appearance="@( _activePanelMode==PanelMode.Options?Appearance.Accent:Appearance.Stealth)" Size="Size.Small" Title="Settings" OnClick="@(()=>SetPanelMode(PanelMode.Options))"><FluentIcon Value="@(new Icons.Settings())" /></FluentButton>
+                <FluentButton Appearance="@( _activePanelMode==PanelMode.Help?Appearance.Accent:Appearance.Stealth)" Size="Size.Small" Title="Help" OnClick="@(()=>SetPanelMode(PanelMode.Help))"><FluentIcon Value="@(new Icons.Question())" /></FluentButton>
+            </FluentStack>
+        </div>
+    </div>
 </div>
 
 <style>
-    .page-container {
-        position: relative;
-        /* Removed width: 100%; - now uses inline style parameter */
-        overflow: hidden;
-    }
-
-        .page-container:focus {
-            outline: none;
-        }
-
-    body {
-        margin: 0;
-        padding: 0;
-    }
-
-/*     .controls-panel {
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(30, 30, 30, 0.95);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 12px;
-        padding: 16px 20px;
-        color: white;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        font-size: 13px;
-        z-index: 1000;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-        max-width: 280px;
-        backdrop-filter: blur(10px);
-        animation: slideIn 0.2s ease-out;
-    } */
-
-    @@keyframes slideIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .controls-panel h4 {
-        margin: 0 0 12px 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: #4fc3f7;
-    }
-
-    .control-group {
-        margin-bottom: 12px;
-    }
-
-        .control-group:last-child {
-            margin-bottom: 12px;
-        }
-
-        .control-group strong {
-            color: #ffa726;
-            font-size: 14px;
-        }
-
-    .controls-panel ul {
-        margin: 6px 0 0 0;
-        padding-left: 20px;
-        list-style: none;
-    }
-
-    .controls-panel li {
-        margin: 4px 0;
-        line-height: 1.4;
-    }
-
-        .controls-panel li strong {
-            color: #81c784;
-            font-weight: 600;
-        }
-
-        .controls-panel li::before {
-            content: '▸';
-            color: #4fc3f7;
-            margin-right: 6px;
-        }
-
-    .controls-panel .hint {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.6);
-        text-align: center;
-    }
-
-        .controls-panel .hint strong {
-            color: #4fc3f7;
-            font-weight: 600;
-        }
-
-    /* Unified vertical toolbar panel */
-    .toolbar-panel {
+    .unified-panel {
         position: absolute;
         top: 50%;
         transform: translateY(-50%);
-        background: rgba(30, 30, 30, 0.95);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 12px;
+        background: rgba(30,30,30,0.95);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 14px;
         backdrop-filter: blur(10px);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-        z-index: 999;
-        padding: 12px 8px;
-        transition: opacity 0.3s ease, transform 0.3s ease;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        z-index: 1000;
+        width: 240px;
+        max-width: 320px;
         max-height: 90vh;
-        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition: opacity .25s ease, transform .25s ease;
     }
-
-        .toolbar-panel.right {
-            right: 5px;
-        }
-
-        .toolbar-panel.left {
-            left: 5px;
-        }
-
-        .toolbar-panel.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .toolbar-panel.right.hidden {
-            transform: translateY(-50%) translateX(20px);
-        }
-
-        .toolbar-panel.left.hidden {
-            transform: translateY(-50%) translateX(-20px);
-        }
-
-        .toolbar-panel.visible {
-            opacity: 1;
-            pointer-events: all;
-            transform: translateY(-50%) translateX(0);
-        }
-
-    .toolbar-btn {
-        width: 48px;
-        height: 48px;
-        min-width: 48px;
-        padding: 8px;
-        color: #4fc3f7;
-        font-weight: 600;
-        font-size: 14px;
-        transition: all 0.2s ease;
-    }
-
-        .toolbar-btn:hover {
-            background: rgba(79, 195, 247, 0.25) !important;
-            transform: scale(1.05);
-        }
-
-        .toolbar-btn:active {
-            transform: scale(0.95);
-        }
-
-        .toolbar-btn.settings-btn {
-            color: #4fc3f7;
-        }
-
-        .toolbar-btn.reset-btn {
-            color: #ffa726;
-        }
-
-        .toolbar-btn.help-btn {
-            color: #81c784;
-        }
-
-        .toolbar-btn.dock-btn {
-            color: #ba68c8;
-        }
-
-        .toolbar-btn.cardinal-btn {
-            color: #64b5f6;
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-    /* Scrollbar styling for toolbar */
-    .toolbar-panel::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .toolbar-panel::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
-    }
-
-    .toolbar-panel::-webkit-scrollbar-thumb {
-        background: rgba(79, 195, 247, 0.3);
-        border-radius: 3px;
-    }
-
-        .toolbar-panel::-webkit-scrollbar-thumb:hover {
-            background: rgba(79, 195, 247, 0.5);
-        }
-
-    @@media (max-width: 500px) {
-        .toolbar-panel {
-            padding: 8px 4px;
-        }
-
-        .toolbar-btn {
-            width: 40px;
-            height: 40px;
-            min-width: 40px;
-            font-size: 12px;
-        }
-    }
+    .unified-panel.right { right: 8px; }
+    .unified-panel.left { left: 8px; }
+    .unified-panel.hidden { opacity:0; pointer-events:none; }
+    .unified-panel.visible { opacity:1; }
+    .panel-content { flex:1 1 auto; overflow-y:auto; padding:10px 12px; }
+    .panel-footer { flex:0 0 auto; padding:8px 8px 10px; border-top:1px solid rgba(255,255,255,0.15); background:rgba(20,20,20,0.6); }
+    .toolbar-btn { width:100%; }
+    .options-scroll input[type=color] { cursor:pointer; }
+    .help-content h4 { margin:0 0 12px; font-size:16px; font-weight:600; color:#4fc3f7; }
+    .help-content ul { list-style:none; padding-left:0; margin:6px 0 12px; }
+    .help-content li { margin:4px 0; font-size:13px; }
+    .help-content li strong { color:#81c784; }
+    .refresh-prompt { margin-top:12px; padding:10px; background:rgba(255,193,7,.15); border:1px solid #ffc107; border-radius:8px; display:flex; flex-direction:column; gap:6px; }
 </style>
 
 @code {
+    public enum PanelMode { Toolbar, Options, Help }
+    private PanelMode _activePanelMode = PanelMode.Toolbar;
+    private bool _panelVisible = true; // default visible
+    private string _toolbarDockSide = "right";
+    private void SetPanelMode(PanelMode mode) { _activePanelMode = mode; StateHasChanged(); }
 
-    [Parameter]
-    public string Width { get; set; } = "100%";
-
-    [Parameter]
-    public string Height { get; set; } = "100vh";
+    [Parameter] public string Width { get; set; } = "100%";
+    [Parameter] public string Height { get; set; } = "100vh";
 
     private ElementReference? _canvasRef;
-    private bool _showControls = false;
-    private bool _isOptionsPanelExpanded = false;
-    private bool _isToolbarVisible = false;
-    private bool _isMouseOverToolbar = false;
-    private string _toolbarDockSide = "right"; // "right" or "left"
-
-
     private BugViewerOptions _options;
-
-    /// <summary>
-    /// WebGPU rendering options. Pass a configured instance to control grid appearance and camera.
-    /// </summary>
-    [Parameter]
-    public BugViewerOptions Options
-    {
-        get => _options;
-        set
-        {
-            if (!ReferenceEquals(_options, value))
-            {
-                _options = value;
-                _options.PropertyChanged += OnOptionsChanged;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Camera instance for controlling the 3D view.
-    /// </summary>
+    [Parameter] public BugViewerOptions Options { get => _options; set { if(!ReferenceEquals(_options,value)){ _options = value; _options.PropertyChanged += OnOptionsChanged; _options.PropertyChanged += OnOptionsPropertyChanged; } } }
     public OrbitCamera? Camera { get; private set; }
-
-    /// <summary>
-    /// Event raised when a picking ray is created (e.g., on double-click).
-    /// Subscribers can use this ray to perform triangle/primitive intersection tests.
-    /// </summary>
-    public event Action<Ray>? OnPickingRayCreated;
 
     private IJSObjectReference? _module;
     private DotNetObjectReference<BugViewer>? _dotNetRef;
     private bool _ready;
     private string? _error;
-    private bool _isDragging;
-    private bool _isPanning;
-    private double _lastPointerX;
-    private double _lastPointerY;
+    private bool _isDragging; private bool _isPanning; private double _lastPointerX; private double _lastPointerY;
     private HashSet<string> _pressedKeys = new();
     private System.Threading.Timer? _keyboardMoveTimer;
-    private Sphere totalSphere;
-    private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
-    private List<MeshData> _meshes = new();
-    private List<LineData> _lines = new();
-    private List<MeshData> _billBoards = new();
-    // Canvas dimensions for projection matrix computation
-    private double _canvasWidth = 800;
-    private double _canvasHeight = 600;
-
-    // Double-click detection
-    private DateTime _lastClickTime = DateTime.MinValue;
-    private double _lastClickX;
-    private double _lastClickY;
-    private const double DoubleClickTimeMs = 300; // Standard double-click time window
-    private const double DoubleClickDistancePx = 5; // Maximum distance for double-click
-
+    private Sphere totalSphere; private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
+    private List<MeshData> _meshes = new(); private List<LineData> _lines = new(); private List<MeshData> _billBoards = new();
+    private double _canvasWidth = 800; private double _canvasHeight = 600;
+    private DateTime _lastClickTime = DateTime.MinValue; private double _lastClickX; private double _lastClickY;
+    private const double DoubleClickTimeMs = 300; private const double DoubleClickDistancePx = 5;
     public double LatestFrameMs { get; private set; }
 
-    protected override void OnParametersSet()
-    {
-        base.OnParametersSet();
-    }
+    // Options rendering local fields (from original OptionsPanel)
+    private bool _showMsaaRefreshPrompt = false;
+    private string SampleCountString { get => Options.SampleCount.ToString(); set { if (int.TryParse(value,out var v)){ Options.SampleCount = v; } } }
+    private List<Option<string>> _sampleCountItems = new(){
+        new(){ Value="1", Text="1x"}, new(){ Value="2", Text="2x"}, new(){ Value="4", Text="4x"}, new(){ Value="8", Text="8x"}
+    };
 
-    protected override void OnInitialized()
-    {
-        if (Options is null)
-            Options = BugViewerOptions.Default;
-        Camera = new OrbitCamera(Vector3.Zero, Options);
-        // Start keyboard movement timer (60 FPS for smooth movement)
-        _keyboardMoveTimer = new System.Threading.Timer(_ => ProcessKeyboardMovement(), null, 0, 16);
+    // Event for picking rays
+    public event Action<Ray>? OnPickingRayCreated;
 
-        // No direct subscription here; handled in Options setter above.
-    }
-
-    #region Public Facing Methods
-    /// <summary>
-    /// Adds a mesh to the WebGPU scene for rendering.
-    /// </summary>
-    public async Task AddMeshAsync(MeshData mesh)
-    {
-        _meshes.Add(mesh);
-        UpdateViewer(UpdateSpheresAdd(mesh));
-        await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
-    }
-
-    /// <summary>
-    /// Adds lines to the WebGPU scene for rendering.
-    /// </summary>
-    public async Task AddLinesAsync(LineData path)
-    {
-        _lines.Add(path);
-        UpdateViewer(UpdateSpheresAdd(path));
-        await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
-    }
-
-    /// <summary>
-    /// Removes a mesh from the scene by its ID.
-    /// </summary>
-    public async Task RemoveMeshAsync(MeshData mesh)
-    {
-        var index = _meshes.IndexOf(mesh);
-        if (index < 0) return;
-        UpdateViewer(UpdateSpheresRemove(mesh));
-        await _module.InvokeVoidAsync("removeMesh", index);
-    }
+    // Viewer update helper (moved from previous version)
     private async void UpdateViewer(bool sphereChanged)
     {
-        if ((sphereChanged && _options.AutoResetCamera == UpdateTypes.SphereChange)
-        || _options.AutoResetCamera == UpdateTypes.OnDataChange)
+        if (Camera is null || _module is null) return;
+        if ((sphereChanged && Options.AutoResetCamera == UpdateTypes.SphereChange) || Options.AutoResetCamera == UpdateTypes.OnDataChange)
         {
             ResetCamera();
-            await _module!.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            try { await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } catch { }
         }
-        if ((sphereChanged && _options.AutoUpdateGrid == UpdateTypes.SphereChange)
-        || _options.AutoUpdateGrid == UpdateTypes.OnDataChange)
+        if ((sphereChanged && Options.AutoUpdateGrid == UpdateTypes.SphereChange) || Options.AutoUpdateGrid == UpdateTypes.OnDataChange)
         {
-            _options.GridSize = _options.AutoGridBuffer * (totalSphere.Center.Length() + totalSphere.GetRadius());
+            Options.GridSize = Options.AutoGridBuffer * (totalSphere.Center.Length() + totalSphere.GetRadius());
             OnOptionsChanged(null, null);
         }
     }
-    /// <summary>
-    /// Removes lines from the scene by their ID.
-    /// </summary>
-    public async Task RemoveLinesAsync(LineData path)
-    {
-        var index = _lines.IndexOf(path);
-        if (index < 0) return;
-        UpdateViewer(UpdateSpheresRemove(path));
-        await _module.InvokeVoidAsync("removeLines", index);
-    }
 
-    /// <summary>
-    /// Clears all dynamically added meshes from the scene.
-    /// </summary>
-    public async Task ClearAllMeshesAsync()
-    {
-        if (_meshes.Count == 0) return;
-        var needToUpdate = _meshes.All(m => UpdateSpheresRemove(m));
-        _meshes.Clear();
-        UpdateViewer(needToUpdate);
-        await _module.InvokeVoidAsync("clearAllMeshes");
-    }
+    protected override void OnInitialized(){ if(Options is null) Options = BugViewerOptions.Default; Camera = new OrbitCamera(Vector3.Zero, Options); _keyboardMoveTimer = new System.Threading.Timer(_=>ProcessKeyboardMovement(),null,0,16); }
 
-    /// <summary>
-    /// Clears all dynamically added lines from the scene.
-    /// </summary>
-    public async Task ClearAllLinesAsync()
-    {
-        if (_lines.Count == 0) return;
-        var needToUpdate = _lines.All(m => UpdateSpheresRemove(m));
-        _lines.Clear();
-        UpdateViewer(needToUpdate);
-        await _module.InvokeVoidAsync("clearAllLines");
-    }
+    private void ToggleSettings(){ SetPanelMode(PanelMode.Options); }
+    private void ToggleHelp(){ SetPanelMode(PanelMode.Help); }
+    private void ToggleDockSide(){ _toolbarDockSide = _toolbarDockSide=="right"?"left":"right"; }
 
-    /// <summary>
-    /// Adds a text billboard to the WebGPU scene for rendering.
-    /// </summary>
-    public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
-    {
-        if (_module is null || !_ready)
-        {
-            throw new InvalidOperationException("WebGPU is not ready. Wait for initialization.");
-        }
+    private void OnKeyDown(KeyboardEventArgs e){ if(e.Key=="."){ _panelVisible = !_panelVisible; StateHasChanged(); return; } if(e.Key=="?" || (e.Key=="/" && e.ShiftKey)){ SetPanelMode(PanelMode.Help); _panelVisible = true; } else _pressedKeys.Add(e.Key.ToLower()); }
+    private void OnKeyUp(KeyboardEventArgs e){ _pressedKeys.Remove(e.Key.ToLower()); }
 
-        // Render text to bitmap in C# instead of JavaScript
-        var billboardData = new TextBillboard
-        {
-            BackgroundColor = backgroundColor,
-            TextColor = textColor,
-            Text = text,
-            Vertices = new List<Vector3> { position },
-            Id = id
-        };
-        await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
-    }
+    private void OnPointerDown(PointerEventArgs e){ var currentTime = DateTime.Now; var timeSinceLast=(currentTime-_lastClickTime).TotalMilliseconds; var dist=Math.Sqrt(Math.Pow(e.ClientX-_lastClickX,2)+Math.Pow(e.ClientY-_lastClickY,2)); if(e.Button==0 && timeSinceLast<=DoubleClickTimeMs && dist<=DoubleClickDistancePx){ OnDoubleClick(e); return; } if(e.Button==0){ _lastClickTime=currentTime; _lastClickX=e.ClientX; _lastClickY=e.ClientY; _isDragging=true; _isPanning=false; _lastPointerX=e.ClientX; _lastPointerY=e.ClientY; } else if(e.Button==2){ _isPanning=true; _isDragging=false; _lastPointerX=e.ClientX; _lastPointerY=e.ClientY; }}
 
-    /// <summary>
-    /// Removes a text billboard from the scene by its ID.
-    /// </summary>
-    public async Task RemoveTextBillboardAsync(string id)
-    {
-        if (_module is null) return;
-        await _module.InvokeVoidAsync("removeTextBillboard", id);
-    }
+    private async Task OnDoubleClick(PointerEventArgs e){ if(_module is null || !_ready) return; var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef); var rx = e.ClientX - rect.Left; var ry = e.ClientY - rect.Top; var pickingRay = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height); await AddTextBillboardAsync("dbl", "Picked", pickingRay.Anchor + 15 * pickingRay.Direction, System.Drawing.Color.Blue, System.Drawing.Color.White); OnPickingRayCreated?.Invoke(pickingRay); }
+    private class BoundingClientRect{ public double Left{get;set;} public double Top{get;set;} public double Width{get;set;} public double Height{get;set;} }
 
-    /// <summary>
-    /// Clears all text billboards from the scene.
-    /// </summary>
-    public async Task ClearAllTextBillboardsAsync()
-    {
-        if (_module is null) return;
-        await _module.InvokeVoidAsync("clearAllTextBillboards");
-    }
-    #endregion
-    #region Tasks and Events
+    private async Task OnPointerMove(PointerEventArgs e){ if(_isDragging){ var dx=e.ClientX-_lastPointerX; var dy=e.ClientY-_lastPointerY; _lastPointerX=e.ClientX; _lastPointerY=e.ClientY; Camera.Orbit(dx,dy); if(_module!=null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } else if(_isPanning){ var dx=e.ClientX-_lastPointerX; var dy=e.ClientY-_lastPointerY; _lastPointerX=e.ClientX; _lastPointerY=e.ClientY; Camera.PanWithMouse(dx,dy,e.ShiftKey); if(_module!=null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); }}
+    private void OnPointerUp(PointerEventArgs e){ if(e.Button==0) _isDragging=false; else if(e.Button==2) _isPanning=false; }
+    private async Task OnWheel(WheelEventArgs e){ Camera.Zoom(e.DeltaY); if(_module!=null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); }
 
-    private void OnCanvasMouseMove(MouseEventArgs e)
-    {
-        // Show toolbar when mouse moves over canvas (and no buttons are down)
-        if (e.Buttons == 0 && _isMouseOverToolbar && !_isToolbarVisible)
-        {
-            _isToolbarVisible = true;
-            StateHasChanged();
-        }
-        else if (e.Buttons == 0 && !_isMouseOverToolbar && _isToolbarVisible)
-        {
-            _isToolbarVisible = false;
-            StateHasChanged();
-        }
-    }
+    private async void ProcessKeyboardMovement(){ if(_pressedKeys.Count==0 || _module==null || !_ready) return; double forward=0,right=0,up=0; bool shift=_pressedKeys.Contains("shift"); if(_pressedKeys.Contains("w")) forward+=1; if(_pressedKeys.Contains("s")) forward-=1; if(_pressedKeys.Contains("d")) right+=1; if(_pressedKeys.Contains("a")) right-=1; if(_pressedKeys.Contains("q")) up-=1; if(_pressedKeys.Contains("e")) up+=1; if(forward!=0 || right!=0 || up!=0){ Camera.PanWithKeyboard(forward,right,up,shift); try{ await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } catch {} }}
 
-    private void OnToolbarMouseEnter()
-    {
-        _isMouseOverToolbar = true;
-    }
+    protected override async Task OnAfterRenderAsync(bool firstRender){ if(!firstRender) return; OnPickingRayCreated += OnPickingRayRun; try{ _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}"); } catch(JSException jse){ _error=$"Failed to import webgpu module: {jse.Message}"; StateHasChanged(); return; } catch(Exception ex){ _error=$"Unexpected error importing webgpu module: {ex.Message}"; StateHasChanged(); return; } _dotNetRef = DotNetObjectReference.Create(this); try{ await SendOptionsToJavaScriptAsync(true); } catch(Exception ex){ _error=$"Error initializing WebGPU canvas: {ex.Message}"; StateHasChanged(); }}
+    protected override async Task OnParametersSetAsync(){ await SendOptionsToJavaScriptAsync(false); }
 
-    private void OnToolbarMouseLeave()
-    {
-        _isMouseOverToolbar = false;
-        // Toolbar will fade out naturally unless mouse is over canvas
-    }
+    private async Task SendOptionsToJavaScriptAsync(bool init){ if(_module is null) return; if(init){ await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(), Camera.ConvertMatrixToJavaScript()); } else { await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions()); await SendProjectionMatrixToJavaScriptAsync(); }}
 
-    private void ToggleSettings()
-    {
-        _isOptionsPanelExpanded = !_isOptionsPanelExpanded;
-        StateHasChanged();
-    }
+    [JSInvokable] public Task OnFrameMsUpdate(double ms){ LatestFrameMs = ms; return Task.CompletedTask; }
+    [JSInvokable] public async Task OnWebGpuReady(){ _ready=true; _error=null; await SendProjectionMatrixToJavaScriptAsync(); StateHasChanged(); }
+    [JSInvokable] public Task OnWebGpuError(string message){ _ready=false; _error=message; StateHasChanged(); return Task.CompletedTask; }
+    [JSInvokable] public async Task OnCanvasResized(double w,double h){ _canvasWidth=w; _canvasHeight=h; await SendProjectionMatrixToJavaScriptAsync(); }
+    private async Task SendProjectionMatrixToJavaScriptAsync(){ if(_module is null || !_ready || Camera is null) return; try{ var proj = Camera.ConvertProjectionMatrixToJavaScript(_canvasWidth,_canvasHeight); await _module.InvokeVoidAsync("writeProjectionMatrix", proj); } catch(Exception ex){ Console.Error.WriteLine(ex.Message); }}
 
-    private void ToggleHelp()
-    {
-        _showControls = !_showControls;
-        StateHasChanged();
-    }
+    public async ValueTask DisposeAsync(){ Camera = new OrbitCamera(Camera.Target, Options); _keyboardMoveTimer?.Dispose(); Options.PropertyChanged -= OnOptionsChanged; Options.PropertyChanged -= OnOptionsPropertyChanged; if(_module!=null){ try{ await _module.InvokeVoidAsync("disposeWebGPU_Canvas"); } catch {} try{ await _module.DisposeAsync(); } catch {} } _dotNetRef?.Dispose(); }
 
-    private void ToggleDockSide()
-    {
-        _toolbarDockSide = _toolbarDockSide == "right" ? "left" : "right";
-        StateHasChanged();
-    }
-
-    private void OnPointerDown(PointerEventArgs e)
-    {
-        // Hide toolbar when user starts interacting
-        if (!_isMouseOverToolbar)
-        {
-            _isToolbarVisible = false;
-            StateHasChanged();
-        }
-
-        var currentTime = DateTime.Now;
-        var timeSinceLastClick = (currentTime - _lastClickTime).TotalMilliseconds;
-        var distanceFromLastClick = Math.Sqrt(
-            Math.Pow(e.ClientX - _lastClickX, 2) +
-            Math.Pow(e.ClientY - _lastClickY, 2));
-
-        // Check for double-click (left mouse button only)
-        if (e.Button == 0 &&
-            timeSinceLastClick <= DoubleClickTimeMs &&
-            distanceFromLastClick <= DoubleClickDistancePx)
-        {
-            // Double-click detected - handle it here
-            OnDoubleClick(e);
-            return; // Don't process as single click
-        }
-
-        // Update last click info for next potential double-click
-        if (e.Button == 0)
-        {
-            _lastClickTime = currentTime;
-            _lastClickX = e.ClientX;
-            _lastClickY = e.ClientY;
-        }
-
-        if (e.Button == 0) // Left mouse button - rotate
-        {
-            _isDragging = true;
-            _isPanning = false;
-            _lastPointerX = e.ClientX;
-            _lastPointerY = e.ClientY;
-        }
-        else if (e.Button == 2) // Middle mouse button - pan
-        {
-            _isPanning = true;
-            _isDragging = false;
-            _lastPointerX = e.ClientX;
-            _lastPointerY = e.ClientY;
-        }
-    }
-
-    private async Task OnDoubleClick(PointerEventArgs e)
-    {
-        if (_module is null || !_ready)
-        {
-            return; // WebGPU not ready
-        }
-
-        // Get canvas dimensions using JavaScript interop
-        var canvasRect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
-        var canvasWidth = canvasRect.Width;
-        var canvasHeight = canvasRect.Height;
-
-        // Convert mouse Center relative to canvas
-        var relativeX = e.ClientX - canvasRect.Left;
-        var relativeY = e.ClientY - canvasRect.Top;
-
-        // Create picking ray from camera through mouse Center
-        var pickingRay = Camera.CreateRayFromScreenPoint(relativeX, relativeY, canvasWidth, canvasHeight);
-
-        await AddTextBillboardAsync("myBillboard", "Hello World", pickingRay.Anchor + 15 * pickingRay.Direction, System.Drawing.Color.Blue,
-        System.Drawing.Color.White);
-        // Raise event for subscribers to handle picking
-        OnPickingRayCreated?.Invoke(pickingRay);
-    }
-
-    // Helper class for bounding client rect
-    private class BoundingClientRect
-    {
-        public double Left { get; set; }
-        public double Top { get; set; }
-        public double Width { get; set; }
-        public double Height { get; set; }
-    }
-
-    private async Task OnPointerMove(PointerEventArgs e)
-    {
-        if (_isDragging)
-        {
-            var deltaX = e.ClientX - _lastPointerX;
-            var deltaY = e.ClientY - _lastPointerY;
-
-            _lastPointerX = e.ClientX;
-            _lastPointerY = e.ClientY;
-
-            // Update camera orbit
-            Camera.Orbit(deltaX, deltaY);
-
-            // Send updated view matrix to JavaScript
-            if (_module != null && _ready)
-            {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
-            }
-        }
-        else if (_isPanning)
-        {
-            var deltaX = e.ClientX - _lastPointerX;
-            var deltaY = e.ClientY - _lastPointerY;
-
-            _lastPointerX = e.ClientX;
-            _lastPointerY = e.ClientY;
-
-            // Update camera pan (Shift key check)
-            Camera.PanWithMouse(deltaX, deltaY, e.ShiftKey);
-
-            // Send updated view matrix to JavaScript
-            if (_module != null && _ready)
-            {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
-            }
-        }
-    }
-
-    private void OnPointerUp(PointerEventArgs e)
-    {
-        if (e.Button == 0)
-        {
-            _isDragging = false;
-        }
-        else if (e.Button == 2)
-        {
-            _isPanning = false;
-        }
-    }
-
-    private async Task OnWheel(WheelEventArgs e)
-    {
-        // Update camera zoom
-        Camera.Zoom(e.DeltaY);
-
-        // Send updated view matrix to JavaScript
-        if (_module != null && _ready)
-        {
-            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
-        }
-    }
-
-    private void OnKeyDown(KeyboardEventArgs e)
-    {
-        // Toggle toolbar with period key
-        if (e.Key == ".")
-        {
-            _isToolbarVisible = !_isToolbarVisible;
-            StateHasChanged();
-            return;
-        }
-
-        // Show controls when ? key is pressed (Shift + / or direct ?)
-        if (e.Key == "?" || (e.Key == "/" && e.ShiftKey))
-        {
-            _showControls = true;
-            StateHasChanged();
-        }
-        else
-            // Track pressed keys (allow multiple simultaneous keys)
-            _pressedKeys.Add(e.Key.ToLower());
-    }
-
-    private void OnKeyUp(KeyboardEventArgs e)
-    {
-        // Hide controls when ? key is released
-        if (e.Key == "?" || e.Key == "/")
-        {
-            _showControls = false;
-            StateHasChanged();
-        }
-        else
-            // Remove key from pressed set
-            _pressedKeys.Remove(e.Key.ToLower());
-    }
-
-    private async void ProcessKeyboardMovement()
-    {
-        if (_pressedKeys.Count == 0 || _module == null || !_ready) return;
-
-        // Calculate movement direction from pressed keys
-        double forward = 0, right = 0, up = 0;
-        bool shiftPressed = _pressedKeys.Contains("shift");
-
-        // WASD for horizontal/forward movement
-        if (_pressedKeys.Contains("w")) forward += 1;
-        if (_pressedKeys.Contains("s")) forward -= 1;
-        if (_pressedKeys.Contains("d")) right += 1;
-        if (_pressedKeys.Contains("a")) right -= 1;
-
-        // Q/E for vertical movement
-        if (_pressedKeys.Contains("q")) up -= 1;
-        if (_pressedKeys.Contains("e")) up += 1;
-
-        // Apply movement if any key is pressed
-        if (forward != 0 || right != 0 || up != 0)
-        {
-            Camera.PanWithKeyboard(forward, right, up, shiftPressed);
-
-            // Send updated view matrix to JavaScript
-            try
-            {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
-            }
-            catch
-            {
-                // Ignore exceptions during rapid updates
-            }
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-
-        // Subscribe to picking events
-        OnPickingRayCreated += OnPickingRayRun;
-        // One-time initialization: import module and create .NET reference
-        try
-        {
-            // Add version parameter to force cache refresh
-            _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
-        }
-        catch (JSException jse)
-        {
-            _module = null;
-            _error = $"Failed to import webgpu module: {jse.Message}";
-            Console.Error.WriteLine(_error);
-            try { await JS.InvokeVoidAsync("console.error", _error); } catch { }
-            StateHasChanged();
-            return;
-        }
-        catch (Exception ex)
-        {
-            _module = null;
-            _error = $"Unexpected error importing webgpu module: {ex.Message}";
-            Console.Error.WriteLine(_error);
-            try { await JS.InvokeVoidAsync("console.error", _error); } catch { }
-            StateHasChanged();
-            return;
-        }
-
-        // Create DotNetObjectReference for JS -> .NET callbacks
-        _dotNetRef = DotNetObjectReference.Create(this);
-
-        // Send initial options and view matrix (this triggers the render loop in JS)
-        try
-        {
-            await SendOptionsToJavaScriptAsync(isInitializing: true);
-        }
-        catch (Exception ex)
-        {
-            _error = $"Error initializing WebGPU canvas: {ex.Message}";
-            Console.Error.WriteLine(_error);
-            try { await JS.InvokeVoidAsync("console.error", _error); } catch { }
-            StateHasChanged();
-        }
-    }
-
-    protected override async Task OnParametersSetAsync()
-    {
-        // Only send updates after the module is loaded (after first render)
-        await SendOptionsToJavaScriptAsync(isInitializing: false);
-    }
-
-    private async Task SendOptionsToJavaScriptAsync(bool isInitializing)
-    {
-        // Guard: module must be loaded (happens after first render)
-        if (_module is null) return;
-
-        if (isInitializing)
-        {
-            // Pass normalized options on first init to avoid shape mismatches
-            await _module.InvokeVoidAsync(
-                "initGPU_Canvas",
-                _dotNetRef,
-                _canvasRef,
-                Options.ToJavascriptOptions(),
-                Camera.ConvertMatrixToJavaScript());
-        }
-        else
-        {
-            // Hot-update with the same normalized shape
-            await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions());
-
-            // Recompute and send projection matrix when options change
-            // (in case projection-related options like FOV, ortho size, etc. changed)
-            await SendProjectionMatrixToJavaScriptAsync();
-        }
-    }
-
-    [JSInvokable]
-    public Task OnFrameMsUpdate(double ms)
-    {
-        LatestFrameMs = ms;
-        // No StateHasChanged to avoid re-render per frame; consumer can bind to events if desired
-        return Task.CompletedTask;
-    }
-
-    [JSInvokable]
-    public async Task OnWebGpuReady()
-    {
-        _ready = true;
-        _error = null;
-
-        // Send initial projection matrix after WebGPU is ready
-        await SendProjectionMatrixToJavaScriptAsync();
-
-        StateHasChanged();
-    }
-
-    [JSInvokable]
-    public Task OnWebGpuError(string message)
-    {
-        _ready = false;
-        _error = message;
-        StateHasChanged();
-        return Task.CompletedTask;
-    }
-
-    [JSInvokable]
-    public async Task OnCanvasResized(double width, double height)
-    {
-        _canvasWidth = width;
-        _canvasHeight = height;
-
-        // Recompute and send projection matrix when canvas size changes
-        await SendProjectionMatrixToJavaScriptAsync();
-    }
-
-    private async Task SendProjectionMatrixToJavaScriptAsync()
-    {
-        if (_module is null || !_ready || Camera is null) return;
-
-        try
-        {
-            var projectionMatrix = Camera.ConvertProjectionMatrixToJavaScript(_canvasWidth, _canvasHeight);
-            await _module.InvokeVoidAsync("writeProjectionMatrix", projectionMatrix);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error sending projection matrix: {ex.Message}");
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Camera = new OrbitCamera(Camera.Target, Options);
-        // Stop keyboard timer
-        _keyboardMoveTimer?.Dispose();
-
-        Options.PropertyChanged -= OnOptionsChanged;
-
-        if (_module is not null)
-        {
-            try { await _module.InvokeVoidAsync("disposeWebGPU_Canvas"); } catch { /* ignore */ }
-            try { await _module.DisposeAsync(); } catch { /* ignore */ }
-        }
-
-        _dotNetRef?.Dispose();
-    }
-
-    public void ResetCamera()
-    {
-        // Reset camera to default Center and orientation
-        Camera.Reset(totalSphere);
-
-        // Send updated view matrix to JavaScript
-        _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
-    }
-
+    public void ResetCamera(){ Camera.Reset(totalSphere); _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); }
     private async Task HandleCameraReset() => ResetCamera();
+    private async Task HandleCameraCardinalView(CardinalDirection dir){ if(Camera is null) return; ResetCamera(); Camera.SetCardinalView(dir); if(_module!=null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); }
 
-    private async Task HandleCameraCardinalView(CardinalDirection direction)
-    {
-        if (Camera is null) return;
-        ResetCamera();
-        Camera.SetCardinalView(direction);
+    private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e){ if(e?.PropertyName=="ZIsUp"){ Camera.SwapCameraUp(); await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } if(e?.PropertyName=="IsProjectionCamera") Options.AdjustCameraProjectionParameters(); await SendOptionsToJavaScriptAsync(false); }
+    private void OnOptionsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e){ if(e?.PropertyName==nameof(BugViewerOptions.SampleCount)) { _showMsaaRefreshPrompt = true; StateHasChanged(); } }
 
-        // Send updated view matrix to JavaScript
-        if (_module != null && _ready)
-        {
-            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
-        }
-    }
-    #endregion
-    private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e?.PropertyName == "ZIsUp")
-        {
-            Camera.SwapCameraUp();
-            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
-        }
-        if (e?.PropertyName == "IsProjectionCamera")
-            Options.AdjustCameraProjectionParameters();
-        await SendOptionsToJavaScriptAsync(false);
-        await InvokeAsync(StateHasChanged);
-    }
+    private void OnPickingRayRun(Ray pickingRay){ Console.WriteLine($"Picking ray: O({pickingRay.Anchor.X:F2},{pickingRay.Anchor.Y:F2},{pickingRay.Anchor.Z:F2}) D({pickingRay.Direction.X:F2},{pickingRay.Direction.Y:F2},{pickingRay.Direction.Z:F2})"); }
 
-    private void OnPickingRayRun(Ray pickingRay)
-    {
-        // Example: Log the ray information
-        Console.WriteLine($"Picking ray created:");
-        Console.WriteLine($"  Origin: ({pickingRay.Anchor.X:F3}, {pickingRay.Anchor.Y:F3}, {pickingRay.Anchor.Z:F3})");
-        Console.WriteLine($"  Direction: ({pickingRay.Direction.X:F3}, {pickingRay.Direction.Y:F3}, {pickingRay.Direction.Z:F3})");
+    private bool UpdateSpheresAdd(AbstractObject3D obj3D){ var sphere = MinimumSphere.Run(obj3D.Vertices); objectSpheres[obj3D]=sphere; var need=!Sphere.AContainsB(totalSphere,sphere); if(need){ var newSphere=MinimumSphere.Run(objectSpheres.Keys.SelectMany(o=>o.Vertices)); need=!Sphere.IsPracticallySame(newSphere,totalSphere); if(need) totalSphere=newSphere; } return need; }
+    private bool UpdateSpheresRemove(AbstractObject3D obj3D){ var sphere=objectSpheres[obj3D]; objectSpheres.Remove(obj3D); var need=obj3D.Vertices.Any(v=>!Sphere.OnSurface(totalSphere,v)); if(need){ var newSphere=MinimumSphere.Run(objectSpheres.Keys.SelectMany(o=>o.Vertices)); need=!Sphere.IsPracticallySame(newSphere,totalSphere); if(need) totalSphere=newSphere; } return need; }
 
-        // TODO: Implement triangle intersection testing here
-        // You can iterate through your meshes and test ray-triangle intersections
-        // using algorithms like Möller-Trumbore or similar
-    }
-
-    /// <summary>
-    /// Updates the bounding spheres when adding a new object.
-    /// </summary>
-    /// <param name="mesh">The mesh to update spheres for.</param>
-    /// <param name="sphere">The sphere to update.</param>
-    /// <returns>True if spheres were updated, otherwise false.</returns>
-    private bool UpdateSpheresAdd(AbstractObject3D obj3D)
-    {
-        var sphere = MinimumSphere.Run(obj3D.Vertices);
-        objectSpheres[obj3D] = sphere;
-        var needToUpdate = !Sphere.AContainsB(totalSphere, sphere);
-        if (needToUpdate) // if totalSphere does not contain sphere
-        {
-            var newTotalSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
-            needToUpdate = !Sphere.IsPracticallySame(newTotalSphere, totalSphere);
-            if (needToUpdate)
-                totalSphere = newTotalSphere;
-        }
-        return needToUpdate;
-    }
-
-    /// <summary>
-    /// Updates the bounding spheres for the given mesh and sphere.
-    /// </summary>
-    /// <param name="mesh">The mesh to update spheres for.</param>
-    /// <param name="sphere">The sphere to update.</param>
-    /// <returns>True if spheres were updated, otherwise false.</returns>
-    private bool UpdateSpheresRemove(AbstractObject3D obj3D)
-    {
-        var sphere = objectSpheres[obj3D];
-        objectSpheres.Remove(obj3D);
-        var needToUpdate = obj3D.Vertices.Any(v => !Sphere.OnSurface(totalSphere, v));
-        if (needToUpdate) // if totalSphere does not contain sphere
-        {
-            var newTotalSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
-            needToUpdate = !Sphere.IsPracticallySame(newTotalSphere, totalSphere);
-            if (needToUpdate)
-                totalSphere = newTotalSphere;
-        }
-        return needToUpdate;
-    }
+    public async Task AddMeshAsync(MeshData mesh){ _meshes.Add(mesh); UpdateViewer(UpdateSpheresAdd(mesh)); await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData()); }
+    public async Task AddLinesAsync(LineData path){ _lines.Add(path); UpdateViewer(UpdateSpheresAdd(path)); await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData()); }
+    public async Task RemoveMeshAsync(MeshData mesh){ var index=_meshes.IndexOf(mesh); if(index<0) return; UpdateViewer(UpdateSpheresRemove(mesh)); await _module.InvokeVoidAsync("removeMesh", index); }
+    public async Task RemoveLinesAsync(LineData path){ var index=_lines.IndexOf(path); if(index<0) return; UpdateViewer(UpdateSpheresRemove(path)); await _module.InvokeVoidAsync("removeLines", index); }
+    public async Task ClearAllMeshesAsync(){ if(_meshes.Count==0) return; var need=_meshes.All(m=>UpdateSpheresRemove(m)); _meshes.Clear(); UpdateViewer(need); await _module.InvokeVoidAsync("clearAllMeshes"); }
+    public async Task ClearAllLinesAsync(){ if(_lines.Count==0) return; var need=_lines.All(l=>UpdateSpheresRemove(l)); _lines.Clear(); UpdateViewer(need); await _module.InvokeVoidAsync("clearAllLines"); }
+    public async Task AddTextBillboardAsync(string id,string text,Vector3 position,System.Drawing.Color backgroundColor,System.Drawing.Color textColor){ if(_module is null || !_ready) throw new InvalidOperationException("Not ready"); var billboardData=new TextBillboard{ BackgroundColor=backgroundColor, TextColor=textColor, Text=text, Vertices=new List<Vector3>{ position }, Id=id }; await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData()); }
+    public async Task RemoveTextBillboardAsync(string id){ if(_module is null) return; await _module.InvokeVoidAsync("removeTextBillboard", id); }
+    public async Task ClearAllTextBillboardsAsync(){ if(_module is null) return; await _module.InvokeVoidAsync("clearAllTextBillboards"); }
+    private void RefreshPage(){ /* navigation refresh could be added if Navigation injected */ } // placeholder
+    private void ResetToDefaults(){ Options.ResetToDefault(); _showMsaaRefreshPrompt=false; }
 }
