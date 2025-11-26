@@ -8,7 +8,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="page-container" style="width:@Width; height:@Height;">
+<div class="page-container" style="width:@Width; height:@Height;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
     <canvas id="webgpu-canvas"
             class="webgpu-canvas"
             style="height:100%; width:100%;"
@@ -25,7 +25,7 @@
     </canvas>
     <!-- A small anchor button to toggle the popover -->
         <FluentStack Style="position:absolute; top:4px; left:4px; z-index:1001"
-                 Class="@($"toolbar-buttons {(IsAnyPopoverOpen ? "popover-open" : "")}")">
+                 Class="@($"toolbar-buttons {(_isMouseButtonDown ? "mouse-down" : "")} {(IsAnyPopoverOpen ? "popover-open" : "")}")">
         <FluentButton Id="options"
                       Appearance="Appearance.Stealth"
                       Title="Open Options"
@@ -201,7 +201,7 @@
         animation: fadeToTransparent 5s ease-in-out forwards;
     }
 
-        .toolbar-buttons:hover,
+        .toolbar-buttons:hover:not(.mouse-down),
         .toolbar-buttons.popover-open {
             animation: none;
             opacity: 1 !important;
@@ -223,6 +223,7 @@
     private bool _optionsPopover = false;
     private bool _helpPopover = false;
     private bool IsAnyPopoverOpen => _cameraPopover || _optionsPopover || _helpPopover;
+    private bool _isMouseButtonDown;
 
     [Parameter]
     public string Width { get; set; } = "100%";
