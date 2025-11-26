@@ -8,19 +8,16 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="page-container" style="width:@Width; height:@Height;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
+<div @ref="_containerRef" tabindex="0" @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" @onkeydown:stopPropagation="true" class="page-container" style="width:@Width; height:@Height;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
     <canvas id="webgpu-canvas"
             class="webgpu-canvas"
             style="height:100%; width:100%;"
-            tabindex="0"
             @ref="_canvasRef"
             @onpointerdown="OnPointerDown"
             @onpointermove="OnPointerMove"
             @onpointerup="OnPointerUp"
             @onwheel="OnWheel"
             @onwheel:preventDefault="true"
-            @onkeydown="OnKeyDown"
-            @onkeyup="OnKeyUp"
             @oncontextmenu:preventDefault="true">
     </canvas>
     <!-- A small anchor button to toggle the popover -->
@@ -231,6 +228,7 @@
     [Parameter]
     public string Height { get; set; } = "100vh";
 
+    private ElementReference? _containerRef;
     private ElementReference? _canvasRef;
     private BugViewerOptions _options;
 
@@ -303,23 +301,36 @@
 
     private void OnKeyDown(KeyboardEventArgs e)
     {
+        if (e.Key == "Escape")
+        {
+            _cameraPopover = false;
+            _optionsPopover = false;
+            _helpPopover = false;
+            _pressedKeys.Clear();
+            StateHasChanged();
+            return;
+        }
         if (e.Key == ",")
         {
             ShowOptionsPanel();
+            _pressedKeys.Clear();
             return;
         }
 
         if (e.Key == ".")
         {
             ShowCameraPanel();
+            _pressedKeys.Clear();
             return;
         }
 
         if (e.Key == "?" || (e.Key == "/"))
         {
             ShowHelpPanel();
+            _pressedKeys.Clear();
             return;
         }
+        if (IsAnyPopoverOpen) return;
 
         _pressedKeys.Add(e.Key.ToLower());
     }
@@ -352,6 +363,7 @@
 
     private void OnPointerDown(PointerEventArgs e)
     {
+        _containerRef?.FocusAsync();
         var currentTime = DateTime.Now;
         var timeSinceLast = (currentTime - _lastClickTime).TotalMilliseconds;
         var dist = Math.Sqrt(Math.Pow(e.ClientX - _lastClickX, 2) + Math.Pow(e.ClientY - _lastClickY, 2));
@@ -516,6 +528,10 @@
         if (!firstRender)
         {
             return;
+        }
+        if (_containerRef.HasValue)
+        {
+            await _containerRef.Value.FocusAsync();
         }
 
         OnPickingRayCreated += OnPickingRayRun;
