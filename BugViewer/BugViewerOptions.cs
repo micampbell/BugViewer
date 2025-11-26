@@ -20,8 +20,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    /// <summary>Default configuration with sensible values for a basic grid.</summary>
-    public static BugViewerOptions Default = new()
+    /// <summary>DefaultLight configuration with sensible values for a basic grid.</summary>
+    public static BugViewerOptions DefaultLight = new()
     {
         LightPolarAngle = 0.13 * Math.PI,
         LightAzimuthAngle = 0.33 * Math.PI,
@@ -31,6 +31,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoCameraSphereBuffer = 0.2,
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 3.0,
+        IsDarkTheme = false,
         ClearColor = "#f2f2ff",
         LineColor = "#d2d2d2",
         LineTransparency = 0.8f,
@@ -62,41 +63,97 @@ public class BugViewerOptions : INotifyPropertyChanged
         PanSpeedMultiplier = 3.0,
         CoordinateThickness = 1
     };
-    public void ResetToDefault()
+    /// <summary>DefaultLight configuration with sensible values for a basic grid.</summary>
+    public static BugViewerOptions DefaultDark = new()
     {
-        AutoResetCamera = Default.AutoResetCamera;
-        AutoUpdateGrid = Default.AutoUpdateGrid;
-        AutoCameraSphereBuffer = Default.AutoCameraSphereBuffer;
-        AutoGridBuffer = Default.AutoGridBuffer;
-        ClearColor = Default.ClearColor;
-        LineColor = Default.LineColor;
-        LineTransparency = Default.LineTransparency;
-        BaseColor = Default.BaseColor;
-        BaseTransparency = Default.BaseTransparency;
-        LineWidthX = Default.LineWidthX;
-        LineWidthY = Default.LineWidthY;
-        SampleCount = Default.SampleCount;
-        IsProjectionCamera = Default.IsProjectionCamera;
-        Fov = Default.Fov;
-        OrthoSize = Default.OrthoSize;
-        ZNear = Default.ZNear;
-        ZFar = Default.ZFar;
-        MaxPolar = Default.MaxPolar;
-        MinPolar = Default.MinPolar;
-        MaxAzimuth = Default.MaxAzimuth;
-        MinAzimuth = Default.MinAzimuth;
-        ConstrainPolar = Default.ConstrainPolar;
-        ConstrainAzimuth = Default.ConstrainAzimuth;
-        MaxDistance = Default.MaxDistance;
-        MinDistance = Default.MinDistance;
-        ConstrainDistance = Default.ConstrainDistance;
-        OrbitSensitivity = Default.OrbitSensitivity;
-        ZoomSensitivity = Default.ZoomSensitivity;
-        PanSensitivity = Default.PanSensitivity;
-        PanSpeedMultiplier = Default.PanSpeedMultiplier;
-        GridSize = Default.GridSize;
-        GridSpacing = Default.GridSpacing;
-        CoordinateThickness = Default.CoordinateThickness;
+        LightPolarAngle = 0.13 * Math.PI,
+        LightAzimuthAngle = 0.33 * Math.PI,
+        AmbientLight = 0.3,
+        SpecularPower = 32.0,
+        AutoResetCamera = UpdateTypes.SphereChange,
+        AutoCameraSphereBuffer = 0.2,
+        AutoUpdateGrid = UpdateTypes.SphereChange,
+        AutoGridBuffer = 3.0,
+        IsDarkTheme = true,
+        ClearColor = "#202020",
+        LineColor = "#d2d2d2",
+        LineTransparency = 0.8f,
+        BaseColor = "#000000",
+        BaseTransparency = 0f,
+        LineWidthX = 0.1,
+        LineWidthY = 0.1,
+        SampleCount = 4,
+        IsProjectionCamera = true,
+        Fov = 20,
+        OrthoSize = 5.0,
+        ZNear = 0.001,
+        ZFar = 999,
+        ZIsUp = true,
+        GridSize = 100.0,
+        GridSpacing = 5.0,
+        ConstrainPolar = true,
+        MaxPolar = Math.PI * 0.49,
+        MinPolar = -Math.PI * 0.49,
+        ConstrainAzimuth = false,
+        MaxAzimuth = 0,
+        MinAzimuth = 0,
+        MaxDistance = 9999.0,
+        MinDistance = 0.5,
+        ConstrainDistance = true,
+        OrbitSensitivity = 0.01,
+        ZoomSensitivity = 0.005,
+        PanSensitivity = 0.005,
+        PanSpeedMultiplier = 3.0,
+        CoordinateThickness = 1
+    };
+    public void ResetToDefault(bool isDarkTheme)
+    {
+        if (isDarkTheme)
+            Set(DefaultDark);
+        else Set(DefaultLight);
+    }
+
+    private void Set(BugViewerOptions newOptions)
+    {
+        AutoResetCamera = newOptions.AutoResetCamera;
+        AutoUpdateGrid = newOptions.AutoUpdateGrid;
+        AutoCameraSphereBuffer = newOptions.AutoCameraSphereBuffer;
+        AutoGridBuffer = newOptions.AutoGridBuffer;
+        IsDarkTheme = newOptions.IsDarkTheme;
+        ClearColor = newOptions.ClearColor;
+        LineColor = newOptions.LineColor;
+        LineTransparency = newOptions.LineTransparency;
+        BaseColor = newOptions.BaseColor;
+        BaseTransparency = newOptions.BaseTransparency;
+        LineWidthX = newOptions.LineWidthX;
+        LineWidthY = newOptions.LineWidthY;
+        SampleCount = newOptions.SampleCount;
+        IsProjectionCamera = newOptions.IsProjectionCamera;
+        Fov = newOptions.Fov;
+        OrthoSize = newOptions.OrthoSize;
+        ZNear = newOptions.ZNear;
+        ZFar = newOptions.ZFar;
+        MaxPolar = newOptions.MaxPolar;
+        MinPolar = newOptions.MinPolar;
+        MaxAzimuth = newOptions.MaxAzimuth;
+        MinAzimuth = newOptions.MinAzimuth;
+        ConstrainPolar = newOptions.ConstrainPolar;
+        ConstrainAzimuth = newOptions.ConstrainAzimuth;
+        MaxDistance = newOptions.MaxDistance;
+        MinDistance = newOptions.MinDistance;
+        ConstrainDistance = newOptions.ConstrainDistance;
+        OrbitSensitivity = newOptions.OrbitSensitivity;
+        ZoomSensitivity = newOptions.ZoomSensitivity;
+        PanSensitivity = newOptions.PanSensitivity;
+        PanSpeedMultiplier = newOptions.PanSpeedMultiplier;
+        GridSize = newOptions.GridSize;
+        GridSpacing = newOptions.GridSpacing;
+        CoordinateThickness = newOptions.CoordinateThickness;
+        LightPolarAngle = newOptions.LightPolarAngle;
+        LightAzimuthAngle = newOptions.LightAzimuthAngle;
+        AmbientLight = newOptions.AmbientLight;
+        SpecularPower = newOptions.SpecularPower;
+        ZIsUp = newOptions.ZIsUp;
     }
 
     private UpdateTypes _autoResetCamera;
@@ -146,6 +203,22 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
+    private bool _isDarkTheme = true;
+    /// <summary>
+    /// Gets or sets a value indicating whether the application is using a light theme.
+    /// </summary>
+    public bool IsDarkTheme
+    {
+        get => _isDarkTheme;
+        set
+        {
+            if (_isDarkTheme != value)
+            {
+                _isDarkTheme = value;
+                OnPropertyChanged();
+            }
+        }
+    }
 
     private string _clearColor;
     /// <summary>Background clear color for the rendering canvas.</summary>

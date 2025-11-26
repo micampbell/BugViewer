@@ -68,6 +68,11 @@
                 <FluentStack>
                     <FluentAccordion>
                         <FluentAccordionItem Heading="Lighting">
+                            <FluentRadioGroup @bind-Value="Options.IsDarkTheme">
+                                <FluentRadio Value="false">Light</FluentRadio>
+                                <FluentRadio Value="true">Dark</FluentRadio>
+                            </FluentRadioGroup>
+                            <FluentLabel>Color Theme</FluentLabel>
                             <FluentStack Orientation="Orientation.Vertical" Style="width:100%;">
                                 <label>Clear Color</label>
                                 <input type="color" style="width:100%;" @bind="Options.ClearColor" @bind:event="oninput" />
@@ -295,7 +300,7 @@
     {
         if (Options is null)
         {
-            Options = BugViewerOptions.Default;
+            Options = BugViewerOptions.DefaultLight;
         }
 
         Camera = new OrbitCamera(Vector3.Zero, Options);
@@ -895,10 +900,5 @@
         }
 
         await _module.InvokeVoidAsync("clearAllTextBillboards");
-    }
-
-    private void ResetToDefaults()
-    {
-        Options.ResetToDefault();
     }
 }
