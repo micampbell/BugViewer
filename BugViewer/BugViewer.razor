@@ -8,7 +8,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="page-container" style="width:@Width; height:@Height;" >
+<div class="page-container" style="width:@Width; height:@Height;">
     <canvas id="webgpu-canvas"
             class="webgpu-canvas"
             style="height:100%; width:100%;"
@@ -24,18 +24,19 @@
             @oncontextmenu:preventDefault="true">
     </canvas>
     <!-- A small anchor button to toggle the popover -->
-    <FluentStack Style="position:absolute; top:4px; left:4px; z-index:1001" >
-        <FluentButton Id="camera-controls"
-                      Appearance="Appearance.Stealth"
-                      Title="Open Camera Controls"
-                      OnClick="@(() => ShowCameraPanel())">
-            <FluentIcon Value="@(new Icons.CameraSparkles())" />
-        </FluentButton>
+        <FluentStack Style="position:absolute; top:4px; left:4px; z-index:1001"
+                 Class="@($"toolbar-buttons {(IsAnyPopoverOpen ? "popover-open" : "")}")">
         <FluentButton Id="options"
                       Appearance="Appearance.Stealth"
                       Title="Open Options"
                       OnClick="@(() => ShowOptionsPanel())">
             <FluentIcon Value="@(new Icons.Settings())" />
+        </FluentButton>
+        <FluentButton Id="camera-controls"
+                      Appearance="Appearance.Stealth"
+                      Title="Open Camera Controls"
+                      OnClick="@(() => ShowCameraPanel())">
+            <FluentIcon Value="@(new Icons.CameraSparkles())" />
         </FluentButton>
         <FluentButton Id="help"
                       Appearance="Appearance.Stealth"
@@ -58,12 +59,11 @@
                 <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))" Appearance="Appearance.Stealth" Title="View +Y" Class="toolbar-btn cardinal-btn">+Y</FluentButton>
                 <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))" Appearance="Appearance.Stealth" Title="View -Z" Class="toolbar-btn cardinal-btn">-Z</FluentButton>
                 <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))" Appearance="Appearance.Stealth" Title="View +Z" Class="toolbar-btn cardinal-btn">+Z</FluentButton>
-                <FluentButton OnClick="ToggleDockSide" Appearance="Appearance.Stealth" Title="Dock Side" Class="toolbar-btn dock-btn"><FluentIcon Value="@(new Icons.ArrowBidirectionalLeftRight())" /></FluentButton>
             </FluentStack>
         </Body>
     </FluentPopover>
     <FluentPopover AnchorId="options"
-                   Style="width:320px;"
+                   Style="width:360px;"
                    @bind-Open="_optionsPopover"
                    HorizontalPosition="HorizontalPosition.Right">
         <Body>
@@ -79,6 +79,11 @@
                             <FluentSlider Label="Light Azimuthal" @bind-Value="Options.LightAzimuthAngle" Min="1" Max="6.28" Step="0.01" />
                             <FluentSlider Label="Ambient Light" @bind-Value="Options.AmbientLight" Min="0" Max="1" Step="0.01" />
                             <FluentSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
+                            <FluentSelect Items=@_sampleCountItems Label="MSAA Sample Count"
+                                          TOption="Option<int>"
+                                          OptionText="@(i => i.Text)"
+                                          OptionValue="@(i => i.Value.ToString())"
+                                          @bind-SelectedOption="@selectedIntOption" ValueChanged="SampleCountOptionChanged" />
                         </FluentAccordionItem>
                     </FluentAccordion>
                     <FluentAccordion>
@@ -154,15 +159,6 @@
                     <FluentAccordion>
                         <FluentAccordionItem Heading="🎬 Rendering">
                             <FluentStack Orientation="Orientation.Vertical">
-                                <FluentSelect @bind-Value="SampleCountString" Label="MSAA Sample Count" Items="_sampleCountItems" />
-                                @if (_showMsaaRefreshPrompt)
-                                {
-                                    <div class="refresh-prompt">
-                                        <FluentLabel Typo="Typography.Body">MSAA changed - refresh needed</FluentLabel>
-                                        <FluentButton OnClick="RefreshPage" Appearance="Appearance.Accent">Refresh</FluentButton>
-                                    </div>
-                                }
-                                <FluentButton OnClick="ResetToDefaults" Appearance="Appearance.Outline">Reset to Defaults</FluentButton>
                             </FluentStack>
                         </FluentAccordionItem>
                     </FluentAccordion>
@@ -200,63 +196,109 @@
 
 </div>
 
+<style>
+    .toolbar-buttons {
+        animation: fadeToTransparent 5s ease-in-out forwards;
+    }
+
+        .toolbar-buttons:hover,
+        .toolbar-buttons.popover-open {
+            animation: none;
+            opacity: 1 !important;
+        }
+
+    @@keyframes fadeToTransparent {
+        from {
+            opacity: 1;
+        }
+
+        to {
+            opacity: 0.001;
+        }
+    }
+</style>
+
 @code {
     private bool _cameraPopover = false;
     private bool _optionsPopover = false;
     private bool _helpPopover = false;
-    private string _toolbarDockSide = "right";
+    private bool IsAnyPopoverOpen => _cameraPopover || _optionsPopover || _helpPopover;
 
-    [Parameter] public string Width { get; set; } = "100%";
-    [Parameter] public string Height { get; set; } = "100vh";
+    [Parameter]
+    public string Width { get; set; } = "100%";
+
+    [Parameter]
+    public string Height { get; set; } = "100vh";
 
     private ElementReference? _canvasRef;
     private BugViewerOptions _options;
-    [Parameter] public BugViewerOptions Options { get => _options; set { if (!ReferenceEquals(_options, value)) { _options = value; _options.PropertyChanged += OnOptionsChanged; _options.PropertyChanged += OnOptionsPropertyChanged; } } }
+
+    [Parameter]
+    public BugViewerOptions Options
+    {
+        get => _options;
+        set
+        {
+            if (!ReferenceEquals(_options, value))
+            {
+                _options = value;
+                _options.PropertyChanged += OnOptionsChanged;
+            }
+        }
+    }
+
     public OrbitCamera? Camera { get; private set; }
 
     private IJSObjectReference? _module;
     private DotNetObjectReference<BugViewer>? _dotNetRef;
     private bool _ready;
     private string? _error;
-    private bool _isDragging; private bool _isPanning; private double _lastPointerX; private double _lastPointerY;
+    private bool _isDragging;
+    private bool _isPanning;
+    private double _lastPointerX;
+    private double _lastPointerY;
     private HashSet<string> _pressedKeys = new();
     private System.Threading.Timer? _keyboardMoveTimer;
-    private Sphere totalSphere; private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
-    private List<MeshData> _meshes = new(); private List<LineData> _lines = new(); private List<MeshData> _billBoards = new();
-    private double _canvasWidth = 800; private double _canvasHeight = 600;
-    private DateTime _lastClickTime = DateTime.MinValue; private double _lastClickX; private double _lastClickY;
-    private const double DoubleClickTimeMs = 300; private const double DoubleClickDistancePx = 5;
+    private Sphere totalSphere;
+    private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
+    private List<MeshData> _meshes = new();
+    private List<LineData> _lines = new();
+    private List<MeshData> _billBoards = new();
+    private double _canvasWidth = 800;
+    private double _canvasHeight = 600;
+    private DateTime _lastClickTime = DateTime.MinValue;
+    private double _lastClickX;
+    private double _lastClickY;
+    private const double DoubleClickTimeMs = 300;
+    private const double DoubleClickDistancePx = 5;
     public double LatestFrameMs { get; private set; }
 
-    // Options rendering local fields (from original OptionsPanel)
-    private bool _showMsaaRefreshPrompt = false;
-    private string SampleCountString { get => Options.SampleCount.ToString(); set { if (int.TryParse(value, out var v)) { Options.SampleCount = v; } } }
-    private List<Option<string>> _sampleCountItems = new(){
-        new(){ Value="1", Text="1x"}, new(){ Value="2", Text="2x"}, new(){ Value="4", Text="4x"}, new(){ Value="8", Text="8x"}
+    Option<int>? selectedIntOption;
+    private List<Option<int>> _sampleCountItems = new()
+    {
+        new() { Value = 1, Text = "1x (No MSAA)" },
+        // new() { Value = 2, Text = "2x" },  //generally not supported
+        new() { Value = 4, Text = "4x MSAA" },
+        new() { Value = 8, Text = "8x MSAA" }
     };
-
-    // Event for picking rays
+    private void SampleCountOptionChanged(string args)
+    {
+        Options.SampleCount = int.Parse(args);
+    }
     public event Action<Ray>? OnPickingRayCreated;
 
-    // Viewer update helper (moved from previous version)
-    private async void UpdateViewer(bool sphereChanged)
+    protected override void OnInitialized()
     {
-        if (Camera is null || _module is null) return;
-        if ((sphereChanged && Options.AutoResetCamera == UpdateTypes.SphereChange) || Options.AutoResetCamera == UpdateTypes.OnDataChange)
+        if (Options is null)
         {
-            ResetCamera();
-            try { await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } catch { }
+            Options = BugViewerOptions.Default;
         }
-        if ((sphereChanged && Options.AutoUpdateGrid == UpdateTypes.SphereChange) || Options.AutoUpdateGrid == UpdateTypes.OnDataChange)
-        {
-            Options.GridSize = Options.AutoGridBuffer * (totalSphere.Center.Length() + totalSphere.GetRadius());
-            OnOptionsChanged(null, null);
-        }
+
+        Camera = new OrbitCamera(Vector3.Zero, Options);
+        _keyboardMoveTimer = new System.Threading.Timer(_ => ProcessKeyboardMovement(), null, 0, 16);
     }
 
-    protected override void OnInitialized() { if (Options is null) Options = BugViewerOptions.Default; Camera = new OrbitCamera(Vector3.Zero, Options); _keyboardMoveTimer = new System.Threading.Timer(_ => ProcessKeyboardMovement(), null, 0, 16); }
 
-    private void ToggleDockSide() { _toolbarDockSide = _toolbarDockSide == "right" ? "left" : "right"; }
 
     private void OnKeyDown(KeyboardEventArgs e)
     {
@@ -265,17 +307,20 @@
             ShowOptionsPanel();
             return;
         }
+
         if (e.Key == ".")
         {
             ShowCameraPanel();
             return;
         }
-        if (e.Key == "?" || (e.Key == "/" && e.ShiftKey))
+
+        if (e.Key == "?" || (e.Key == "/"))
         {
             ShowHelpPanel();
             return;
         }
-        else _pressedKeys.Add(e.Key.ToLower());
+
+        _pressedKeys.Add(e.Key.ToLower());
     }
 
     private void ShowOptionsPanel()
@@ -283,70 +328,555 @@
         _optionsPopover = !_optionsPopover;
         _helpPopover = false;
         _cameraPopover = false;
-        StateHasChanged();
     }
+
     private void ShowHelpPanel()
     {
         _optionsPopover = false;
         _helpPopover = !_helpPopover;
         _cameraPopover = false;
-        StateHasChanged();
     }
+
     private void ShowCameraPanel()
     {
         _optionsPopover = false;
         _helpPopover = false;
         _cameraPopover = !_cameraPopover;
+    }
+
+    private void OnKeyUp(KeyboardEventArgs e)
+    {
+        _pressedKeys.Remove(e.Key.ToLower());
+    }
+
+    private void OnPointerDown(PointerEventArgs e)
+    {
+        var currentTime = DateTime.Now;
+        var timeSinceLast = (currentTime - _lastClickTime).TotalMilliseconds;
+        var dist = Math.Sqrt(Math.Pow(e.ClientX - _lastClickX, 2) + Math.Pow(e.ClientY - _lastClickY, 2));
+
+        if (e.Button == 0 && timeSinceLast <= DoubleClickTimeMs && dist <= DoubleClickDistancePx)
+        {
+            OnDoubleClick(e);
+            return;
+        }
+
+        if (e.Button == 0)
+        {
+            _lastClickTime = currentTime;
+            _lastClickX = e.ClientX;
+            _lastClickY = e.ClientY;
+            _isDragging = true;
+            _isPanning = false;
+            _lastPointerX = e.ClientX;
+            _lastPointerY = e.ClientY;
+        }
+        else if (e.Button == 2)
+        {
+            _isPanning = true;
+            _isDragging = false;
+            _lastPointerX = e.ClientX;
+            _lastPointerY = e.ClientY;
+        }
+    }
+
+    private async Task OnDoubleClick(PointerEventArgs e)
+    {
+        if (_module is null || !_ready)
+        {
+            return;
+        }
+
+        var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
+        var rx = e.ClientX - rect.Left;
+        var ry = e.ClientY - rect.Top;
+        var pickingRay = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
+        await AddTextBillboardAsync("dbl", "Picked", pickingRay.Anchor + 15 * pickingRay.Direction, System.Drawing.Color.Blue, System.Drawing.Color.White);
+        OnPickingRayCreated?.Invoke(pickingRay);
+    }
+
+    private class BoundingClientRect
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+    }
+
+    private async Task OnPointerMove(PointerEventArgs e)
+    {
+        if (_isDragging)
+        {
+            var dx = e.ClientX - _lastPointerX;
+            var dy = e.ClientY - _lastPointerY;
+            _lastPointerX = e.ClientX;
+            _lastPointerY = e.ClientY;
+            Camera.Orbit(dx, dy);
+
+            if (_module != null && _ready)
+            {
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            }
+        }
+        else if (_isPanning)
+        {
+            var dx = e.ClientX - _lastPointerX;
+            var dy = e.ClientY - _lastPointerY;
+            _lastPointerX = e.ClientX;
+            _lastPointerY = e.ClientY;
+            Camera.PanWithMouse(dx, dy, e.ShiftKey);
+
+            if (_module != null && _ready)
+            {
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            }
+        }
+    }
+
+    private void OnPointerUp(PointerEventArgs e)
+    {
+        if (e.Button == 0)
+        {
+            _isDragging = false;
+        }
+        else if (e.Button == 2)
+        {
+            _isPanning = false;
+        }
+    }
+
+    private async Task OnWheel(WheelEventArgs e)
+    {
+        Camera.Zoom(e.DeltaY);
+
+        if (_module != null && _ready)
+        {
+            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+        }
+    }
+
+    private async void ProcessKeyboardMovement()
+    {
+        if (_pressedKeys.Count == 0 || _module == null || !_ready)
+        {
+            return;
+        }
+
+        double forward = 0, right = 0, up = 0;
+        bool shift = _pressedKeys.Contains("shift");
+
+        if (_pressedKeys.Contains("w"))
+        {
+            forward += 1;
+        }
+
+        if (_pressedKeys.Contains("s"))
+        {
+            forward -= 1;
+        }
+
+        if (_pressedKeys.Contains("d"))
+        {
+            right += 1;
+        }
+
+        if (_pressedKeys.Contains("a"))
+        {
+            right -= 1;
+        }
+
+        if (_pressedKeys.Contains("q"))
+        {
+            up -= 1;
+        }
+
+        if (_pressedKeys.Contains("e"))
+        {
+            up += 1;
+        }
+
+        if (forward != 0 || right != 0 || up != 0)
+        {
+            Camera.PanWithKeyboard(forward, right, up, shift);
+
+            try
+            {
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            }
+            catch
+            {
+                // Handle error silently
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        OnPickingRayCreated += OnPickingRayRun;
+
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
+        }
+        catch (JSException jse)
+        {
+            _error = $"Failed to import webgpu module: {jse.Message}";
+            StateHasChanged();
+            return;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Unexpected error importing webgpu module: {ex.Message}";
+            StateHasChanged();
+            return;
+        }
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        try
+        {
+            await SendOptionsToJavaScriptAsync(true);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error initializing WebGPU canvas: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await SendOptionsToJavaScriptAsync(false);
+    }
+
+    private async Task SendOptionsToJavaScriptAsync(bool init)
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        if (init)
+        {
+            await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(), Camera.ConvertMatrixToJavaScript());
+        }
+        else
+        {
+            await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions());
+            await SendProjectionMatrixToJavaScriptAsync();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnFrameMsUpdate(double ms)
+    {
+        LatestFrameMs = ms;
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnWebGpuReady()
+    {
+        _ready = true;
+        _error = null;
+        await SendProjectionMatrixToJavaScriptAsync();
         StateHasChanged();
     }
 
-    private void OnKeyUp(KeyboardEventArgs e) { _pressedKeys.Remove(e.Key.ToLower()); }
+    [JSInvokable]
+    public Task OnWebGpuError(string message)
+    {
+        _ready = false;
+        _error = message;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
 
-    private void OnPointerDown(PointerEventArgs e) { var currentTime = DateTime.Now; var timeSinceLast = (currentTime - _lastClickTime).TotalMilliseconds; var dist = Math.Sqrt(Math.Pow(e.ClientX - _lastClickX, 2) + Math.Pow(e.ClientY - _lastClickY, 2)); if (e.Button == 0 && timeSinceLast <= DoubleClickTimeMs && dist <= DoubleClickDistancePx) { OnDoubleClick(e); return; } if (e.Button == 0) { _lastClickTime = currentTime; _lastClickX = e.ClientX; _lastClickY = e.ClientY; _isDragging = true; _isPanning = false; _lastPointerX = e.ClientX; _lastPointerY = e.ClientY; } else if (e.Button == 2) { _isPanning = true; _isDragging = false; _lastPointerX = e.ClientX; _lastPointerY = e.ClientY; } }
+    [JSInvokable]
+    public async Task OnCanvasResized(double w, double h)
+    {
+        _canvasWidth = w;
+        _canvasHeight = h;
+        await SendProjectionMatrixToJavaScriptAsync();
+    }
 
-    private async Task OnDoubleClick(PointerEventArgs e) { if (_module is null || !_ready) return; var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef); var rx = e.ClientX - rect.Left; var ry = e.ClientY - rect.Top; var pickingRay = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height); await AddTextBillboardAsync("dbl", "Picked", pickingRay.Anchor + 15 * pickingRay.Direction, System.Drawing.Color.Blue, System.Drawing.Color.White); OnPickingRayCreated?.Invoke(pickingRay); }
-    private class BoundingClientRect { public double Left { get; set; } public double Top { get; set; } public double Width { get; set; } public double Height { get; set; } }
+    private async Task SendProjectionMatrixToJavaScriptAsync()
+    {
+        if (_module is null || !_ready || Camera is null)
+        {
+            return;
+        }
 
-    private async Task OnPointerMove(PointerEventArgs e) { if (_isDragging) { var dx = e.ClientX - _lastPointerX; var dy = e.ClientY - _lastPointerY; _lastPointerX = e.ClientX; _lastPointerY = e.ClientY; Camera.Orbit(dx, dy); if (_module != null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } else if (_isPanning) { var dx = e.ClientX - _lastPointerX; var dy = e.ClientY - _lastPointerY; _lastPointerX = e.ClientX; _lastPointerY = e.ClientY; Camera.PanWithMouse(dx, dy, e.ShiftKey); if (_module != null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } }
-    private void OnPointerUp(PointerEventArgs e) { if (e.Button == 0) _isDragging = false; else if (e.Button == 2) _isPanning = false; }
-    private async Task OnWheel(WheelEventArgs e) { Camera.Zoom(e.DeltaY); if (_module != null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); }
+        try
+        {
+            var proj = Camera.ConvertProjectionMatrixToJavaScript(_canvasWidth, _canvasHeight);
+            await _module.InvokeVoidAsync("writeProjectionMatrix", proj);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+        }
+    }
 
-    private async void ProcessKeyboardMovement() { if (_pressedKeys.Count == 0 || _module == null || !_ready) return; double forward = 0, right = 0, up = 0; bool shift = _pressedKeys.Contains("shift"); if (_pressedKeys.Contains("w")) forward += 1; if (_pressedKeys.Contains("s")) forward -= 1; if (_pressedKeys.Contains("d")) right += 1; if (_pressedKeys.Contains("a")) right -= 1; if (_pressedKeys.Contains("q")) up -= 1; if (_pressedKeys.Contains("e")) up += 1; if (forward != 0 || right != 0 || up != 0) { Camera.PanWithKeyboard(forward, right, up, shift); try { await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } catch { } } }
+    public async ValueTask DisposeAsync()
+    {
+        Camera = new OrbitCamera(Camera.Target, Options);
+        _keyboardMoveTimer?.Dispose();
+        Options.PropertyChanged -= OnOptionsChanged;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; OnPickingRayCreated += OnPickingRayRun; try { _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}"); } catch (JSException jse) { _error = $"Failed to import webgpu module: {jse.Message}"; StateHasChanged(); return; } catch (Exception ex) { _error = $"Unexpected error importing webgpu module: {ex.Message}"; StateHasChanged(); return; } _dotNetRef = DotNetObjectReference.Create(this); try { await SendOptionsToJavaScriptAsync(true); } catch (Exception ex) { _error = $"Error initializing WebGPU canvas: {ex.Message}"; StateHasChanged(); } }
-    protected override async Task OnParametersSetAsync() { await SendOptionsToJavaScriptAsync(false); }
+        if (_module != null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("disposeWebGPU_Canvas");
+            }
+            catch
+            {
+                // Handle error silently
+            }
 
-    private async Task SendOptionsToJavaScriptAsync(bool init) { if (_module is null) return; if (init) { await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(), Camera.ConvertMatrixToJavaScript()); } else { await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions()); await SendProjectionMatrixToJavaScriptAsync(); } }
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch
+            {
+                // Handle error silently
+            }
+        }
 
-    [JSInvokable] public Task OnFrameMsUpdate(double ms) { LatestFrameMs = ms; return Task.CompletedTask; }
-    [JSInvokable] public async Task OnWebGpuReady() { _ready = true; _error = null; await SendProjectionMatrixToJavaScriptAsync(); StateHasChanged(); }
-    [JSInvokable] public Task OnWebGpuError(string message) { _ready = false; _error = message; StateHasChanged(); return Task.CompletedTask; }
-    [JSInvokable] public async Task OnCanvasResized(double w, double h) { _canvasWidth = w; _canvasHeight = h; await SendProjectionMatrixToJavaScriptAsync(); }
-    private async Task SendProjectionMatrixToJavaScriptAsync() { if (_module is null || !_ready || Camera is null) return; try { var proj = Camera.ConvertProjectionMatrixToJavaScript(_canvasWidth, _canvasHeight); await _module.InvokeVoidAsync("writeProjectionMatrix", proj); } catch (Exception ex) { Console.Error.WriteLine(ex.Message); } }
+        _dotNetRef?.Dispose();
+    }
 
-    public async ValueTask DisposeAsync() { Camera = new OrbitCamera(Camera.Target, Options); _keyboardMoveTimer?.Dispose(); Options.PropertyChanged -= OnOptionsChanged; Options.PropertyChanged -= OnOptionsPropertyChanged; if (_module != null) { try { await _module.InvokeVoidAsync("disposeWebGPU_Canvas"); } catch { } try { await _module.DisposeAsync(); } catch { } } _dotNetRef?.Dispose(); }
+    public void ResetCamera()
+    {
+        Camera.Reset(totalSphere);
+        _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+    }
 
-    public void ResetCamera() { Camera.Reset(totalSphere); _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); }
-    private async Task HandleCameraReset() => ResetCamera();
-    private async Task HandleCameraCardinalView(CardinalDirection dir) { if (Camera is null) return; ResetCamera(); Camera.SetCardinalView(dir); if (_module != null && _ready) await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); }
+    private async Task HandleCameraReset()
+    {
+        ResetCamera();
+    }
 
-    private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (e?.PropertyName == "ZIsUp") { Camera.SwapCameraUp(); await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript()); } if (e?.PropertyName == "IsProjectionCamera") Options.AdjustCameraProjectionParameters(); await SendOptionsToJavaScriptAsync(false); }
-    private void OnOptionsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (e?.PropertyName == nameof(BugViewerOptions.SampleCount)) { _showMsaaRefreshPrompt = true; StateHasChanged(); } }
+    private async Task HandleCameraCardinalView(CardinalDirection dir)
+    {
+        if (Camera is null)
+        {
+            return;
+        }
 
-    private void OnPickingRayRun(Ray pickingRay) { Console.WriteLine($"Picking ray: O({pickingRay.Anchor.X:F2},{pickingRay.Anchor.Y:F2},{pickingRay.Anchor.Z:F2}) D({pickingRay.Direction.X:F2},{pickingRay.Direction.Y:F2},{pickingRay.Direction.Z:F2})"); }
+        ResetCamera();
+        Camera.SetCardinalView(dir);
 
-    private bool UpdateSpheresAdd(AbstractObject3D obj3D) { var sphere = MinimumSphere.Run(obj3D.Vertices); objectSpheres[obj3D] = sphere; var need = !Sphere.AContainsB(totalSphere, sphere); if (need) { var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices)); need = !Sphere.IsPracticallySame(newSphere, totalSphere); if (need) totalSphere = newSphere; } return need; }
-    private bool UpdateSpheresRemove(AbstractObject3D obj3D) { var sphere = objectSpheres[obj3D]; objectSpheres.Remove(obj3D); var need = obj3D.Vertices.Any(v => !Sphere.OnSurface(totalSphere, v)); if (need) { var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices)); need = !Sphere.IsPracticallySame(newSphere, totalSphere); if (need) totalSphere = newSphere; } return need; }
+        if (_module != null && _ready)
+        {
+            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+        }
+    }
 
-    public async Task AddMeshAsync(MeshData mesh) { _meshes.Add(mesh); UpdateViewer(UpdateSpheresAdd(mesh)); await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData()); }
-    public async Task AddLinesAsync(LineData path) { _lines.Add(path); UpdateViewer(UpdateSpheresAdd(path)); await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData()); }
-    public async Task RemoveMeshAsync(MeshData mesh) { var index = _meshes.IndexOf(mesh); if (index < 0) return; UpdateViewer(UpdateSpheresRemove(mesh)); await _module.InvokeVoidAsync("removeMesh", index); }
-    public async Task RemoveLinesAsync(LineData path) { var index = _lines.IndexOf(path); if (index < 0) return; UpdateViewer(UpdateSpheresRemove(path)); await _module.InvokeVoidAsync("removeLines", index); }
-    public async Task ClearAllMeshesAsync() { if (_meshes.Count == 0) return; var need = _meshes.All(m => UpdateSpheresRemove(m)); _meshes.Clear(); UpdateViewer(need); await _module.InvokeVoidAsync("clearAllMeshes"); }
-    public async Task ClearAllLinesAsync() { if (_lines.Count == 0) return; var need = _lines.All(l => UpdateSpheresRemove(l)); _lines.Clear(); UpdateViewer(need); await _module.InvokeVoidAsync("clearAllLines"); }
-    public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor) { if (_module is null || !_ready) throw new InvalidOperationException("Not ready"); var billboardData = new TextBillboard { BackgroundColor = backgroundColor, TextColor = textColor, Text = text, Vertices = new List<Vector3> { position }, Id = id }; await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData()); }
-    public async Task RemoveTextBillboardAsync(string id) { if (_module is null) return; await _module.InvokeVoidAsync("removeTextBillboard", id); }
-    public async Task ClearAllTextBillboardsAsync() { if (_module is null) return; await _module.InvokeVoidAsync("clearAllTextBillboards"); }
-    private void RefreshPage() { /* navigation refresh could be added if Navigation injected */ } // placeholder
-    private void ResetToDefaults() { Options.ResetToDefault(); _showMsaaRefreshPrompt = false; }
+    private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e?.PropertyName == nameof(Options.ZIsUp))
+        {
+            Camera.SwapCameraUp();
+            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+        }
+
+        if (e?.PropertyName == nameof(Options.IsProjectionCamera))
+        {
+            Options.AdjustCameraProjectionParameters();
+        }
+        StateHasChanged();
+        await SendOptionsToJavaScriptAsync(false);
+    }
+
+
+    private void OnPickingRayRun(Ray pickingRay)
+    {
+        Console.WriteLine($"Picking ray: O({pickingRay.Anchor.X:F2},{pickingRay.Anchor.Y:F2},{pickingRay.Anchor.Z:F2}) D({pickingRay.Direction.X:F2},{pickingRay.Direction.Y:F2},{pickingRay.Direction.Z:F2})");
+    }
+
+    private async void UpdateViewer(bool sphereChanged)
+    {
+        if (Camera is null || _module is null)
+        {
+            return;
+        }
+
+        if ((sphereChanged && Options.AutoResetCamera == UpdateTypes.SphereChange) || Options.AutoResetCamera == UpdateTypes.OnDataChange)
+        {
+            ResetCamera();
+
+            try
+            {
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            }
+            catch
+            {
+                // Handle error silently
+            }
+        }
+
+        if ((sphereChanged && Options.AutoUpdateGrid == UpdateTypes.SphereChange) || Options.AutoUpdateGrid == UpdateTypes.OnDataChange)
+        {
+            Options.GridSize = Options.AutoGridBuffer * (totalSphere.Center.Length() + totalSphere.GetRadius());
+            OnOptionsChanged(null, null);
+        }
+    }
+
+    private bool UpdateSpheresAdd(AbstractObject3D obj3D)
+    {
+        var sphere = MinimumSphere.Run(obj3D.Vertices);
+        objectSpheres[obj3D] = sphere;
+        var need = !Sphere.AContainsB(totalSphere, sphere);
+
+        if (need)
+        {
+            var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
+            need = !Sphere.IsPracticallySame(newSphere, totalSphere);
+
+            if (need)
+            {
+                totalSphere = newSphere;
+            }
+        }
+
+        return need;
+    }
+
+    private bool UpdateSpheresRemove(AbstractObject3D obj3D)
+    {
+        var sphere = objectSpheres[obj3D];
+        objectSpheres.Remove(obj3D);
+        var need = obj3D.Vertices.Any(v => !Sphere.OnSurface(totalSphere, v));
+
+        if (need)
+        {
+            var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
+            need = !Sphere.IsPracticallySame(newSphere, totalSphere);
+
+            if (need)
+            {
+                totalSphere = newSphere;
+            }
+        }
+
+        return need;
+    }
+
+    public async Task AddMeshAsync(MeshData mesh)
+    {
+        _meshes.Add(mesh);
+        UpdateViewer(UpdateSpheresAdd(mesh));
+        await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
+    }
+
+    public async Task AddLinesAsync(LineData path)
+    {
+        _lines.Add(path);
+        UpdateViewer(UpdateSpheresAdd(path));
+        await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
+    }
+
+    public async Task RemoveMeshAsync(MeshData mesh)
+    {
+        var index = _meshes.IndexOf(mesh);
+
+        if (index < 0)
+        {
+            return;
+        }
+
+        UpdateViewer(UpdateSpheresRemove(mesh));
+        await _module.InvokeVoidAsync("removeMesh", index);
+    }
+
+    public async Task RemoveLinesAsync(LineData path)
+    {
+        var index = _lines.IndexOf(path);
+
+        if (index < 0)
+        {
+            return;
+        }
+
+        UpdateViewer(UpdateSpheresRemove(path));
+        await _module.InvokeVoidAsync("removeLines", index);
+    }
+
+    public async Task ClearAllMeshesAsync()
+    {
+        if (_meshes.Count == 0)
+        {
+            return;
+        }
+
+        var need = _meshes.All(m => UpdateSpheresRemove(m));
+        _meshes.Clear();
+        UpdateViewer(need);
+        await _module.InvokeVoidAsync("clearAllMeshes");
+    }
+
+    public async Task ClearAllLinesAsync()
+    {
+        if (_lines.Count == 0)
+        {
+            return;
+        }
+
+        var need = _lines.All(l => UpdateSpheresRemove(l));
+        _lines.Clear();
+        UpdateViewer(need);
+        await _module.InvokeVoidAsync("clearAllLines");
+    }
+
+    public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
+    {
+        if (_module is null || !_ready)
+        {
+            throw new InvalidOperationException("Not ready");
+        }
+
+        var billboardData = new TextBillboard
+        {
+            BackgroundColor = backgroundColor,
+            TextColor = textColor,
+            Text = text,
+            Vertices = new List<Vector3> { position },
+            Id = id
+        };
+
+        await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
+    }
+
+    public async Task RemoveTextBillboardAsync(string id)
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        await _module.InvokeVoidAsync("removeTextBillboard", id);
+    }
+
+    public async Task ClearAllTextBillboardsAsync()
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        await _module.InvokeVoidAsync("clearAllTextBillboards");
+    }
+
+    private void ResetToDefaults()
+    {
+        Options.ResetToDefault();
+    }
 }
