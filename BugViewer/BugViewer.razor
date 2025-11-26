@@ -21,7 +21,7 @@
             @oncontextmenu:preventDefault="true">
     </canvas>
     <!-- A small anchor button to toggle the popover -->
-        <FluentStack Style="position:absolute; top:4px; left:4px; z-index:1001"
+    <FluentStack Style="position:absolute; top:4px; left:4px; z-index:1001"
                  Class="@($"toolbar-buttons {(_isMouseButtonDown ? "mouse-down" : "")} {(IsAnyPopoverOpen ? "popover-open" : "")}")">
         <FluentButton Id="options"
                       Appearance="Appearance.Stealth"
@@ -103,17 +103,28 @@
                     <FluentAccordion>
                         <FluentAccordionItem Heading="📷 Camera">
                             <FluentStack Orientation="Orientation.Vertical">
-                                <FluentSwitch Label="Which Coordinate is Up?" CheckedMessage="Z is Up" UncheckedMessage="Y is Up" @bind-Value="Options.ZIsUp" />
-                                <FluentSwitch Label="Projection vs Ortho" CheckedMessage="Projection" UncheckedMessage="Orthographic" @bind-Value="Options.IsProjectionCamera" />
-                                @if (Options.IsProjectionCamera)
-                                {
-                                    <FluentSlider Label="Field of View" @bind-Value="Options.Fov" Min="1" Max="179" Step="0.5" />
-                                }
-                                else
-                                {
-                                    <FluentLabel>Orthographic Size: @Options.OrthoSize.ToString("F2")</FluentLabel>
-                                    <FluentSlider @bind-Value="Options.OrthoSize" Min="1" Max="999" Step="0.5" />
-                                }
+                                <FluentRadioGroup @bind-Value="Options.ZIsUp">
+                                    <FluentRadio Value="false">Y is Up</FluentRadio>
+                                    <FluentRadio Value="true">Z is Up</FluentRadio>
+                                </FluentRadioGroup>
+                                <FluentLabel>Which Coordinate is Up?</FluentLabel>
+                                <FluentRadioGroup @bind-Value="Options.IsProjectionCamera">
+                                    <FluentRadio Value="true">Perspective</FluentRadio>
+                                    <FluentRadio Value="false">Orthographic</FluentRadio>
+                                </FluentRadioGroup>
+                                <FluentLabel>Projection vs Ortho</FluentLabel>
+
+                                <FluentStack>
+                                    @if (Options.IsProjectionCamera)
+                                    {
+                                        <FluentSlider Label="Field of View" @bind-Value="Options.Fov" Min="1" Max="179" Step="0.5" />
+                                    }
+                                    else
+                                    {
+                                        <FluentLabel>Orthographic Size: @Options.OrthoSize.ToString("F2")</FluentLabel>
+                                        <FluentSlider @bind-Value="Options.OrthoSize" Min="1" Max="999" Step="0.5" />
+                                    }
+                                </FluentStack>
                                 <FluentLabel>Near: @Options.ZNear.ToString("F5")</FluentLabel>
                                 <FluentSlider @bind-Value="Options.ZNear" Min="0.00001" Max="1" Step="0.001" />
                                 <FluentLabel>Far: @Options.ZFar.ToString("F0")</FluentLabel>
@@ -150,12 +161,6 @@
                                 <FluentSlider @bind-Value="Options.PanSensitivity" Min="0.0001" Max="0.01" Step="0.001" />
                                 <FluentLabel>Pan Speed (Shift): @Options.PanSpeedMultiplier.ToString("F1")</FluentLabel>
                                 <FluentSlider @bind-Value="Options.PanSpeedMultiplier" Min="1" Max="10" Step="0.5" />
-                            </FluentStack>
-                        </FluentAccordionItem>
-                    </FluentAccordion>
-                    <FluentAccordion>
-                        <FluentAccordionItem Heading="🎬 Rendering">
-                            <FluentStack Orientation="Orientation.Vertical">
                             </FluentStack>
                         </FluentAccordionItem>
                     </FluentAccordion>

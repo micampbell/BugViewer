@@ -126,7 +126,10 @@ public class OrbitCamera
     {
         // Use exponential zoom for more natural feel
         var zoomFactor = 1.0 + (wheelDelta * _options.ZoomSensitivity);
+        if (_options.IsProjectionCamera)
         Distance *= zoomFactor;
+        else
+            _options.OrthoSize *= zoomFactor;
     }
 
     /// <summary>
@@ -261,7 +264,7 @@ public class OrbitCamera
         //  determine the shorter dimension of the current view
         var angleAtCamera = Math.PI * _options.Fov / 360;
         Distance = radius / Math.Sin(angleAtCamera);
-        _options.ZFar = Distance + 10 * radius;
+        _options.ZFar = Distance + 50 * radius;
         _options.ZNear = Math.Max(0.0001, 0.001 * radius);
     }
 
