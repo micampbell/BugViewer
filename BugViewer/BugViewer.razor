@@ -8,9 +8,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="page-container" style="width:@Width; height:@Height;">
-
-
+<div class="page-container" style="width:@Width; height:@Height;" >
     <canvas id="webgpu-canvas"
             class="webgpu-canvas"
             style="height:100%; width:100%;"
@@ -65,109 +63,111 @@
         </Body>
     </FluentPopover>
     <FluentPopover AnchorId="options"
-                   Style="width:200px;"
+                   Style="width:320px;"
                    @bind-Open="_optionsPopover"
                    HorizontalPosition="HorizontalPosition.Right">
         <Body>
-            <FluentStack>
-                <FluentAccordion>
-                    <FluentAccordionItem Heading="Lighting">
-                        <FluentStack Orientation="Orientation.Vertical" Style="width:100%;">
-                            <label>Clear Color</label>
-                            <input type="color" style="width:100%;" @bind="Options.ClearColor" @bind:event="oninput" />
-                        </FluentStack>
-                        <FluentSlider Label="Light Polar Angle" @bind-Value="Options.LightPolarAngle" Min="0" Max="3.14" Step="0.01" />
-                        <FluentSlider Label="Light Azimuthal" @bind-Value="Options.LightAzimuthAngle" Min="1" Max="6.28" Step="0.01" />
-                        <FluentSlider Label="Ambient Light" @bind-Value="Options.AmbientLight" Min="0" Max="1" Step="0.01" />
-                        <FluentSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
-                    </FluentAccordionItem>
-                </FluentAccordion>
-                <FluentAccordion>
-                    <FluentAccordionItem Heading="📐 Grid">
-                        <FluentStack Orientation="Orientation.Vertical">
-                            <FluentSlider Label="Coordinate Thickness" @bind-Value="Options.CoordinateThickness" Min="0" Max="10" Step="0.1" />
-                            <FluentSlider Label="Grid Size" @bind-Value="Options.GridSize" Min="50" Max="1000" Step="1" />
-                            <FluentSlider Label="Grid Spacing" @bind-Value="Options.GridSpacing" Min="1" Max="100" Step="0.5" />
-                            <FluentSlider Label="Line Width X" @bind-Value="Options.LineWidthX" Min="0" Max="1" Step="0.01" />
-                            <FluentSlider Label="Line Width Y" @bind-Value="Options.LineWidthY" Min="0" Max="1" Step="0.01" />
-                            <label>Grid Line Color</label>
-                            <input type="color" style="width:100%;" @bind="Options.LineColor" @bind:event="oninput" />
-                            <FluentSlider Label="Line Transparency" @bind-Value="Options.LineTransparency" Min="0" Max="1" Step="0.01" />
-                            <label>Grid Base Color</label>
-                            <input type="color" style="width:100%;" @bind="Options.BaseColor" @bind:event="oninput" />
-                            <FluentSlider Label="Base Transparency" @bind-Value="Options.BaseTransparency" Min="0" Max="1" Step="0.01" />
-                        </FluentStack>
-                    </FluentAccordionItem>
-                </FluentAccordion>
-                <FluentAccordion>
-                    <FluentAccordionItem Heading="📷 Camera">
-                        <FluentStack Orientation="Orientation.Vertical">
-                            <FluentSwitch Label="Which Coordinate is Up?" CheckedMessage="Z is Up" UncheckedMessage="Y is Up" @bind-Value="Options.ZIsUp" />
-                            <FluentSwitch Label="Projection vs Ortho" CheckedMessage="Projection" UncheckedMessage="Orthographic" @bind-Value="Options.IsProjectionCamera" />
-                            @if (Options.IsProjectionCamera)
-                            {
-                                <FluentSlider Label="Field of View" @bind-Value="Options.Fov" Min="1" Max="179" Step="0.5" />
-                            }
-                            else
-                            {
-                                <FluentLabel>Orthographic Size: @Options.OrthoSize.ToString("F2")</FluentLabel>
-                                <FluentSlider @bind-Value="Options.OrthoSize" Min="1" Max="999" Step="0.5" />
-                            }
-                            <FluentLabel>Near: @Options.ZNear.ToString("F5")</FluentLabel>
-                            <FluentSlider @bind-Value="Options.ZNear" Min="0.00001" Max="1" Step="0.001" />
-                            <FluentLabel>Far: @Options.ZFar.ToString("F0")</FluentLabel>
-                            <FluentSlider @bind-Value="Options.ZFar" Min="10" Max="9999" Step="1" />
-                            <FluentCheckbox @bind-Value="Options.ConstrainPolar" Label="Constrain Polar" />
-                            @if (Options.ConstrainPolar)
-                            {
-                                <FluentLabel>Max Polar: @((Options.MaxPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
-                                <FluentSlider @bind-Value="Options.MaxPolar" Min="0" Max="@(Math.PI * 0.5)" Step="0.01" />
-                                <FluentLabel>Min Polar: @((Options.MinPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
-                                <FluentSlider @bind-Value="Options.MinPolar" Min="@(-Math.PI * 0.5)" Max="0" Step="0.01" />
-                            }
-                            <FluentCheckbox @bind-Value="Options.ConstrainAzimuth" Label="Constrain Azimuth" />
-                            @if (Options.ConstrainAzimuth)
-                            {
-                                <FluentLabel>Max Azimuth: @((Options.MaxAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
-                                <FluentSlider @bind-Value="Options.MaxAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
-                                <FluentLabel>Min Azimuth: @((Options.MinAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
-                                <FluentSlider @bind-Value="Options.MinAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
-                            }
-                            <FluentCheckbox @bind-Value="Options.ConstrainDistance" Label="Constrain Distance" />
-                            @if (Options.ConstrainDistance)
-                            {
-                                <FluentLabel>Max Distance: @Options.MaxDistance.ToString("F1")</FluentLabel>
-                                <FluentSlider @bind-Value="Options.MaxDistance" Min="1" Max="1000" Step="0.5" />
-                                <FluentLabel>Min Distance: @Options.MinDistance.ToString("F2")</FluentLabel>
-                                <FluentSlider @bind-Value="Options.MinDistance" Min="0.1" Max="10" Step="0.1" />
-                            }
-                            <FluentLabel>Orbit Sensitivity: @Options.OrbitSensitivity.ToString("F5")</FluentLabel>
-                            <FluentSlider @bind-Value="Options.OrbitSensitivity" Min="0.001" Max="0.1" Step="0.001" />
-                            <FluentLabel>Zoom Sensitivity: @Options.ZoomSensitivity.ToString("F5")</FluentLabel>
-                            <FluentSlider @bind-Value="Options.ZoomSensitivity" Min="0.0001" Max="0.01" Step="0.0001" />
-                            <FluentLabel>Pan Sensitivity: @Options.PanSensitivity.ToString("F5")</FluentLabel>
-                            <FluentSlider @bind-Value="Options.PanSensitivity" Min="0.0001" Max="0.01" Step="0.001" />
-                            <FluentLabel>Pan Speed (Shift): @Options.PanSpeedMultiplier.ToString("F1")</FluentLabel>
-                            <FluentSlider @bind-Value="Options.PanSpeedMultiplier" Min="1" Max="10" Step="0.5" />
-                        </FluentStack>
-                    </FluentAccordionItem>
-                </FluentAccordion>
-                <FluentAccordion>
-                    <FluentAccordionItem Heading="🎬 Rendering">
-                        <FluentStack Orientation="Orientation.Vertical">
-                            <FluentSelect @bind-Value="SampleCountString" Label="MSAA Sample Count" Items="_sampleCountItems" />
-                            @if (_showMsaaRefreshPrompt)
-                            {
-                                <div class="refresh-prompt">
-                                    <FluentLabel Typo="Typography.Body">MSAA changed - refresh needed</FluentLabel>
-                                    <FluentButton OnClick="RefreshPage" Appearance="Appearance.Accent">Refresh</FluentButton>
-                                </div>
-                            }
-                            <FluentButton OnClick="ResetToDefaults" Appearance="Appearance.Outline">Reset to Defaults</FluentButton>
-                        </FluentStack>
-                    </FluentAccordionItem>
-                </FluentAccordion>
-            </FluentStack>
+            <div style="max-height:70vh; overflow-y: auto;">
+                <FluentStack>
+                    <FluentAccordion>
+                        <FluentAccordionItem Heading="Lighting">
+                            <FluentStack Orientation="Orientation.Vertical" Style="width:100%;">
+                                <label>Clear Color</label>
+                                <input type="color" style="width:100%;" @bind="Options.ClearColor" @bind:event="oninput" />
+                            </FluentStack>
+                            <FluentSlider Label="Light Polar Angle" @bind-Value="Options.LightPolarAngle" Min="0" Max="3.14" Step="0.01" />
+                            <FluentSlider Label="Light Azimuthal" @bind-Value="Options.LightAzimuthAngle" Min="1" Max="6.28" Step="0.01" />
+                            <FluentSlider Label="Ambient Light" @bind-Value="Options.AmbientLight" Min="0" Max="1" Step="0.01" />
+                            <FluentSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
+                        </FluentAccordionItem>
+                    </FluentAccordion>
+                    <FluentAccordion>
+                        <FluentAccordionItem Heading="📐 Grid">
+                            <FluentStack Orientation="Orientation.Vertical">
+                                <FluentSlider Label="Coordinate Thickness" @bind-Value="Options.CoordinateThickness" Min="0" Max="10" Step="0.1" />
+                                <FluentSlider Label="Grid Size" @bind-Value="Options.GridSize" Min="50" Max="1000" Step="1" />
+                                <FluentSlider Label="Grid Spacing" @bind-Value="Options.GridSpacing" Min="1" Max="100" Step="0.5" />
+                                <FluentSlider Label="Line Width X" @bind-Value="Options.LineWidthX" Min="0" Max="1" Step="0.01" />
+                                <FluentSlider Label="Line Width Y" @bind-Value="Options.LineWidthY" Min="0" Max="1" Step="0.01" />
+                                <label>Grid Line Color</label>
+                                <input type="color" style="width:100%;" @bind="Options.LineColor" @bind:event="oninput" />
+                                <FluentSlider Label="Line Transparency" @bind-Value="Options.LineTransparency" Min="0" Max="1" Step="0.01" />
+                                <label>Grid Base Color</label>
+                                <input type="color" style="width:100%;" @bind="Options.BaseColor" @bind:event="oninput" />
+                                <FluentSlider Label="Base Transparency" @bind-Value="Options.BaseTransparency" Min="0" Max="1" Step="0.01" />
+                            </FluentStack>
+                        </FluentAccordionItem>
+                    </FluentAccordion>
+                    <FluentAccordion>
+                        <FluentAccordionItem Heading="📷 Camera">
+                            <FluentStack Orientation="Orientation.Vertical">
+                                <FluentSwitch Label="Which Coordinate is Up?" CheckedMessage="Z is Up" UncheckedMessage="Y is Up" @bind-Value="Options.ZIsUp" />
+                                <FluentSwitch Label="Projection vs Ortho" CheckedMessage="Projection" UncheckedMessage="Orthographic" @bind-Value="Options.IsProjectionCamera" />
+                                @if (Options.IsProjectionCamera)
+                                {
+                                    <FluentSlider Label="Field of View" @bind-Value="Options.Fov" Min="1" Max="179" Step="0.5" />
+                                }
+                                else
+                                {
+                                    <FluentLabel>Orthographic Size: @Options.OrthoSize.ToString("F2")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.OrthoSize" Min="1" Max="999" Step="0.5" />
+                                }
+                                <FluentLabel>Near: @Options.ZNear.ToString("F5")</FluentLabel>
+                                <FluentSlider @bind-Value="Options.ZNear" Min="0.00001" Max="1" Step="0.001" />
+                                <FluentLabel>Far: @Options.ZFar.ToString("F0")</FluentLabel>
+                                <FluentSlider @bind-Value="Options.ZFar" Min="10" Max="9999" Step="1" />
+                                <FluentCheckbox @bind-Value="Options.ConstrainPolar" Label="Constrain Polar" />
+                                @if (Options.ConstrainPolar)
+                                {
+                                    <FluentLabel>Max Polar: @((Options.MaxPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.MaxPolar" Min="0" Max="@(Math.PI * 0.5)" Step="0.01" />
+                                    <FluentLabel>Min Polar: @((Options.MinPolar * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.MinPolar" Min="@(-Math.PI * 0.5)" Max="0" Step="0.01" />
+                                }
+                                <FluentCheckbox @bind-Value="Options.ConstrainAzimuth" Label="Constrain Azimuth" />
+                                @if (Options.ConstrainAzimuth)
+                                {
+                                    <FluentLabel>Max Azimuth: @((Options.MaxAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.MaxAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
+                                    <FluentLabel>Min Azimuth: @((Options.MinAzimuth * 180 / Math.PI).ToString("F0"))°</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.MinAzimuth" Min="@(-Math.PI)" Max="@Math.PI" Step="0.01" />
+                                }
+                                <FluentCheckbox @bind-Value="Options.ConstrainDistance" Label="Constrain Distance" />
+                                @if (Options.ConstrainDistance)
+                                {
+                                    <FluentLabel>Max Distance: @Options.MaxDistance.ToString("F1")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.MaxDistance" Min="1" Max="1000" Step="0.5" />
+                                    <FluentLabel>Min Distance: @Options.MinDistance.ToString("F2")</FluentLabel>
+                                    <FluentSlider @bind-Value="Options.MinDistance" Min="0.1" Max="10" Step="0.1" />
+                                }
+                                <FluentLabel>Orbit Sensitivity: @Options.OrbitSensitivity.ToString("F5")</FluentLabel>
+                                <FluentSlider @bind-Value="Options.OrbitSensitivity" Min="0.001" Max="0.1" Step="0.001" />
+                                <FluentLabel>Zoom Sensitivity: @Options.ZoomSensitivity.ToString("F5")</FluentLabel>
+                                <FluentSlider @bind-Value="Options.ZoomSensitivity" Min="0.0001" Max="0.01" Step="0.0001" />
+                                <FluentLabel>Pan Sensitivity: @Options.PanSensitivity.ToString("F5")</FluentLabel>
+                                <FluentSlider @bind-Value="Options.PanSensitivity" Min="0.0001" Max="0.01" Step="0.001" />
+                                <FluentLabel>Pan Speed (Shift): @Options.PanSpeedMultiplier.ToString("F1")</FluentLabel>
+                                <FluentSlider @bind-Value="Options.PanSpeedMultiplier" Min="1" Max="10" Step="0.5" />
+                            </FluentStack>
+                        </FluentAccordionItem>
+                    </FluentAccordion>
+                    <FluentAccordion>
+                        <FluentAccordionItem Heading="🎬 Rendering">
+                            <FluentStack Orientation="Orientation.Vertical">
+                                <FluentSelect @bind-Value="SampleCountString" Label="MSAA Sample Count" Items="_sampleCountItems" />
+                                @if (_showMsaaRefreshPrompt)
+                                {
+                                    <div class="refresh-prompt">
+                                        <FluentLabel Typo="Typography.Body">MSAA changed - refresh needed</FluentLabel>
+                                        <FluentButton OnClick="RefreshPage" Appearance="Appearance.Accent">Refresh</FluentButton>
+                                    </div>
+                                }
+                                <FluentButton OnClick="ResetToDefaults" Appearance="Appearance.Outline">Reset to Defaults</FluentButton>
+                            </FluentStack>
+                        </FluentAccordionItem>
+                    </FluentAccordion>
+                </FluentStack>
+            </div>
         </Body>
     </FluentPopover>
     <FluentPopover AnchorId="help"
@@ -197,100 +197,8 @@
             </div>
         </Body>
     </FluentPopover>
-  
+
 </div>
-
-<style>
-    .unified-panel {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(30,30,30,0.95);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 14px;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-        z-index: 1000;
-        width: 240px;
-        max-width: 320px;
-        max-height: 90vh;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        transition: opacity .25s ease, transform .25s ease;
-    }
-
-        .unified-panel.right {
-            right: 8px;
-        }
-
-        .unified-panel.left {
-            left: 8px;
-        }
-
-        .unified-panel.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .unified-panel.visible {
-            opacity: 1;
-        }
-
-    .panel-content {
-        flex: 1 1 auto;
-        overflow-y: auto;
-        padding: 10px 12px;
-    }
-
-    .panel-footer {
-        flex: 0 0 auto;
-        padding: 8px 8px 10px;
-        border-top: 1px solid rgba(255,255,255,0.15);
-        background: rgba(20,20,20,0.6);
-    }
-
-    .toolbar-btn {
-        width: 100%;
-    }
-
-    .options-scroll input[type=color] {
-        cursor: pointer;
-    }
-
-    .help-content h4 {
-        margin: 0 0 12px;
-        font-size: 16px;
-        font-weight: 600;
-        color: #4fc3f7;
-    }
-
-    .help-content ul {
-        list-style: none;
-        padding-left: 0;
-        margin: 6px 0 12px;
-    }
-
-    .help-content li {
-        margin: 4px 0;
-        font-size: 13px;
-    }
-
-        .help-content li strong {
-            color: #81c784;
-        }
-
-    .refresh-prompt {
-        margin-top: 12px;
-        padding: 10px;
-        background: rgba(255,193,7,.15);
-        border: 1px solid #ffc107;
-        border-radius: 8px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-</style>
 
 @code {
     private bool _cameraPopover = false;
