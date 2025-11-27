@@ -8,7 +8,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div @ref="_containerRef" tabindex="0" @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" @onkeydown:stopPropagation="true" class="page-container" style="width:@Width; height:@Height;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
+<div @ref="_containerRef" tabindex="0" @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" @onkeydown:stopPropagation="true" class="page-container" style="width:@Width; height:@Height; position:relative;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
     <canvas id="webgpu-canvas"
             class="webgpu-canvas"
             style="height:100%; width:100%;"
@@ -48,7 +48,7 @@
                    @bind-Open="_cameraPopover"
                    HorizontalPosition="HorizontalPosition.Right">
         <Body>
-            <FluentStack>
+            <FluentStack Orientation="Orientation.Vertical">
                 <FluentButton OnClick="HandleCameraReset" Appearance="Appearance.Stealth" Title="Reset Camera" Class="toolbar-btn reset-btn"><FluentIcon Value="@(new Icons.CameraSwitch())" /></FluentButton>
                 <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))" Appearance="Appearance.Stealth" Title="View -X" Class="toolbar-btn cardinal-btn">-X</FluentButton>
                 <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))" Appearance="Appearance.Stealth" Title="View +X" Class="toolbar-btn cardinal-btn">+X</FluentButton>
@@ -65,7 +65,7 @@
                    HorizontalPosition="HorizontalPosition.Right">
         <Body>
             <div style="max-height:70vh; overflow-y: auto;">
-                <FluentStack>
+                <FluentStack Orientation="Orientation.Vertical">
                     <FluentAccordion>
                         <FluentAccordionItem Heading="Lighting">
                             <FluentRadioGroup @bind-Value="Options.IsDarkTheme">
