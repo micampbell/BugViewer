@@ -4,6 +4,8 @@
 @using BugViewer
 @using TVGL
 @using TVGLPresenter.Components
+@using TVGLPresenter.Services
+@inject ThemeService ThemeService
 
 <PageTitle>Home</PageTitle>
 
@@ -30,8 +32,24 @@
 		if (firstRender)
 		{
 			TVGL.Global.Logger = logViewer;
+            
+            if (viewer?.Options != null)
+            {
+                viewer.Options.AutoResetOnThemeChange = true;
+                viewer.Options.PropertyChanged += OnBugViewerOptionsChanged;
+                ThemeService.IsDarkMode = viewer.Options.IsDarkTheme;
+            }
 		}
 	}
+
+    private void OnBugViewerOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e?.PropertyName == nameof(BugViewerOptions.IsDarkTheme) && viewer?.Options != null)
+        {
+            ThemeService.IsDarkMode = viewer.Options.IsDarkTheme;
+        }
+    }
+
 	private async Task OpenFile(InputFileChangeEventArgs args)
 	{
 		var fileArgs = args.GetMultipleFiles(1)[0];

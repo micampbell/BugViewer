@@ -5,18 +5,24 @@
 
 <PageTitle>Home</PageTitle>
 
-<button class="add-cube-button" @onclick="AddCube">
+<FluentButton @onclick="AddCube">
     ➕ Add Cube
-</button>
-<button class="add-wire-button" @onclick="AddWire">
+</FluentButton>
+<FluentButton  @onclick="AddWire">
     ➕ Add Wire
-</button>
-<BugViewer @ref="viewer" />
+</FluentButton>
+<BugViewer @ref="viewer" Options="@viewerOptions" Width="80%" />
 
 
 
 @code {
     private BugViewer? viewer;
+    private BugViewerOptions viewerOptions = new()
+    {
+        IsDarkTheme = true,
+        ClearColor = "#828282",
+        AutoResetOnThemeChange = false
+    };
 
     private async Task AddCube(MouseEventArgs args)
     {

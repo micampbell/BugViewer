@@ -1,4 +1,11 @@
 ﻿@inherits LayoutComponentBase
+@using TVGLPresenter.Services
+@using Microsoft.FluentUI.AspNetCore.Components
+@inject ThemeService ThemeService
+@implements IDisposable
+
+<FluentDesignTheme Mode="@ThemeService.CurrentMode" />
+
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -10,3 +17,20 @@
         </article>
     </main>
 </div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        ThemeService.OnThemeChanged += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged;
+    }
+}

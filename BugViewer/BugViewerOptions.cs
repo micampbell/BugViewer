@@ -106,6 +106,13 @@ public class BugViewerOptions : INotifyPropertyChanged
         PanSpeedMultiplier = 3.0,
         CoordinateThickness = 1
     };
+    
+    /// <summary>
+    /// When true, changing IsDarkTheme will automatically reset all options to the default theme.
+    /// When false, IsDarkTheme is just a flag and doesn't trigger resets.
+    /// </summary>
+    public bool AutoResetOnThemeChange { get; set; } = false;
+
     public void ResetToDefault(bool isDarkTheme)
     {
         if (isDarkTheme)
@@ -185,7 +192,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
 
-    private double _autoGridBuffer;
+    private double _autoGridBuffer = 3.0;
     /// <summary>
     /// The amount that the radius of the bounding sphere is increased 
     /// when automatically positioning the camera to view an object.
@@ -203,7 +210,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private bool _isDarkTheme = true;
+    private bool _isDarkTheme = true;       
     /// <summary>
     /// Gets or sets a value indicating whether the application is using a light theme.
     /// </summary>
@@ -220,7 +227,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private string _clearColor;
+    private string _clearColor = "#f2f2ff"; // Add default value
     /// <summary>Background clear color for the rendering canvas.</summary>
     public string ClearColor
     {
@@ -235,7 +242,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _autoCameraSphereBuffer;
+    private double _autoCameraSphereBuffer = 0.2;
     /// <summary>
     /// The amount that the radius of the bounding sphere is increased 
     /// when automatically positioning the camera to view an object.
@@ -266,7 +273,7 @@ public class BugViewerOptions : INotifyPropertyChanged
             }
         }
     }
-    private string _lineColor;
+    private string _lineColor = "#d2d2d2"; // Add default value
     /// <summary>Color of grid lines.</summary>
     public string LineColor
     {
@@ -296,7 +303,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private string _baseColor;
+    private string _baseColor = "#000000"; // Add default value
     /// <summary>Base/background color of the grid.</summary>
     public string BaseColor
     {
@@ -311,8 +318,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _lineWidthX;
-    private double _lineWidthY;
+    private double _lineWidthX = 0.1;
+    private double _lineWidthY = 0.1;
 
     /// <summary>Grid line width in X direction (0.0 to 1.0).</summary>
     public double LineWidthX
@@ -345,8 +352,8 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
 
-    private double _gridSize;
-    private double _gridSpacing;
+    private double _gridSize = 100.0;
+    private double _gridSpacing = 5.0;
 
     /// <summary>Grid size of the square.</summary>
     public double GridSize
@@ -376,7 +383,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private int _sampleCount;
+    private int _sampleCount = 1;
     /// <summary>Multi-Sample Anti-Aliasing (MSAA) sample count for smoother rendering.</summary>
     public int SampleCount
     {
@@ -405,7 +412,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _fov;
+    private double _fov = 20.0;
     /// <summary>Field of view in radians (used for Perspective projection).</summary>
     public double Fov
     {
@@ -420,7 +427,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _orthoSize;
+    private double _orthoSize = 5.0;
     /// <summary>Half-height of view in world units (used for Orthographic projection).</summary>
     public double OrthoSize
     {
@@ -447,7 +454,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _zNear;
+    private double _zNear = 0.001;
     /// <summary>Near clipping plane distance.</summary>
     public double ZNear
     {
@@ -461,7 +468,7 @@ public class BugViewerOptions : INotifyPropertyChanged
             }
         }
     }
-    private double _zFar;
+    private double _zFar = 999.0;
     /// <summary>Far clipping plane distance.</summary>
     public double ZFar
     {
@@ -477,7 +484,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
     // Orbit constraints
-    private double _maxPolar;
+    private double _maxPolar = Math.PI * 0.49;
     /// <summary>Maximum polar angle in radians (slightly less than 90° to avoid gimbal lock).</summary>
     public double MaxPolar
     {
@@ -492,7 +499,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _minPolar;
+    private double _minPolar = -Math.PI * 0.49;
     /// <summary>Minimum polar angle in radians.</summary>
     public double MinPolar
     {
@@ -507,7 +514,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _maxAzimuth;
+    private double _maxAzimuth = 0;
     /// <summary>Maximum azimuth angle in radians.</summary>
     public double MaxAzimuth
     {
@@ -522,7 +529,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _minAzimuth;
+    private double _minAzimuth = 0;
     /// <summary>Minimum azimuth angle in radians.</summary>
     public double MinAzimuth
     {
@@ -560,7 +567,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     public bool ConstrainAzimuth { get => _constrainAzimuth; set { _constrainAzimuth = value; OnPropertyChanged(); } }
 
     // Distance constraints
-    private double _maxDistance;
+    private double _maxDistance = 9999.0;
     /// <summary>Maximum camera distance from the target.</summary>
     public double MaxDistance
     {
@@ -575,7 +582,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _minDistance;
+    private double _minDistance = 0.5;
     /// <summary>Minimum camera distance from the target.</summary>
     public double MinDistance
     {
@@ -595,7 +602,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     public bool ConstrainDistance { get => _constrainDistance; set { _constrainDistance = value; OnPropertyChanged(); } }
 
     // Sensitivity settings
-    private double _orbitSensitivity;
+    private double _orbitSensitivity = 0.01;
     /// <summary>Sensitivity for orbit (rotation) controls.</summary>
     public double OrbitSensitivity
     {
@@ -610,7 +617,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _zoomSensitivity;
+    private double _zoomSensitivity = 0.005;
     /// <summary>Sensitivity for zoom controls (increased for better zoom response).</summary>
     public double ZoomSensitivity
     {
@@ -625,7 +632,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _panSensitivity;
+    private double _panSensitivity = 0.005;
     /// <summary>Sensitivity for pan controls.</summary>
     public double PanSensitivity
     {
@@ -640,7 +647,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _panSpeedMultiplier;
+    private double _panSpeedMultiplier = 3.0;
     /// <summary>Multiplier for pan speed when Shift is held.</summary>
     public double PanSpeedMultiplier
     {
@@ -655,7 +662,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _lightPolarAngle;
+    private double _lightPolarAngle = 0.13 * Math.PI;
     /// <summary>Direction of the primary light source.</summary>
     public double LightPolarAngle
     {
@@ -670,7 +677,7 @@ public class BugViewerOptions : INotifyPropertyChanged
             }
         }
     }
-    private double _lightAzimuthAngle;
+    private double _lightAzimuthAngle = 0.33 * Math.PI;
     /// <summary>Direction of the primary light source.</summary>
     public double LightAzimuthAngle
     {
@@ -696,7 +703,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         else return [z, x, y];
     }
 
-    private double _ambientLight;
+    private double _ambientLight = 0.3;
     /// <summary>Ambient light intensity (0.0 to 1.0).</summary>
     public double AmbientLight
     {
@@ -712,7 +719,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private double _specularPower;
+    private double _specularPower = 32.0;
     /// <summary>Shininess of the material (higher is sharper).</summary>
     public double SpecularPower
     {
@@ -728,7 +735,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
 
-    private double _coordThick;
+    private double _coordThick = 1;
     /// <summary>Whether to show coordinate axes (X=red, Y=green, Z=blue).</summary>
     public double CoordinateThickness
     {

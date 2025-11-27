@@ -719,6 +719,12 @@
         {
             Options.AdjustCameraProjectionParameters();
         }
+
+        if (e?.PropertyName == nameof(Options.IsDarkTheme) && Options.AutoResetOnThemeChange)
+        {
+            Options.ResetToDefault(Options.IsDarkTheme);
+        }
+
         StateHasChanged();
         await SendOptionsToJavaScriptAsync(false);
     }
