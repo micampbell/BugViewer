@@ -273,6 +273,8 @@
     private List<MeshData> _meshes = new();
     private List<LineData> _lines = new();
     private List<MeshData> _billBoards = new();
+    private HashSet<string> _sentMeshIds = new();
+    private bool _moduleInitialized = false;
     private double _canvasWidth = 800;
     private double _canvasHeight = 600;
     private DateTime _lastClickTime = DateTime.MinValue;
@@ -611,7 +613,41 @@
     {
         _ready = true;
         _error = null;
+
+        // send any queued options/projection
         await SendProjectionMatrixToJavaScriptAsync();
+
+        // Mark module initialized and flush any queued meshes
+        _moduleInitialized = true;
+        if (_module != null)
+        {
+            try
+            {
+                foreach (var m in _meshes)
+                {
+                    if (!_sentMeshIds.Contains(m.Id))
+                    {
+                        await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
+                        _sentMeshIds.Add(m.Id);
+                    }
+                }
+
+                foreach (var l in _lines)
+                {
+                    await _module.InvokeVoidAsync("addLines", l.CreateJavascriptData());
+                }
+
+                foreach (var b in _billBoards)
+                {
+                    await _module.InvokeVoidAsync("addTextBillboard", b.CreateJavascriptData());
+                }
+            }
+            catch (JSException jsEx)
+            {
+                Console.Error.WriteLine(jsEx.Message);
+            }
+        }
+
         StateHasChanged();
     }
 
@@ -652,7 +688,7 @@
 
     public async ValueTask DisposeAsync()
     {
-        Camera = new OrbitCamera(Camera.Target, Options);
+        //Camera = new OrbitCamera(Camera.Target, Options);
         _keyboardMoveTimer?.Dispose();
         Options.PropertyChanged -= OnOptionsChanged;
 
@@ -807,13 +843,32 @@
     {
         _meshes.Add(mesh);
         UpdateViewer(UpdateSpheresAdd(mesh));
-        await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
+
+        // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
+        if (_module is null || !_ready)
+        {
+            return;
+        }
+
+        // avoid duplicates
+        if (!_sentMeshIds.Contains(mesh.Id))
+        {
+            await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
+            _sentMeshIds.Add(mesh.Id);
+        }
     }
 
     public async Task AddLinesAsync(LineData path)
     {
         _lines.Add(path);
         UpdateViewer(UpdateSpheresAdd(path));
+
+        if (_module is null || !_ready)
+        {
+            return;
+        }
+
+        // no id tracking for lines currently
         await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
     }
 
@@ -827,20 +882,31 @@
         }
 
         UpdateViewer(UpdateSpheresRemove(mesh));
-        await _module.InvokeVoidAsync("removeMesh", index);
-    }
+        _meshes.RemoveAt(index);
 
-    public async Task RemoveLinesAsync(LineData path)
-    {
-        var index = _lines.IndexOf(path);
-
-        if (index < 0)
+        if (_module is null || !_ready)
         {
+            // nothing sent yet or module not ready; ensure we don't try to remove on JS
+            _sentMeshIds.Remove(mesh.Id);
             return;
         }
 
-        UpdateViewer(UpdateSpheresRemove(path));
-        await _module.InvokeVoidAsync("removeLines", index);
+        // If the mesh was sent, we need to remove by index in JS. Recompute index.
+        try
+        {
+            // Rebuild JS-side scene: easiest is to clear and resend remaining meshes
+            await _module.InvokeVoidAsync("clearAllMeshes");
+            _sentMeshIds.Clear();
+            foreach (var m in _meshes)
+            {
+                await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
+                _sentMeshIds.Add(m.Id);
+            }
+        }
+        catch
+        {
+            // ignore errors
+        }
     }
 
     public async Task ClearAllMeshesAsync()
@@ -852,7 +918,14 @@
 
         var need = _meshes.All(m => UpdateSpheresRemove(m));
         _meshes.Clear();
+        _sentMeshIds.Clear();
         UpdateViewer(need);
+
+        if (_module is null || !_ready)
+        {
+            return;
+        }
+
         await _module.InvokeVoidAsync("clearAllMeshes");
     }
 
