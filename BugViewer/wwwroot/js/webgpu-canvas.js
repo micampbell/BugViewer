@@ -996,7 +996,7 @@ export async function addMesh(meshData) {
         shaderCode = MESH_SHADER;
         isTransparent = colors.length >= 4 && colors[3] < 1.0;
 
-        const singleColorUniformBuffer = createBuffer(colors, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+        colorBuffer = createBuffer(colors, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
 
         meshBindGroupLayout = device.createBindGroupLayout({
             label: `Mesh ${id} BGL`,
@@ -1011,7 +1011,7 @@ export async function addMesh(meshData) {
             layout: meshBindGroupLayout,
             entries: [
                 { binding: 0, resource: { buffer: lightUniformBuffer } },
-                { binding: 1, resource: { buffer: singleColorUniformBuffer } }
+                { binding: 1, resource: { buffer: colorBuffer } }
             ]
         });
         pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout, meshBindGroupLayout] });
@@ -1086,10 +1086,22 @@ export async function addMesh(meshData) {
 
 export function removeMesh(index) {
     const mesh = meshes[index];
+    if (!mesh) return;
     mesh.vertexBuffer?.destroy();
     mesh.colorBuffer?.destroy();
     mesh.indexBuffer?.destroy();
     meshes.splice(index, 1);
+}
+
+export function changeMeshColor(colorChangeData) {
+    const { index, color } = colorChangeData;
+    const mesh = meshes[index];
+    if (mesh && mesh.singleColor && mesh.colorBuffer) {
+        device.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(color));
+        if (color.length >= 4) {
+            mesh.isTransparent = color[3] < 1.0;
+        }
+    }
 }
 
 export function clearAllMeshes() {

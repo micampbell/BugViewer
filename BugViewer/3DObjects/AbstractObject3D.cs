@@ -18,7 +18,7 @@ public abstract record AbstractObject3D
     /// Per-triangle colors (RGBA, 0-1 range).
     /// Array length should equal Indices.Length / 3 (one color per triangle).
     /// </summary>
-    public IEnumerable<Color> Colors { get; init; }
+    public IEnumerable<Color> Colors { get; set; }
 
     protected IEnumerable<int> TriangleIndices((int, int, int) faceIndices)
     {

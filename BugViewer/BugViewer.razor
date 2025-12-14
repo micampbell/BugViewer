@@ -256,6 +256,9 @@
         }
     }
 
+    [Parameter]
+    public EventCallback OnReady { get; set; }
+
     public OrbitCamera? Camera { get; private set; }
 
     private IJSObjectReference? _module;
@@ -649,6 +652,11 @@
         }
 
         StateHasChanged();
+
+        if (OnReady.HasDelegate)
+        {
+            await OnReady.InvokeAsync();
+        }
     }
 
     [JSInvokable]
@@ -872,17 +880,48 @@
         await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
     }
 
-    public async Task RemoveMeshAsync(MeshData mesh)
+    public async Task ChangeMeshColorAsync(MeshData mesh, System.Drawing.Color color)
     {
         var index = _meshes.IndexOf(mesh);
-
         if (index < 0)
-        {
+        {   // logger.LogError("Mesh not found in viewer");
+            return;
+        }
+        if (_meshes[index].ColorMode != MeshColoring.UniformColor)
+        {   // logger.LogError("Mesh not found in viewer");
             return;
         }
 
-        UpdateViewer(UpdateSpheresRemove(mesh));
+        // Update the C# model so if it's sent later (or re-sent), it has the new color
+        _meshes[index].Colors = new[] { color };
+
+        // now call JS to change color of the mesh at index if ready
+        if (_module != null && _ready)
+        {
+            await _module.InvokeVoidAsync("changeMeshColor",
+                    new
+                    {
+                        index = index,
+                        color = new float[]
+                        {
+                        color.R / 255f,
+                        color.G / 255f,
+                        color.B / 255f,
+                        color.A / 255f
+                        }
+                    });
+        }
+    }
+    public async Task RemoveMeshAsync(MeshData mesh)
+    {
+        // Find index before removing so we can tell JS which mesh to remove
+        var index = _meshes.IndexOf(mesh);
+        if (index < 0)
+            return;
+
+        // Remove from the C# list and update viewer bounds
         _meshes.RemoveAt(index);
+        UpdateViewer(UpdateSpheresRemove(mesh));
 
         if (_module is null || !_ready)
         {
@@ -891,21 +930,33 @@
             return;
         }
 
-        // If the mesh was sent, we need to remove by index in JS. Recompute index.
         try
         {
-            // Rebuild JS-side scene: easiest is to clear and resend remaining meshes
-            await _module.InvokeVoidAsync("clearAllMeshes");
-            _sentMeshIds.Clear();
-            foreach (var m in _meshes)
+            // If the mesh was already sent to JS, ask JS to remove by index.
+            // The JS side will destroy GPU resources and splice the meshes array.
+            if (_sentMeshIds.Contains(mesh.Id))
             {
-                await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
-                _sentMeshIds.Add(m.Id);
+                await _module.InvokeVoidAsync("removeMesh", index);
+                _sentMeshIds.Remove(mesh.Id);
             }
         }
         catch
         {
-            // ignore errors
+            // If remove by index fails for any reason, fall back to rebuilding the JS scene
+            try
+            {
+                await _module.InvokeVoidAsync("clearAllMeshes");
+                _sentMeshIds.Clear();
+                foreach (var m in _meshes)
+                {
+                    await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
+                    _sentMeshIds.Add(m.Id);
+                }
+            }
+            catch
+            {
+                // ignore errors
+            }
         }
     }
 
@@ -916,10 +967,9 @@
             return;
         }
 
-        var need = _meshes.All(m => UpdateSpheresRemove(m));
         _meshes.Clear();
         _sentMeshIds.Clear();
-        UpdateViewer(need);
+        UpdateViewer(true);
 
         if (_module is null || !_ready)
         {
