@@ -258,6 +258,8 @@
 
     [Parameter]
     public EventCallback OnReady { get; set; }
+    [Parameter]
+    public EventCallback OnTriangleSelected { get; set; }
 
     public OrbitCamera? Camera { get; private set; }
 
@@ -273,10 +275,10 @@
     private System.Threading.Timer? _keyboardMoveTimer;
     private Sphere totalSphere;
     private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
-    private List<MeshData> _meshes = new();
-    private List<LineData> _lines = new();
-    private List<MeshData> _billBoards = new();
-    private HashSet<string> _sentMeshIds = new();
+    private List<MeshData> meshes = new();
+    private List<LineData> lines = new();
+    private List<MeshData> billBoards = new();
+    private HashSet<string> sentMeshIds = new();
     private bool _moduleInitialized = false;
     private double _canvasWidth = 800;
     private double _canvasHeight = 600;
@@ -286,6 +288,16 @@
     private const double DoubleClickTimeMs = 300;
     private const double DoubleClickDistancePx = 5;
     public double LatestFrameMs { get; private set; }
+
+    public string SelectedMeshName { get; private set; } = null;
+    public int SelectedTriangleInMeshIndex { get; private set; } = -1;
+    List<string> triangleToMesh = new();
+    List<int> triangleToInMeshIndex = new();
+    List<float> facePlaneDistances = new();
+    List<Vector3> faceNormals = new();
+    List<Vector3> bCoords = new();
+    List<Vector3> uBarycentricMultipliers = new();
+    List<Vector3> vBarycentricMultipliers = new();
 
     Option<int>? selectedIntOption;
     private List<Option<int>> _sampleCountItems = new()
@@ -299,7 +311,7 @@
     {
         Options.SampleCount = int.Parse(args);
     }
-    public event Action<Ray>? OnPickingRayCreated;
+
 
     protected override void OnInitialized()
     {
@@ -418,9 +430,55 @@
         var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
         var rx = e.ClientX - rect.Left;
         var ry = e.ClientY - rect.Top;
-        var pickingRay = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
-        await AddTextBillboardAsync("dbl", "Picked", pickingRay.Anchor + 15 * pickingRay.Direction, System.Drawing.Color.Blue, System.Drawing.Color.White);
-        OnPickingRayCreated?.Invoke(pickingRay);
+        if (Options.DoubleClickIsSelect)
+        {
+            if (!OnTriangleSelected.HasDelegate) return;
+            (Vector3 anchor, Vector3 dirVector) = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
+            if (DoesRayGoThroughTriangle(anchor, dirVector, out var meshName, out var meshIndex, out var distance, out var point))
+            {
+                SelectedMeshName = meshName;
+                SelectedTriangleInMeshIndex = meshIndex;
+                await OnTriangleSelected.InvokeAsync();
+            }
+        }
+        else ResetCamera();
+    }
+
+    bool DoesRayGoThroughTriangle(Vector3 anchor, Vector3 dirVector, out string meshName, out int meshIndex, out float distance, out Vector3 point)
+    {
+        distance = float.MaxValue;
+        meshIndex = -1;
+        meshName = "";
+        point = Vector3.Zero;
+        for (int index = 0; index < triangleToMesh.Count; index++)
+        {
+            var normal = faceNormals[index];
+            if (Vector3.Dot(normal, dirVector) >= 0)
+                continue; // ignore back faces
+            var faceDistance = facePlaneDistances[index];
+            var uBaryFactor = uBarycentricMultipliers[index];
+            var vBaryFactor = vBarycentricMultipliers[index];
+            var dot = Vector3.Dot(dirVector, normal);
+
+            var anchorDistanceToPlane = faceDistance - Vector3.Dot(anchor, normal);
+            var thisDistance = anchorDistanceToPlane / dot;
+            if (thisDistance < 0 || thisDistance >= distance)
+                continue;
+            var thisPoint = anchor + distance * dirVector; // yes, it is normally '+' but in the previous line
+
+            var wVector = thisPoint - bCoords[index];
+            var u = Vector3.Dot(wVector, uBaryFactor);
+            if (u <= 0 || u >= 1) continue;
+            var v = Vector3.Dot(wVector, vBaryFactor);
+            if (v <= 0 || v >= 1) continue;
+            if (u + v > 1) continue;
+            // yes intersecting!
+            distance = thisDistance;
+            meshName = triangleToMesh[index];
+            meshIndex = triangleToInMeshIndex[index];
+            point = thisPoint;
+        }
+        return meshIndex != -1;
     }
 
     private class BoundingClientRect
@@ -549,8 +607,6 @@
             await _containerRef.Value.FocusAsync();
         }
 
-        OnPickingRayCreated += OnPickingRayRun;
-
         try
         {
             _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
@@ -626,21 +682,21 @@
         {
             try
             {
-                foreach (var m in _meshes)
+                foreach (var m in meshes)
                 {
-                    if (!_sentMeshIds.Contains(m.Id))
+                    if (!sentMeshIds.Contains(m.Id))
                     {
                         await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
-                        _sentMeshIds.Add(m.Id);
+                        sentMeshIds.Add(m.Id);
                     }
                 }
 
-                foreach (var l in _lines)
+                foreach (var l in lines)
                 {
                     await _module.InvokeVoidAsync("addLines", l.CreateJavascriptData());
                 }
 
-                foreach (var b in _billBoards)
+                foreach (var b in billBoards)
                 {
                     await _module.InvokeVoidAsync("addTextBillboard", b.CreateJavascriptData());
                 }
@@ -773,12 +829,6 @@
         await SendOptionsToJavaScriptAsync(false);
     }
 
-
-    private void OnPickingRayRun(Ray pickingRay)
-    {
-        Console.WriteLine($"Picking ray: O({pickingRay.Anchor.X:F2},{pickingRay.Anchor.Y:F2},{pickingRay.Anchor.Z:F2}) D({pickingRay.Direction.X:F2},{pickingRay.Direction.Y:F2},{pickingRay.Direction.Z:F2})");
-    }
-
     private async void UpdateViewer(bool sphereChanged)
     {
         if (Camera is null || _module is null)
@@ -849,8 +899,34 @@
 
     public async Task AddMeshAsync(MeshData mesh)
     {
-        _meshes.Add(mesh);
+        meshes.Add(mesh);
         UpdateViewer(UpdateSpheresAdd(mesh));
+        for (int i = 0; i < mesh.Indices.Count; i++)
+        {
+            var tri = mesh.Indices[i];
+            var a = mesh.Vertices[tri.a];
+            var b = mesh.Vertices[tri.b];
+            var c = mesh.Vertices[tri.c];
+            var v1 = b - a;
+            var v2 = c - b;
+            var v1Sqd = v1.LengthSquared();
+            var v2Sqd = v2.LengthSquared();
+            var normal = Vector3.Normalize(Vector3.Cross(b - a, c - b));
+            var dist = Vector3.Dot(normal, a);
+            var v1Dotv2 = Vector3.Dot(v1, v2);
+            var oneOverDenom = 1 / (v1Sqd * v2Sqd - v1Dotv2 * v1Dotv2);
+            var uBaryMultiplier = Vector3.Multiply(oneOverDenom,
+                Vector3.Multiply(v1Sqd, v2) - Vector3.Multiply(v1Dotv2, v1));
+            var vBaryMultiplier = Vector3.Multiply(oneOverDenom,
+                Vector3.Multiply(v2Sqd, v1) - Vector3.Multiply(v1Dotv2, v2));
+            triangleToMesh.Add(mesh.Id);
+            triangleToInMeshIndex.Add(i);
+            facePlaneDistances.Add(dist);
+            faceNormals.Add(normal);
+            bCoords.Add(b);
+            uBarycentricMultipliers.Add(uBaryMultiplier);
+            vBarycentricMultipliers.Add(vBaryMultiplier);
+        }
 
         // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
         if (_module is null || !_ready)
@@ -859,16 +935,16 @@
         }
 
         // avoid duplicates
-        if (!_sentMeshIds.Contains(mesh.Id))
+        if (!sentMeshIds.Contains(mesh.Id))
         {
             await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
-            _sentMeshIds.Add(mesh.Id);
+            sentMeshIds.Add(mesh.Id);
         }
     }
 
     public async Task AddLinesAsync(LineData path)
     {
-        _lines.Add(path);
+        lines.Add(path);
         UpdateViewer(UpdateSpheresAdd(path));
 
         if (_module is null || !_ready)
@@ -882,18 +958,18 @@
 
     public async Task ChangeMeshColorAsync(MeshData mesh, System.Drawing.Color color)
     {
-        var index = _meshes.IndexOf(mesh);
+        var index = meshes.IndexOf(mesh);
         if (index < 0)
         {   // logger.LogError("Mesh not found in viewer");
             return;
         }
-        if (_meshes[index].ColorMode != MeshColoring.UniformColor)
+        if (meshes[index].ColorMode != MeshColoring.UniformColor)
         {   // logger.LogError("Mesh not found in viewer");
             return;
         }
 
         // Update the C# model so if it's sent later (or re-sent), it has the new color
-        _meshes[index].Colors = new[] { color };
+        meshes[index].Colors = new[] { color };
 
         // now call JS to change color of the mesh at index if ready
         if (_module != null && _ready)
@@ -915,18 +991,18 @@
     public async Task RemoveMeshAsync(MeshData mesh)
     {
         // Find index before removing so we can tell JS which mesh to remove
-        var index = _meshes.IndexOf(mesh);
+        var index = meshes.IndexOf(mesh);
         if (index < 0)
             return;
 
         // Remove from the C# list and update viewer bounds
-        _meshes.RemoveAt(index);
+        meshes.RemoveAt(index);
         UpdateViewer(UpdateSpheresRemove(mesh));
 
         if (_module is null || !_ready)
         {
             // nothing sent yet or module not ready; ensure we don't try to remove on JS
-            _sentMeshIds.Remove(mesh.Id);
+            sentMeshIds.Remove(mesh.Id);
             return;
         }
 
@@ -934,10 +1010,10 @@
         {
             // If the mesh was already sent to JS, ask JS to remove by index.
             // The JS side will destroy GPU resources and splice the meshes array.
-            if (_sentMeshIds.Contains(mesh.Id))
+            if (sentMeshIds.Contains(mesh.Id))
             {
                 await _module.InvokeVoidAsync("removeMesh", index);
-                _sentMeshIds.Remove(mesh.Id);
+                sentMeshIds.Remove(mesh.Id);
             }
         }
         catch
@@ -946,11 +1022,11 @@
             try
             {
                 await _module.InvokeVoidAsync("clearAllMeshes");
-                _sentMeshIds.Clear();
-                foreach (var m in _meshes)
+                sentMeshIds.Clear();
+                foreach (var m in meshes)
                 {
                     await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
-                    _sentMeshIds.Add(m.Id);
+                    sentMeshIds.Add(m.Id);
                 }
             }
             catch
@@ -962,13 +1038,13 @@
 
     public async Task ClearAllMeshesAsync()
     {
-        if (_meshes.Count == 0)
+        if (meshes.Count == 0)
         {
             return;
         }
 
-        _meshes.Clear();
-        _sentMeshIds.Clear();
+        meshes.Clear();
+        sentMeshIds.Clear();
         UpdateViewer(true);
 
         if (_module is null || !_ready)
@@ -981,13 +1057,13 @@
 
     public async Task ClearAllLinesAsync()
     {
-        if (_lines.Count == 0)
+        if (lines.Count == 0)
         {
             return;
         }
 
-        var need = _lines.All(l => UpdateSpheresRemove(l));
-        _lines.Clear();
+        var need = lines.All(l => UpdateSpheresRemove(l));
+        lines.Clear();
         UpdateViewer(need);
         await _module.InvokeVoidAsync("clearAllLines");
     }

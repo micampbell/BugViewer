@@ -2,20 +2,7 @@
 
 namespace BugViewer;
 
-/// <summary>
-/// Simple ray structure for picking/selection operations.
-/// </summary>
-public struct Ray
-{
-    public Vector3 Anchor;
-    public Vector3 Direction;
 
-    public Ray(Vector3 origin, Vector3 direction)
-    {
-        Anchor = origin;
-        Direction = direction;
-    }
-}
 
 /// <summary>
 /// Orbit camera for 3D scene navigation with mouse/touch controls.
@@ -127,7 +114,7 @@ public class OrbitCamera
         // Use exponential zoom for more natural feel
         var zoomFactor = 1.0 + (wheelDelta * _options.ZoomSensitivity);
         if (_options.IsProjectionCamera)
-        Distance *= zoomFactor;
+            Distance *= zoomFactor;
         else
             _options.OrthoSize *= zoomFactor;
     }
@@ -366,7 +353,7 @@ public class OrbitCamera
     /// <param name="screenWidth">Canvas/screen width in pixels</param>
     /// <param name="screenHeight">Canvas/screen height in pixels</param>
     /// <returns>Ray with origin at camera Center and direction through the screen point</returns>
-    public Ray CreateRayFromScreenPoint(double screenX, double screenY, double screenWidth, double screenHeight)
+    public (Vector3, Vector3) CreateRayFromScreenPoint(double screenX, double screenY, double screenWidth, double screenHeight)
     {
         // Convert screen coordinates to normalized device coordinates (NDC)
         // NDC: X: -1 (left) to +1 (right), Y: -1 (bottom) to +1 (top)
@@ -399,7 +386,7 @@ public class OrbitCamera
         Vector3 target = new Vector3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z);
         Vector3 direction = Vector3.Normalize(target - origin);
 
-        return new Ray(origin, direction);
+        return (origin, direction);
     }
 
     /// <summary>

@@ -37,6 +37,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         LineTransparency = 0.8f,
         BaseColor = "#000000",
         BaseTransparency = 0f,
+        DoubleClickIsSelect = true,
         LineWidthX = 0.1,
         LineWidthY = 0.1,
         SampleCount = 4,
@@ -80,6 +81,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         LineTransparency = 0.8f,
         BaseColor = "#000000",
         BaseTransparency = 0f,
+        DoubleClickIsSelect = true,
         LineWidthX = 0.1,
         LineWidthY = 0.1,
         SampleCount = 4,
@@ -407,6 +409,21 @@ public class BugViewerOptions : INotifyPropertyChanged
             if (_isProjectionCamera != value)
             {
                 _isProjectionCamera = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private bool _doubleClickIsSelect;
+    /// <summary>Camera projection type (Perspective or Orthographic).</summary>
+    public bool DoubleClickIsSelect
+    {
+        get => _doubleClickIsSelect;
+        set
+        {
+            if (_doubleClickIsSelect != value)
+            {
+                _doubleClickIsSelect = value;
                 OnPropertyChanged();
             }
         }

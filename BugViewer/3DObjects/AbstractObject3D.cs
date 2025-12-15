@@ -9,7 +9,7 @@ namespace BugViewer;
 public abstract record AbstractObject3D
 {
     /// <summary>Vertex positions (x, y, z triplets).</summary>
-    public required IEnumerable<Vector3> Vertices { get; init; }
+    public required IList<Vector3> Vertices { get; init; }
 
     /// <summary>Unique identifier for this mesh instance.</summary>
     public required string Id { get; init; }

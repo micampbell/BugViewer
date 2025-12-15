@@ -9,7 +9,7 @@ namespace BugViewer;
 public record MeshData : AbstractObject3D
 {
     /// <summary>Triangle indices (3 indices per triangle).</summary>
-    public required IEnumerable<(int a, int b, int c)> Indices { get; init; }
+    public required IList<(int a, int b, int c)> Indices { get; init; }
 
     public required MeshColoring ColorMode { get; init; }
     
