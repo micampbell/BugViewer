@@ -1,4 +1,3 @@
-using System.Drawing;
 using System.Numerics;
 
 namespace BugViewer;
@@ -26,7 +25,7 @@ public record LineData : AbstractObject3D
             GenerateStadiumGeometry(
                 Vertices, 
                 Thicknesses, 
-                Colors.Cast<Color>(), 
+                Colors, 
                 FadeFactors);
 
         return new
@@ -60,12 +59,11 @@ public record LineData : AbstractObject3D
         float[] fades,
         ushort[] indices
     ) GenerateStadiumGeometry(
-        IEnumerable<Vector3> vertices,
+        IList<Vector3> vertexList,
         IEnumerable<double> thicknesses,
         IEnumerable<System.Drawing.Color> colors,
         IEnumerable<double> fadeFactors)
     {
-        var vertexList = vertices.ToList();
         var thicknessList = thicknesses.ToList();
         var colorList = colors.ToList();
         var fadeList = fadeFactors.ToList();
@@ -97,13 +95,13 @@ public record LineData : AbstractObject3D
             var v1 = vertexList[i + 1];
 
             var color = colorList.Count > i
-                ? new float[] {
+                ? new [] {
                     colorList[i].R / 255f,
                     colorList[i].G / 255f,
                     colorList[i].B / 255f,
                     colorList[i].A / 255f
                 }
-                : new float[] { 1f, 1f, 1f, 1f };
+                : new [] { 1f, 1f, 1f, 1f };
 
             var baseIdxBody = quadPositions.Count / 3;
 

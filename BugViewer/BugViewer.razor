@@ -277,8 +277,10 @@
     private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
     private List<MeshData> meshes = new();
     private List<LineData> lines = new();
-    private List<MeshData> billBoards = new();
-    private HashSet<string> sentMeshIds = new();
+    private List<TextBillboard> billBoards = new();
+    private Dictionary<string, int> sentMeshIds;
+    private Dictionary<string, int> sentLineIds;
+    private Dictionary<string, int> sentBBIds;
     private bool _moduleInitialized = false;
     private double _canvasWidth = 800;
     private double _canvasHeight = 600;
@@ -464,7 +466,7 @@
             var thisDistance = anchorDistanceToPlane / dot;
             if (thisDistance < 0 || thisDistance >= distance)
                 continue;
-            var thisPoint = anchor + distance * dirVector; // yes, it is normally '+' but in the previous line
+            var thisPoint = anchor + thisDistance * dirVector; // yes, it is normally '+' but in the previous line
 
             var wVector = thisPoint - bCoords[index];
             var u = Vector3.Dot(wVector, uBaryFactor);
@@ -670,7 +672,9 @@
     [JSInvokable]
     public async Task OnWebGpuReady()
     {
+        // mark ready early so Add* methods will attempt to send immediately
         _ready = true;
+        Console.WriteLine($"OnWebGpuReady: ready=true. meshes={meshes.Count}, lines={lines.Count}, billboards={billBoards.Count}");
         _error = null;
 
         // send any queued options/projection
@@ -682,23 +686,30 @@
         {
             try
             {
-                foreach (var m in meshes)
+                sentMeshIds = new Dictionary<string, int>();
+                for (int i = 0; i < meshes.Count; i++)
                 {
-                    if (!sentMeshIds.Contains(m.Id))
-                    {
-                        await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
-                        sentMeshIds.Add(m.Id);
-                    }
+                    var mesh = meshes[i];
+                    sentMeshIds.Add(mesh.Id, i);
+                    Console.WriteLine($"OnWebGpuReady: sending mesh {mesh.Id} -> index {i}");
+                    await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
                 }
 
-                foreach (var l in lines)
+                sentLineIds = new Dictionary<string, int>();
+                for (int i = 0; i < lines.Count; i++)
                 {
-                    await _module.InvokeVoidAsync("addLines", l.CreateJavascriptData());
+                    var linesData = lines[i];
+                    sentLineIds.Add(linesData.Id, i);
+                    Console.WriteLine($"OnWebGpuReady: sending lines {linesData.Id} -> index {i}");
+                    await _module.InvokeVoidAsync("addLines", linesData.CreateJavascriptData());
                 }
 
-                foreach (var b in billBoards)
+                sentBBIds = new Dictionary<string, int>();
+                for (int i = 0; i < billBoards.Count; i++)
                 {
-                    await _module.InvokeVoidAsync("addTextBillboard", b.CreateJavascriptData());
+                    var bb = billBoards[i];
+                    sentBBIds.Add(bb.Id, i);
+                    await _module.InvokeVoidAsync("addTextBillboard", bb.CreateJavascriptData());
                 }
             }
             catch (JSException jsEx)
@@ -899,7 +910,20 @@
 
     public async Task AddMeshAsync(MeshData mesh)
     {
+        var index = -1;
+        var nameInSent = sentMeshIds?.TryGetValue(mesh.Id, out index);
+        if (nameInSent.GetValueOrDefault(false))
+        {
+            var former = meshes[index];
+            if (mesh.GetHashCode() == former.GetHashCode())
+                return;
+            await RemoveMeshAsync(index);
+        }
         meshes.Add(mesh);
+        // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
+        if (_module is null || !_ready)
+            return;
+
         UpdateViewer(UpdateSpheresAdd(mesh));
         for (int i = 0; i < mesh.Indices.Count; i++)
         {
@@ -907,11 +931,11 @@
             var a = mesh.Vertices[tri.a];
             var b = mesh.Vertices[tri.b];
             var c = mesh.Vertices[tri.c];
-            var v1 = b - a;
+            var v1 = a - b;
             var v2 = c - b;
             var v1Sqd = v1.LengthSquared();
             var v2Sqd = v2.LengthSquared();
-            var normal = Vector3.Normalize(Vector3.Cross(b - a, c - b));
+            var normal = Vector3.Normalize(Vector3.Cross(-v1, v2));
             var dist = Vector3.Dot(normal, a);
             var v1Dotv2 = Vector3.Dot(v1, v2);
             var oneOverDenom = 1 / (v1Sqd * v2Sqd - v1Dotv2 * v1Dotv2);
@@ -927,43 +951,65 @@
             uBarycentricMultipliers.Add(uBaryMultiplier);
             vBarycentricMultipliers.Add(vBaryMultiplier);
         }
-
-        // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
-        if (_module is null || !_ready)
-        {
-            return;
-        }
-
-        // avoid duplicates
-        if (!sentMeshIds.Contains(mesh.Id))
-        {
-            await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
-            sentMeshIds.Add(mesh.Id);
-        }
+        await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
+        sentMeshIds[mesh.Id] = meshes.Count - 1;
     }
 
     public async Task AddLinesAsync(LineData path)
     {
-        lines.Add(path);
-        UpdateViewer(UpdateSpheresAdd(path));
+        var index = -1;
+        var nameInSent = sentLineIds?.TryGetValue(path.Id, out index);
+        if (nameInSent.GetValueOrDefault(false))
+        {
+            var former = lines[index];
+            if (path.GetHashCode() == former.GetHashCode())
+                return;
+            await RemoveLinesAsync(index);
+        }
 
+        lines.Add(path);
+        Console.WriteLine($"AddLinesAsync: queued line '{path.Id}'. _module={( _module != null ? "set" : "null" )}, _ready={_ready}, lines.Count={lines.Count}");
+
+        // If module not ready yet, queue the line. It will be sent from OnWebGpuReady.
         if (_module is null || !_ready)
         {
+            Console.WriteLine($"AddLinesAsync: module not ready, leaving '{path.Id}' queued");
             return;
         }
 
-        // no id tracking for lines currently
-        await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
+        UpdateViewer(UpdateSpheresAdd(path));
+
+        // Ensure sentLineIds exists (defensive)
+        sentLineIds ??= new Dictionary<string, int>();
+
+        try
+        {
+            Console.WriteLine($"AddLinesAsync: invoking JS addLines for '{path.Id}'");
+            await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
+            sentLineIds[path.Id] = lines.Count - 1;
+        }
+        catch (JSException jsEx)
+        {
+            Console.Error.WriteLine($"AddLinesAsync: JSException adding '{path.Id}': {jsEx.Message}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"AddLinesAsync: Exception adding '{path.Id}': {ex.Message}");
+        }
     }
 
     public async Task ChangeMeshColorAsync(MeshData mesh, System.Drawing.Color color)
     {
-        var index = meshes.IndexOf(mesh);
-        if (index < 0)
+        var index = -1;
+        if (sentMeshIds is null)
+            return;
+        var nameInSent = sentMeshIds.TryGetValue(mesh.Id, out index);
+        if (!nameInSent)
         {   // logger.LogError("Mesh not found in viewer");
             return;
         }
-        if (meshes[index].ColorMode != MeshColoring.UniformColor)
+        var former = meshes[index];
+        if (former.ColorMode != MeshColoring.UniformColor)
         {   // logger.LogError("Mesh not found in viewer");
             return;
         }
@@ -972,49 +1018,47 @@
         meshes[index].Colors = new[] { color };
 
         // now call JS to change color of the mesh at index if ready
-        if (_module != null && _ready)
-        {
-            await _module.InvokeVoidAsync("changeMeshColor",
-                    new
+        await _module.InvokeVoidAsync("changeMeshColor",
+                new
+                {
+                    index = index,
+                    color = new float[]
                     {
-                        index = index,
-                        color = new float[]
-                        {
                         color.R / 255f,
                         color.G / 255f,
                         color.B / 255f,
                         color.A / 255f
-                        }
-                    });
-        }
+                    }
+                });
     }
     public async Task RemoveMeshAsync(MeshData mesh)
     {
-        // Find index before removing so we can tell JS which mesh to remove
-        var index = meshes.IndexOf(mesh);
-        if (index < 0)
-            return;
-
+        var index = -1;
+        if (sentMeshIds is null)
+        {
+            // Find index before removing so we can tell JS which mesh to remove
+            index = meshes.IndexOf(mesh);
+            if (index < 0)
+                return;
+            await RemoveMeshAsync(index);
+        }
+        else
+        {
+            var nameInSent = sentMeshIds.TryGetValue(mesh.Id, out index);
+            if (nameInSent)
+                await RemoveMeshAsync(index);
+        }
+    }
+    private async Task RemoveMeshAsync(int index)
+    {
+        var meshId = meshes[index].Id;
+        UpdateViewer(UpdateSpheresRemove(meshes[index]));
         // Remove from the C# list and update viewer bounds
         meshes.RemoveAt(index);
-        UpdateViewer(UpdateSpheresRemove(mesh));
-
-        if (_module is null || !_ready)
-        {
-            // nothing sent yet or module not ready; ensure we don't try to remove on JS
-            sentMeshIds.Remove(mesh.Id);
-            return;
-        }
-
+        sentMeshIds.Remove(meshId);
         try
         {
-            // If the mesh was already sent to JS, ask JS to remove by index.
-            // The JS side will destroy GPU resources and splice the meshes array.
-            if (sentMeshIds.Contains(mesh.Id))
-            {
-                await _module.InvokeVoidAsync("removeMesh", index);
-                sentMeshIds.Remove(mesh.Id);
-            }
+            await _module.InvokeVoidAsync("removeMesh", index);
         }
         catch
         {
@@ -1023,10 +1067,11 @@
             {
                 await _module.InvokeVoidAsync("clearAllMeshes");
                 sentMeshIds.Clear();
-                foreach (var m in meshes)
+                for (int i = 0; i < meshes.Count; i++)
                 {
+                    var m = meshes[i];
+                    sentMeshIds.Add(m.Id, i);
                     await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
-                    sentMeshIds.Add(m.Id);
                 }
             }
             catch
@@ -1055,6 +1100,58 @@
         await _module.InvokeVoidAsync("clearAllMeshes");
     }
 
+
+    public async Task RemoveLinesAsync(LineData line)
+    {
+        var index = -1;
+        if (sentLineIds is null)
+        {
+            index = lines.IndexOf(line);
+            if (index < 0)
+                return;
+            await RemoveLinesAsync(index);
+        }
+        else
+        {
+            var nameInSent = sentLineIds.TryGetValue(line.Id, out index);
+            if (nameInSent)
+                await RemoveLinesAsync(index);
+        }
+    }
+    private async Task RemoveLinesAsync(int index)
+    {
+        var lineId = lines[index].Id;
+        UpdateViewer(UpdateSpheresRemove(lines[index]));
+        // Remove from the C# list and update viewer bounds
+        lines.RemoveAt(index);
+        sentLineIds.Remove(lineId);
+
+        try
+        {
+            await _module.InvokeVoidAsync("removeLines", index);
+        }
+        catch
+        {
+            // If remove by index fails for any reason, fall back to rebuilding the JS scene
+            try
+            {
+                await _module.InvokeVoidAsync("clearAllLines");
+                sentLineIds.Clear();
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    var m = lines[i];
+                    sentLineIds.Add(m.Id, i);
+                    await _module.InvokeVoidAsync("addLines", m.CreateJavascriptData());
+                }
+            }
+            catch
+            {
+                // ignore errors
+            }
+        }
+    }
+
+
     public async Task ClearAllLinesAsync()
     {
         if (lines.Count == 0)
@@ -1070,11 +1167,13 @@
 
     public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
     {
-        if (_module is null || !_ready)
+        var index = -1;
+        var nameInSent = sentBBIds?.TryGetValue(id, out index);
+        if (nameInSent.GetValueOrDefault(false))
         {
-            throw new InvalidOperationException("Not ready");
+            var former = billBoards[index];
+            await RemoveTextBillboardAsync(index);
         }
-
         var billboardData = new TextBillboard
         {
             BackgroundColor = backgroundColor,
@@ -1083,27 +1182,70 @@
             Vertices = new List<Vector3> { position },
             Id = id
         };
+        billBoards.Add(billboardData);
+        if (_module is null || !_ready)
+            return;
 
         await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
     }
 
-    public async Task RemoveTextBillboardAsync(string id)
+    public async Task RemoveTextBillboardAsync(TextBillboard billBoard)
     {
-        if (_module is null)
+        var index = -1;
+        if (sentBBIds is null)
         {
-            return;
+            // Find index before removing so we can tell JS which mesh to remove
+            index = billBoards.IndexOf(billBoard);
+            if (index < 0)
+                return;
+            await RemoveTextBillboardAsync(index);
+        }
+        else
+        {
+            var nameInSent = sentBBIds?.TryGetValue(billBoard.Id, out index);
+            if (nameInSent.GetValueOrDefault(false))
+                await RemoveTextBillboardAsync(index);
+        }
+    }
+    private async Task RemoveTextBillboardAsync(int index)
+    {
+        var bbId = billBoards[index].Id;
+        billBoards.RemoveAt(index);
+        sentBBIds.Remove(bbId);
+        try
+        {
+            await _module.InvokeVoidAsync("removeTextBillboard", index);
+        }
+        catch
+        {
+            // If remove by index fails for any reason, fall back to rebuilding the JS scene
+            try
+            {
+                await _module.InvokeVoidAsync("clearAllTextBillboards");
+                sentBBIds.Clear();
+                for (int i = 0; i < billBoards.Count; i++)
+                {
+                    var m = billBoards[i];
+                    sentBBIds.Add(m.Id, i);
+                    await _module.InvokeVoidAsync("addTextBillboard", m.CreateJavascriptData());
+                }
+            }
+            catch
+            {
+                // ignore errors
+            }
         }
 
-        await _module.InvokeVoidAsync("removeTextBillboard", id);
     }
 
     public async Task ClearAllTextBillboardsAsync()
     {
-        if (_module is null)
+        billBoards.Clear();
+        sentBBIds.Clear();
+        if (_module is null || !_ready)
         {
             return;
         }
-
         await _module.InvokeVoidAsync("clearAllTextBillboards");
     }
 }

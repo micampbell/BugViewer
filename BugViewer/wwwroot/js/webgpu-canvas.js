@@ -1044,8 +1044,6 @@ export async function addMesh(meshData) {
         });
     }
 
-
-
     const pipeline = await device.createRenderPipelineAsync({
         label: `Mesh ${id} Pipeline`,
         layout: pipelineLayout,
@@ -1216,9 +1214,6 @@ export function clearAllLines() {
 export async function addTextBillboard(billboardData) {
     const { id, text, position, backgroundColor, textColor } = billboardData;
 
-    // Remove existing billboard with same ID
-    removeTextBillboard(id);
-
     // Create a canvas to render the text
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -1335,15 +1330,12 @@ export async function addTextBillboard(billboardData) {
     });
 }
 
-export function removeTextBillboard(billboardId) {
-    const index = textBillboards.findIndex(b => b.id === billboardId);
-    if (index >= 0) {
-        const billboard = textBillboards[index];
-        billboard.vertexBuffer?.destroy();
-        billboard.indexBuffer?.destroy();
-        billboard.texture?.destroy();
-        textBillboards.splice(index, 1);
-    }
+export function removeTextBillboard(index) {
+    const billboard = textBillboards[index];
+    billboard.vertexBuffer?.destroy();
+    billboard.indexBuffer?.destroy();
+    billboard.texture?.destroy();
+    textBillboards.splice(index, 1);
 }
 
 export function clearAllTextBillboards() {
@@ -1389,12 +1381,20 @@ function transformPoint(point, matrix) {
 
 function createBuffer(data, usage, ArrayType = Float32Array) {
     const typedArray = data instanceof ArrayType ? data : new ArrayType(data);
+    // Align buffer size to 4 bytes because createBuffer with mappedAtCreation=true
+    // requires the size to be a multiple of 4 on many WebGPU implementations.
+    const byteLength = typedArray.byteLength;
+    const alignedSize = (byteLength + 3) & ~3; // round up to next multiple of 4
+
     const buffer = device.createBuffer({
-        size: typedArray.byteLength,
+        size: alignedSize,
         usage,
         mappedAtCreation: true
     });
-    new ArrayType(buffer.getMappedRange()).set(typedArray);
+
+    // Copy raw bytes into the mapped range. Use Uint8Array so this works for any typed array.
+    const mappedRange = buffer.getMappedRange();
+    new Uint8Array(mappedRange).set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength));
     buffer.unmap();
     return buffer;
 }
