@@ -87,9 +87,9 @@ public record LineData : AbstractObject3D
         for (int i = 0; i < numSegments; i++)
         {
             var t = (float)thicknessList[i];
-            var fade = fadeList.Count > i ? Math.Clamp((float)fadeList[i], 0f, 1f) : 0f;
-
             if (t <= 0) continue; // Skip zero-thickness segments
+
+            var fade = fadeList.Count > i ? Math.Clamp((float)fadeList[i], 0f, 1f) : 0f;
 
             var v0 = vertexList[i];
             var v1 = vertexList[i + 1];

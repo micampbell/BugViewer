@@ -273,7 +273,9 @@
     private double _lastPointerY;
     private HashSet<string> _pressedKeys = new();
     private System.Threading.Timer? _keyboardMoveTimer;
-    private Sphere totalSphere;
+    private Sphere BoundingSphere;
+    public float SphereRadius => BoundingSphere.GetRadius();
+    public Vector3 SphereCenter => BoundingSphere.Center;
     private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
     private List<MeshData> meshes = new();
     private List<LineData> lines = new();
@@ -793,7 +795,7 @@
 
     public void ResetCamera()
     {
-        Camera.Reset(totalSphere);
+        Camera.Reset(BoundingSphere);
         _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
     }
 
@@ -863,7 +865,7 @@
 
         if ((sphereChanged && Options.AutoUpdateGrid == UpdateTypes.SphereChange) || Options.AutoUpdateGrid == UpdateTypes.OnDataChange)
         {
-            Options.GridSize = Options.AutoGridBuffer * (totalSphere.Center.Length() + totalSphere.GetRadius());
+            Options.GridSize = Options.AutoGridBuffer * (BoundingSphere.Center.Length() + BoundingSphere.GetRadius());
             OnOptionsChanged(null, null);
         }
     }
@@ -872,16 +874,16 @@
     {
         var sphere = MinimumSphere.Run(obj3D.Vertices);
         objectSpheres[obj3D] = sphere;
-        var need = !Sphere.AContainsB(totalSphere, sphere);
+        var need = !Sphere.AContainsB(BoundingSphere, sphere);
 
         if (need)
         {
             var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
-            need = !Sphere.IsPracticallySame(newSphere, totalSphere);
+            need = !Sphere.IsPracticallySame(newSphere, BoundingSphere);
 
             if (need)
             {
-                totalSphere = newSphere;
+                BoundingSphere = newSphere;
             }
         }
 
@@ -892,16 +894,16 @@
     {
         var sphere = objectSpheres[obj3D];
         objectSpheres.Remove(obj3D);
-        var need = obj3D.Vertices.Any(v => !Sphere.OnSurface(totalSphere, v));
+        var need = obj3D.Vertices.Any(v => !Sphere.OnSurface(BoundingSphere, v));
 
         if (need)
         {
             var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
-            need = !Sphere.IsPracticallySame(newSphere, totalSphere);
+            need = !Sphere.IsPracticallySame(newSphere, BoundingSphere);
 
             if (need)
             {
-                totalSphere = newSphere;
+                BoundingSphere = newSphere;
             }
         }
 
@@ -964,11 +966,11 @@
             var former = lines[index];
             if (path.GetHashCode() == former.GetHashCode())
                 return;
-            await RemoveLinesAsync(index);
+            RemoveLinesAsync(index);
         }
 
         lines.Add(path);
-        Console.WriteLine($"AddLinesAsync: queued line '{path.Id}'. _module={( _module != null ? "set" : "null" )}, _ready={_ready}, lines.Count={lines.Count}");
+        Console.WriteLine($"AddLinesAsync: queued line '{path.Id}'. _module={(_module != null ? "set" : "null")}, _ready={_ready}, lines.Count={lines.Count}");
 
         // If module not ready yet, queue the line. It will be sent from OnWebGpuReady.
         if (_module is null || !_ready)
