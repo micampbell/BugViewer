@@ -271,7 +271,7 @@
     private bool _isPanning;
     private double _lastPointerX;
     private double _lastPointerY;
-    private HashSet<string> _pressedKeys = new();
+    public HashSet<string> PressedKeys = new();
     private System.Threading.Timer? _keyboardMoveTimer;
     private Sphere BoundingSphere;
     public float SphereRadius => BoundingSphere.GetRadius();
@@ -337,33 +337,33 @@
             _cameraPopover = false;
             _optionsPopover = false;
             _helpPopover = false;
-            _pressedKeys.Clear();
+            PressedKeys.Clear();
             StateHasChanged();
             return;
         }
         if (e.Key == ",")
         {
             ShowOptionsPanel();
-            _pressedKeys.Clear();
+            PressedKeys.Clear();
             return;
         }
 
         if (e.Key == ".")
         {
             ShowCameraPanel();
-            _pressedKeys.Clear();
+            PressedKeys.Clear();
             return;
         }
 
         if (e.Key == "?" || (e.Key == "/"))
         {
             ShowHelpPanel();
-            _pressedKeys.Clear();
+            PressedKeys.Clear();
             return;
         }
         if (IsAnyPopoverOpen) return;
 
-        _pressedKeys.Add(e.Key.ToLower());
+        PressedKeys.Add(e.Key.ToLower());
     }
 
     private void ShowOptionsPanel()
@@ -389,7 +389,7 @@
 
     private void OnKeyUp(KeyboardEventArgs e)
     {
-        _pressedKeys.Remove(e.Key.ToLower());
+        PressedKeys.Remove(e.Key.ToLower());
     }
 
     private void OnPointerDown(PointerEventArgs e)
@@ -547,40 +547,40 @@
 
     private async void ProcessKeyboardMovement()
     {
-        if (_pressedKeys.Count == 0 || _module == null || !_ready)
+        if (PressedKeys.Count == 0 || _module == null || !_ready)
         {
             return;
         }
 
         double forward = 0, right = 0, up = 0;
-        bool shift = _pressedKeys.Contains("shift");
+        bool shift = PressedKeys.Contains("shift");
 
-        if (_pressedKeys.Contains("w"))
+        if (PressedKeys.Contains("w"))
         {
             forward += 1;
         }
 
-        if (_pressedKeys.Contains("s"))
+        if (PressedKeys.Contains("s"))
         {
             forward -= 1;
         }
 
-        if (_pressedKeys.Contains("d"))
+        if (PressedKeys.Contains("d"))
         {
             right += 1;
         }
 
-        if (_pressedKeys.Contains("a"))
+        if (PressedKeys.Contains("a"))
         {
             right -= 1;
         }
 
-        if (_pressedKeys.Contains("q"))
+        if (PressedKeys.Contains("q"))
         {
             up -= 1;
         }
 
-        if (_pressedKeys.Contains("e"))
+        if (PressedKeys.Contains("e"))
         {
             up += 1;
         }
