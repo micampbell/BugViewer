@@ -7,6 +7,9 @@ namespace BugViewer;
 /// </summary>
 public record LineData : AbstractObject3D
 {
+    /// <summary>
+    /// Gets the collection of thickness values to be used for the operation.
+    /// </summary>
     public required IEnumerable<double> Thicknesses { get; init; }
 
     /// <summary>

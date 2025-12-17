@@ -1,0 +1,1036 @@
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
+using System.Numerics;
+
+namespace BugViewer
+{
+    public partial class BugViewer
+    {
+        private bool _cameraPopover = false;
+        private bool _optionsPopover = false;
+        private bool _helpPopover = false;
+        private bool IsAnyPopoverOpen => _cameraPopover || _optionsPopover || _helpPopover;
+        private bool _isMouseButtonDown;
+
+        [Parameter]
+        public string Width { get; set; } = "100%";
+
+        [Parameter]
+        public string Height { get; set; } = "100vh";
+
+        private ElementReference? _containerRef;
+        private ElementReference? _canvasRef;
+        private BugViewerOptions _options;
+
+        [Parameter]
+        public BugViewerOptions Options
+        {
+            get => _options;
+            set
+            {
+                if (!ReferenceEquals(_options, value))
+                {
+                    _options = value;
+                    _options.PropertyChanged += OnOptionsChanged;
+                }
+            }
+        }
+
+        [Parameter]
+        public EventCallback OnReady { get; set; }
+        [Parameter]
+        public EventCallback OnTriangleSelected { get; set; }
+
+        public OrbitCamera? Camera { get; private set; }
+
+        private IJSObjectReference? _module;
+        private DotNetObjectReference<BugViewer>? _dotNetRef;
+        private bool _ready;
+        private string? _error;
+        private bool _isDragging;
+        private bool _isPanning;
+        private double _lastPointerX;
+        private double _lastPointerY;
+        public HashSet<string> PressedKeys = new();
+        private System.Threading.Timer? _keyboardMoveTimer;
+        private Sphere BoundingSphere;
+        public float SphereRadius => BoundingSphere.GetRadius();
+        public Vector3 SphereCenter => BoundingSphere.Center;
+        private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
+        private List<MeshData> meshes = new();
+        private List<LineData> lines = new();
+        private List<TextBillboard> billBoards = new();
+        private Dictionary<string, int> sentMeshIds;
+        private Dictionary<string, int> sentLineIds;
+        private Dictionary<string, int> sentBBIds;
+        private bool _moduleInitialized = false;
+        private double _canvasWidth = 800;
+        private double _canvasHeight = 600;
+        private DateTime _lastClickTime = DateTime.MinValue;
+        private double _lastClickX;
+        private double _lastClickY;
+        private const double DoubleClickTimeMs = 300;
+        private const double DoubleClickDistancePx = 5;
+        public double LatestFrameMs { get; private set; }
+
+        public string SelectedMeshName { get; private set; } = null;
+        public int SelectedTriangleInMeshIndex { get; private set; } = -1;
+        List<string> triangleToMesh = new();
+        List<int> triangleToInMeshIndex = new();
+        List<float> facePlaneDistances = new();
+        List<Vector3> faceNormals = new();
+        List<Vector3> bCoords = new();
+        List<Vector3> uBarycentricMultipliers = new();
+        List<Vector3> vBarycentricMultipliers = new();
+
+        Option<int>? selectedIntOption;
+        private List<Option<int>> _sampleCountItems = new()
+    {
+        new() { Value = 1, Text = "1x (No MSAA)" },
+        // new() { Value = 2, Text = "2x" },  //generally not supported
+        new() { Value = 4, Text = "4x MSAA" },
+        new() { Value = 8, Text = "8x MSAA" }
+    };
+        private void SampleCountOptionChanged(string args)
+        {
+            Options.SampleCount = int.Parse(args);
+        }
+
+
+        protected override void OnInitialized()
+        {
+            if (Options is null)
+            {
+                Options = BugViewerOptions.DefaultLight;
+            }
+
+            Camera = new OrbitCamera(Vector3.Zero, Options);
+            _keyboardMoveTimer = new System.Threading.Timer(_ => ProcessKeyboardMovement(), null, 0, 16);
+        }
+
+
+
+        private void OnKeyDown(KeyboardEventArgs e)
+        {
+            if (e.Key == "Escape")
+            {
+                _cameraPopover = false;
+                _optionsPopover = false;
+                _helpPopover = false;
+                PressedKeys.Clear();
+                StateHasChanged();
+                return;
+            }
+            if (e.Key == ",")
+            {
+                ShowOptionsPanel();
+                PressedKeys.Clear();
+                return;
+            }
+
+            if (e.Key == ".")
+            {
+                ShowCameraPanel();
+                PressedKeys.Clear();
+                return;
+            }
+
+            if (e.Key == "?" || (e.Key == "/"))
+            {
+                ShowHelpPanel();
+                PressedKeys.Clear();
+                return;
+            }
+            if (IsAnyPopoverOpen) return;
+
+            PressedKeys.Add(e.Key.ToLower());
+        }
+
+        private void ShowOptionsPanel()
+        {
+            _optionsPopover = !_optionsPopover;
+            _helpPopover = false;
+            _cameraPopover = false;
+        }
+
+        private void ShowHelpPanel()
+        {
+            _optionsPopover = false;
+            _helpPopover = !_helpPopover;
+            _cameraPopover = false;
+        }
+
+        private void ShowCameraPanel()
+        {
+            _optionsPopover = false;
+            _helpPopover = false;
+            _cameraPopover = !_cameraPopover;
+        }
+
+        private void OnKeyUp(KeyboardEventArgs e)
+        {
+            PressedKeys.Remove(e.Key.ToLower());
+        }
+
+        private void OnPointerDown(PointerEventArgs e)
+        {
+            _containerRef?.FocusAsync();
+            var currentTime = DateTime.Now;
+            var timeSinceLast = (currentTime - _lastClickTime).TotalMilliseconds;
+            var dist = Math.Sqrt(Math.Pow(e.ClientX - _lastClickX, 2) + Math.Pow(e.ClientY - _lastClickY, 2));
+
+            if (e.Button == 0 && timeSinceLast <= DoubleClickTimeMs && dist <= DoubleClickDistancePx)
+            {
+                OnDoubleClick(e);
+                return;
+            }
+
+            if (e.Button == 0)
+            {
+                _lastClickTime = currentTime;
+                _lastClickX = e.ClientX;
+                _lastClickY = e.ClientY;
+                _isDragging = true;
+                _isPanning = false;
+                _lastPointerX = e.ClientX;
+                _lastPointerY = e.ClientY;
+            }
+            else if (e.Button == 2)
+            {
+                _isPanning = true;
+                _isDragging = false;
+                _lastPointerX = e.ClientX;
+                _lastPointerY = e.ClientY;
+            }
+        }
+
+        private async Task OnDoubleClick(PointerEventArgs e)
+        {
+            if (_module is null || !_ready)
+            {
+                return;
+            }
+
+            var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
+            var rx = e.ClientX - rect.Left;
+            var ry = e.ClientY - rect.Top;
+            if (Options.DoubleClickIsSelect)
+            {
+                if (!OnTriangleSelected.HasDelegate) return;
+                (Vector3 anchor, Vector3 dirVector) = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
+                if (DoesRayGoThroughTriangle(anchor, dirVector, out var meshName, out var meshIndex, out var distance, out var point))
+                {
+                    SelectedMeshName = meshName;
+                    SelectedTriangleInMeshIndex = meshIndex;
+                    await OnTriangleSelected.InvokeAsync();
+                }
+            }
+            else ResetCamera();
+        }
+
+        bool DoesRayGoThroughTriangle(Vector3 anchor, Vector3 dirVector, out string meshName, out int meshIndex, out float distance, out Vector3 point)
+        {
+            distance = float.MaxValue;
+            meshIndex = -1;
+            meshName = "";
+            point = Vector3.Zero;
+            for (int index = 0; index < triangleToMesh.Count; index++)
+            {
+                var normal = faceNormals[index];
+                if (Vector3.Dot(normal, dirVector) >= 0)
+                    continue; // ignore back faces
+                var faceDistance = facePlaneDistances[index];
+                var uBaryFactor = uBarycentricMultipliers[index];
+                var vBaryFactor = vBarycentricMultipliers[index];
+                var dot = Vector3.Dot(dirVector, normal);
+
+                var anchorDistanceToPlane = faceDistance - Vector3.Dot(anchor, normal);
+                var thisDistance = anchorDistanceToPlane / dot;
+                if (thisDistance < 0 || thisDistance >= distance)
+                    continue;
+                var thisPoint = anchor + thisDistance * dirVector; // yes, it is normally '+' but in the previous line
+
+                var wVector = thisPoint - bCoords[index];
+                var u = Vector3.Dot(wVector, uBaryFactor);
+                if (u <= 0 || u >= 1) continue;
+                var v = Vector3.Dot(wVector, vBaryFactor);
+                if (v <= 0 || v >= 1) continue;
+                if (u + v > 1) continue;
+                // yes intersecting!
+                distance = thisDistance;
+                meshName = triangleToMesh[index];
+                meshIndex = triangleToInMeshIndex[index];
+                point = thisPoint;
+            }
+            return meshIndex != -1;
+        }
+
+        private class BoundingClientRect
+        {
+            public double Left { get; set; }
+            public double Top { get; set; }
+            public double Width { get; set; }
+            public double Height { get; set; }
+        }
+
+        private async Task OnPointerMove(PointerEventArgs e)
+        {
+            if (_isDragging)
+            {
+                var dx = e.ClientX - _lastPointerX;
+                var dy = e.ClientY - _lastPointerY;
+                _lastPointerX = e.ClientX;
+                _lastPointerY = e.ClientY;
+                Camera.Orbit(dx, dy);
+
+                if (_module != null && _ready)
+                {
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                }
+            }
+            else if (_isPanning)
+            {
+                var dx = e.ClientX - _lastPointerX;
+                var dy = e.ClientY - _lastPointerY;
+                _lastPointerX = e.ClientX;
+                _lastPointerY = e.ClientY;
+                Camera.PanWithMouse(dx, dy, e.ShiftKey);
+
+                if (_module != null && _ready)
+                {
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                }
+            }
+        }
+
+        private void OnPointerUp(PointerEventArgs e)
+        {
+            if (e.Button == 0)
+            {
+                _isDragging = false;
+            }
+            else if (e.Button == 2)
+            {
+                _isPanning = false;
+            }
+        }
+
+        private async Task OnWheel(WheelEventArgs e)
+        {
+            Camera.Zoom(e.DeltaY);
+
+            if (_module != null && _ready)
+            {
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            }
+        }
+
+        private async void ProcessKeyboardMovement()
+        {
+            if (PressedKeys.Count == 0 || _module == null || !_ready)
+            {
+                return;
+            }
+
+            double forward = 0, right = 0, up = 0;
+            bool shift = PressedKeys.Contains("shift");
+
+            if (PressedKeys.Contains("w"))
+            {
+                forward += 1;
+            }
+
+            if (PressedKeys.Contains("s"))
+            {
+                forward -= 1;
+            }
+
+            if (PressedKeys.Contains("d"))
+            {
+                right += 1;
+            }
+
+            if (PressedKeys.Contains("a"))
+            {
+                right -= 1;
+            }
+
+            if (PressedKeys.Contains("q"))
+            {
+                up -= 1;
+            }
+
+            if (PressedKeys.Contains("e"))
+            {
+                up += 1;
+            }
+
+            if (forward != 0 || right != 0 || up != 0)
+            {
+                Camera.PanWithKeyboard(forward, right, up, shift);
+
+                try
+                {
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                }
+                catch
+                {
+                    // Handle error silently
+                }
+            }
+        }
+
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            if (!firstRender)
+            {
+                return;
+            }
+            if (_containerRef.HasValue)
+            {
+                await _containerRef.Value.FocusAsync();
+            }
+
+            try
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
+            }
+            catch (JSException jse)
+            {
+                _error = $"Failed to import webgpu module: {jse.Message}";
+                StateHasChanged();
+                return;
+            }
+            catch (Exception ex)
+            {
+                _error = $"Unexpected error importing webgpu module: {ex.Message}";
+                StateHasChanged();
+                return;
+            }
+
+            _dotNetRef = DotNetObjectReference.Create(this);
+
+            try
+            {
+                await SendOptionsToJavaScriptAsync(true);
+            }
+            catch (Exception ex)
+            {
+                _error = $"Error initializing WebGPU canvas: {ex.Message}";
+                StateHasChanged();
+            }
+        }
+
+        protected override async Task OnParametersSetAsync()
+        {
+            await SendOptionsToJavaScriptAsync(false);
+        }
+
+        private async Task SendOptionsToJavaScriptAsync(bool init)
+        {
+            if (_module is null)
+            {
+                return;
+            }
+
+            if (init)
+            {
+                await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(), Camera.ConvertMatrixToJavaScript());
+            }
+            else
+            {
+                await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions());
+                await SendProjectionMatrixToJavaScriptAsync();
+            }
+        }
+
+        [JSInvokable]
+        public Task OnFrameMsUpdate(double ms)
+        {
+            LatestFrameMs = ms;
+            return Task.CompletedTask;
+        }
+
+        [JSInvokable]
+        public async Task OnWebGpuReady()
+        {
+            // mark ready early so Add* methods will attempt to send immediately
+            _ready = true;
+            Console.WriteLine($"OnWebGpuReady: ready=true. meshes={meshes.Count}, lines={lines.Count}, billboards={billBoards.Count}");
+            _error = null;
+
+            // send any queued options/projection
+            await SendProjectionMatrixToJavaScriptAsync();
+
+            // Mark module initialized and flush any queued meshes
+            _moduleInitialized = true;
+            if (_module != null)
+            {
+                try
+                {
+                    sentMeshIds = new Dictionary<string, int>();
+                    for (int i = 0; i < meshes.Count; i++)
+                    {
+                        var mesh = meshes[i];
+                        sentMeshIds.Add(mesh.Id, i);
+                        Console.WriteLine($"OnWebGpuReady: sending mesh {mesh.Id} -> index {i}");
+                        await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
+                    }
+
+                    sentLineIds = new Dictionary<string, int>();
+                    for (int i = 0; i < lines.Count; i++)
+                    {
+                        var linesData = lines[i];
+                        sentLineIds.Add(linesData.Id, i);
+                        Console.WriteLine($"OnWebGpuReady: sending lines {linesData.Id} -> index {i}");
+                        await _module.InvokeVoidAsync("addLines", linesData.CreateJavascriptData());
+                    }
+
+                    sentBBIds = new Dictionary<string, int>();
+                    for (int i = 0; i < billBoards.Count; i++)
+                    {
+                        var bb = billBoards[i];
+                        sentBBIds.Add(bb.Id, i);
+                        await _module.InvokeVoidAsync("addTextBillboard", bb.CreateJavascriptData());
+                    }
+                }
+                catch (JSException jsEx)
+                {
+                    Console.Error.WriteLine(jsEx.Message);
+                }
+            }
+
+            StateHasChanged();
+
+            if (OnReady.HasDelegate)
+            {
+                await OnReady.InvokeAsync();
+            }
+        }
+
+        [JSInvokable]
+        public Task OnWebGpuError(string message)
+        {
+            _ready = false;
+            _error = message;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+
+        [JSInvokable]
+        public async Task OnCanvasResized(double w, double h)
+        {
+            _canvasWidth = w;
+            _canvasHeight = h;
+            await SendProjectionMatrixToJavaScriptAsync();
+        }
+
+        private async Task SendProjectionMatrixToJavaScriptAsync()
+        {
+            if (_module is null || !_ready || Camera is null)
+            {
+                return;
+            }
+
+            try
+            {
+                var proj = Camera.ConvertProjectionMatrixToJavaScript(_canvasWidth, _canvasHeight);
+                await _module.InvokeVoidAsync("writeProjectionMatrix", proj);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            //Camera = new OrbitCamera(Camera.Target, Options);
+            _keyboardMoveTimer?.Dispose();
+            Options.PropertyChanged -= OnOptionsChanged;
+
+            if (_module != null)
+            {
+                try
+                {
+                    await _module.InvokeVoidAsync("disposeWebGPU_Canvas");
+                }
+                catch
+                {
+                    // Handle error silently
+                }
+
+                try
+                {
+                    await _module.DisposeAsync();
+                }
+                catch
+                {
+                    // Handle error silently
+                }
+            }
+
+            _dotNetRef?.Dispose();
+        }
+
+        public void ResetCamera()
+        {
+            Camera.Reset(BoundingSphere);
+            _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+        }
+
+        private async Task HandleCameraReset()
+        {
+            ResetCamera();
+        }
+
+        private async Task HandleCameraCardinalView(CardinalDirection dir)
+        {
+            if (Camera is null)
+            {
+                return;
+            }
+
+            ResetCamera();
+            Camera.SetCardinalView(dir);
+
+            if (_module != null && _ready)
+            {
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            }
+        }
+
+        private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e?.PropertyName == nameof(Options.ZIsUp))
+            {
+                Camera.SwapCameraUp();
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            }
+
+            if (e?.PropertyName == nameof(Options.IsProjectionCamera))
+            {
+                Options.AdjustCameraProjectionParameters();
+            }
+
+            if (e?.PropertyName == nameof(Options.IsDarkTheme) && Options.AutoResetOnThemeChange)
+            {
+                Options.ResetToDefault(Options.IsDarkTheme);
+            }
+
+            StateHasChanged();
+            await SendOptionsToJavaScriptAsync(false);
+        }
+
+        private async void UpdateViewer(bool sphereChanged)
+        {
+            if (Camera is null || _module is null)
+            {
+                return;
+            }
+
+            if ((sphereChanged && Options.AutoResetCamera == UpdateTypes.SphereChange) || Options.AutoResetCamera == UpdateTypes.OnDataChange)
+            {
+                ResetCamera();
+
+                try
+                {
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                }
+                catch
+                {
+                    // Handle error silently
+                }
+            }
+
+            if ((sphereChanged && Options.AutoUpdateGrid == UpdateTypes.SphereChange) || Options.AutoUpdateGrid == UpdateTypes.OnDataChange)
+            {
+                Options.GridSize = Options.AutoGridBuffer * (BoundingSphere.Center.Length() + BoundingSphere.GetRadius());
+                OnOptionsChanged(null, null);
+            }
+        }
+
+        private bool UpdateSpheresAdd(AbstractObject3D obj3D)
+        {
+            var sphere = MinimumSphere.Run(obj3D.Vertices);
+            objectSpheres[obj3D] = sphere;
+            var need = !Sphere.AContainsB(BoundingSphere, sphere);
+
+            if (need)
+            {
+                var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
+                need = !Sphere.IsPracticallySame(newSphere, BoundingSphere);
+
+                if (need)
+                {
+                    BoundingSphere = newSphere;
+                }
+            }
+
+            return need;
+        }
+
+        private bool UpdateSpheresRemove(AbstractObject3D obj3D)
+        {
+            var sphere = objectSpheres[obj3D];
+            objectSpheres.Remove(obj3D);
+            var need = obj3D.Vertices.Any(v => !Sphere.OnSurface(BoundingSphere, v));
+
+            if (need)
+            {
+                var newSphere = MinimumSphere.Run(objectSpheres.Keys.SelectMany(o => o.Vertices));
+                need = !Sphere.IsPracticallySame(newSphere, BoundingSphere);
+
+                if (need)
+                {
+                    BoundingSphere = newSphere;
+                }
+            }
+
+            return need;
+        }
+
+        public async Task AddMeshAsync(MeshData mesh)
+        {
+            var index = -1;
+            var nameInSent = sentMeshIds?.TryGetValue(mesh.Id, out index);
+            if (nameInSent.GetValueOrDefault(false))
+            {
+                var former = meshes[index];
+                if (mesh.GetHashCode() == former.GetHashCode())
+                    return;
+                await RemoveMeshAsync(index);
+            }
+            meshes.Add(mesh);
+            // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
+            if (_module is null || !_ready)
+                return;
+
+            UpdateViewer(UpdateSpheresAdd(mesh));
+            for (int i = 0; i < mesh.Indices.Count; i++)
+            {
+                var tri = mesh.Indices[i];
+                var a = mesh.Vertices[tri.a];
+                var b = mesh.Vertices[tri.b];
+                var c = mesh.Vertices[tri.c];
+                var v1 = a - b;
+                var v2 = c - b;
+                var v1Sqd = v1.LengthSquared();
+                var v2Sqd = v2.LengthSquared();
+                var normal = Vector3.Normalize(Vector3.Cross(-v1, v2));
+                var dist = Vector3.Dot(normal, a);
+                var v1Dotv2 = Vector3.Dot(v1, v2);
+                var oneOverDenom = 1 / (v1Sqd * v2Sqd - v1Dotv2 * v1Dotv2);
+                var uBaryMultiplier = Vector3.Multiply(oneOverDenom,
+                    Vector3.Multiply(v1Sqd, v2) - Vector3.Multiply(v1Dotv2, v1));
+                var vBaryMultiplier = Vector3.Multiply(oneOverDenom,
+                    Vector3.Multiply(v2Sqd, v1) - Vector3.Multiply(v1Dotv2, v2));
+                triangleToMesh.Add(mesh.Id);
+                triangleToInMeshIndex.Add(i);
+                facePlaneDistances.Add(dist);
+                faceNormals.Add(normal);
+                bCoords.Add(b);
+                uBarycentricMultipliers.Add(uBaryMultiplier);
+                vBarycentricMultipliers.Add(vBaryMultiplier);
+            }
+            await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
+            sentMeshIds[mesh.Id] = meshes.Count - 1;
+        }
+
+        public async Task AddLinesAsync(LineData path)
+        {
+            var index = -1;
+            var nameInSent = sentLineIds?.TryGetValue(path.Id, out index);
+            if (nameInSent.GetValueOrDefault(false))
+            {
+                var former = lines[index];
+                if (path.GetHashCode() == former.GetHashCode())
+                    return;
+                RemoveLinesAsync(index);
+            }
+
+            lines.Add(path);
+            Console.WriteLine($"AddLinesAsync: queued line '{path.Id}'. _module={(_module != null ? "set" : "null")}, _ready={_ready}, lines.Count={lines.Count}");
+
+            // If module not ready yet, queue the line. It will be sent from OnWebGpuReady.
+            if (_module is null || !_ready)
+            {
+                Console.WriteLine($"AddLinesAsync: module not ready, leaving '{path.Id}' queued");
+                return;
+            }
+
+            UpdateViewer(UpdateSpheresAdd(path));
+
+            // Ensure sentLineIds exists (defensive)
+            sentLineIds ??= new Dictionary<string, int>();
+
+            try
+            {
+                Console.WriteLine($"AddLinesAsync: invoking JS addLines for '{path.Id}'");
+                await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
+                sentLineIds[path.Id] = lines.Count - 1;
+            }
+            catch (JSException jsEx)
+            {
+                Console.Error.WriteLine($"AddLinesAsync: JSException adding '{path.Id}': {jsEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"AddLinesAsync: Exception adding '{path.Id}': {ex.Message}");
+            }
+        }
+
+        public async Task ChangeMeshColorAsync(MeshData mesh, System.Drawing.Color color)
+        {
+            var index = -1;
+            if (sentMeshIds is null)
+                return;
+            var nameInSent = sentMeshIds.TryGetValue(mesh.Id, out index);
+            if (!nameInSent)
+            {   // logger.LogError("Mesh not found in viewer");
+                return;
+            }
+            var former = meshes[index];
+            if (former.ColorMode != MeshColoring.UniformColor)
+            {   // logger.LogError("Mesh not found in viewer");
+                return;
+            }
+
+            // Update the C# model so if it's sent later (or re-sent), it has the new color
+            meshes[index].Colors = new[] { color };
+
+            // now call JS to change color of the mesh at index if ready
+            await _module.InvokeVoidAsync("changeMeshColor",
+                    new
+                    {
+                        index = index,
+                        color = new float[]
+                        {
+                        color.R / 255f,
+                        color.G / 255f,
+                        color.B / 255f,
+                        color.A / 255f
+                        }
+                    });
+        }
+        public async Task RemoveMeshAsync(MeshData mesh)
+        {
+            var index = -1;
+            if (sentMeshIds is null)
+            {
+                // Find index before removing so we can tell JS which mesh to remove
+                index = meshes.IndexOf(mesh);
+                if (index < 0)
+                    return;
+                await RemoveMeshAsync(index);
+            }
+            else
+            {
+                var nameInSent = sentMeshIds.TryGetValue(mesh.Id, out index);
+                if (nameInSent)
+                    await RemoveMeshAsync(index);
+            }
+        }
+        private async Task RemoveMeshAsync(int index)
+        {
+            var meshId = meshes[index].Id;
+            UpdateViewer(UpdateSpheresRemove(meshes[index]));
+            // Remove from the C# list and update viewer bounds
+            meshes.RemoveAt(index);
+            sentMeshIds.Remove(meshId);
+            try
+            {
+                await _module.InvokeVoidAsync("removeMesh", index);
+            }
+            catch
+            {
+                // If remove by index fails for any reason, fall back to rebuilding the JS scene
+                try
+                {
+                    await _module.InvokeVoidAsync("clearAllMeshes");
+                    sentMeshIds.Clear();
+                    for (int i = 0; i < meshes.Count; i++)
+                    {
+                        var m = meshes[i];
+                        sentMeshIds.Add(m.Id, i);
+                        await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
+                    }
+                }
+                catch
+                {
+                    // ignore errors
+                }
+            }
+        }
+
+        public async Task ClearAllMeshesAsync()
+        {
+            if (meshes.Count == 0)
+            {
+                return;
+            }
+
+            meshes.Clear();
+            sentMeshIds.Clear();
+            UpdateViewer(true);
+
+            if (_module is null || !_ready)
+            {
+                return;
+            }
+
+            await _module.InvokeVoidAsync("clearAllMeshes");
+        }
+
+
+        public async Task RemoveLinesAsync(LineData line)
+        {
+            var index = -1;
+            if (sentLineIds is null)
+            {
+                index = lines.IndexOf(line);
+                if (index < 0)
+                    return;
+                await RemoveLinesAsync(index);
+            }
+            else
+            {
+                var nameInSent = sentLineIds.TryGetValue(line.Id, out index);
+                if (nameInSent)
+                    await RemoveLinesAsync(index);
+            }
+        }
+        private async Task RemoveLinesAsync(int index)
+        {
+            var lineId = lines[index].Id;
+            UpdateViewer(UpdateSpheresRemove(lines[index]));
+            // Remove from the C# list and update viewer bounds
+            lines.RemoveAt(index);
+            sentLineIds.Remove(lineId);
+
+            try
+            {
+                await _module.InvokeVoidAsync("removeLines", index);
+            }
+            catch
+            {
+                // If remove by index fails for any reason, fall back to rebuilding the JS scene
+                try
+                {
+                    await _module.InvokeVoidAsync("clearAllLines");
+                    sentLineIds.Clear();
+                    for (int i = 0; i < lines.Count; i++)
+                    {
+                        var m = lines[i];
+                        sentLineIds.Add(m.Id, i);
+                        await _module.InvokeVoidAsync("addLines", m.CreateJavascriptData());
+                    }
+                }
+                catch
+                {
+                    // ignore errors
+                }
+            }
+        }
+
+
+        public async Task ClearAllLinesAsync()
+        {
+            if (lines.Count == 0)
+            {
+                return;
+            }
+
+            var need = lines.All(l => UpdateSpheresRemove(l));
+            lines.Clear();
+            UpdateViewer(need);
+            await _module.InvokeVoidAsync("clearAllLines");
+        }
+
+        public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
+        {
+            var index = -1;
+            var nameInSent = sentBBIds?.TryGetValue(id, out index);
+            if (nameInSent.GetValueOrDefault(false))
+            {
+                var former = billBoards[index];
+                await RemoveTextBillboardAsync(index);
+            }
+            var billboardData = new TextBillboard
+            {
+                BackgroundColor = backgroundColor,
+                TextColor = textColor,
+                Text = text,
+                Vertices = new List<Vector3> { position },
+                Id = id
+            };
+            billBoards.Add(billboardData);
+            if (_module is null || !_ready)
+                return;
+
+            await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
+        }
+
+        public async Task RemoveTextBillboardAsync(TextBillboard billBoard)
+        {
+            var index = -1;
+            if (sentBBIds is null)
+            {
+                // Find index before removing so we can tell JS which mesh to remove
+                index = billBoards.IndexOf(billBoard);
+                if (index < 0)
+                    return;
+                await RemoveTextBillboardAsync(index);
+            }
+            else
+            {
+                var nameInSent = sentBBIds?.TryGetValue(billBoard.Id, out index);
+                if (nameInSent.GetValueOrDefault(false))
+                    await RemoveTextBillboardAsync(index);
+            }
+        }
+        private async Task RemoveTextBillboardAsync(int index)
+        {
+            var bbId = billBoards[index].Id;
+            billBoards.RemoveAt(index);
+            sentBBIds.Remove(bbId);
+            try
+            {
+                await _module.InvokeVoidAsync("removeTextBillboard", index);
+            }
+            catch
+            {
+                // If remove by index fails for any reason, fall back to rebuilding the JS scene
+                try
+                {
+                    await _module.InvokeVoidAsync("clearAllTextBillboards");
+                    sentBBIds.Clear();
+                    for (int i = 0; i < billBoards.Count; i++)
+                    {
+                        var m = billBoards[i];
+                        sentBBIds.Add(m.Id, i);
+                        await _module.InvokeVoidAsync("addTextBillboard", m.CreateJavascriptData());
+                    }
+                }
+                catch
+                {
+                    // ignore errors
+                }
+            }
+
+        }
+
+        public async Task ClearAllTextBillboardsAsync()
+        {
+            billBoards.Clear();
+            sentBBIds.Clear();
+            if (_module is null || !_ready)
+            {
+                return;
+            }
+            await _module.InvokeVoidAsync("clearAllTextBillboards");
+        }
+    }
+}
