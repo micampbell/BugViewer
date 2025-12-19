@@ -21,26 +21,35 @@
             @oncontextmenu:preventDefault="true">
     </canvas>
     <!-- A small anchor button to toggle the popover -->
-    <FluentStack Style="position:absolute; top:4px; left:4px; z-index:1001"
+    <FluentStack Style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; padding:4px; box-sizing:border-box;" 
+                 Orientation="@ToolsOrientation" 
+                 HorizontalAlignment="@ToolsHorizontal"
+                 VerticalAlignment="@ToolsVertical"
                  Class="@($"toolbar-buttons {(_isMouseButtonDown ? "mouse-down" : "")} {(IsAnyPopoverOpen ? "popover-open" : "")}")">
-        <FluentButton Id="options"
-                      Appearance="Appearance.Stealth"
-                      Title="Open Options"
-                      OnClick="@(() => ShowOptionsPanel())">
-            <FluentIcon Value="@(new Icons.Settings())" />
-        </FluentButton>
-        <FluentButton Id="camera-controls"
-                      Appearance="Appearance.Stealth"
-                      Title="Open Camera Controls"
-                      OnClick="@(() => ShowCameraPanel())">
-            <FluentIcon Value="@(new Icons.CameraSparkles())" />
-        </FluentButton>
-        <FluentButton Id="help"
-                      Appearance="Appearance.Stealth"
-                      Title="Open Help"
-                      OnClick="@(() => ShowHelpPanel())">
-            <FluentIcon Value="@(new Icons.Question())" />
-        </FluentButton>
+        <div style="pointer-events:auto;">
+            <FluentButton Id="options"
+                          Appearance="Appearance.Stealth"
+                          Title="Open Options"
+                          OnClick="@(() => ShowOptionsPanel())">
+                <FluentIcon Value="@(new Icons.Settings())" />
+            </FluentButton>
+        </div>
+        <div style="pointer-events:auto;">
+            <FluentButton Id="camera-controls"
+                          Appearance="Appearance.Stealth"
+                          Title="Open Camera Controls"
+                          OnClick="@(() => ShowCameraPanel())">
+                <FluentIcon Value="@(new Icons.CameraSparkles())" />
+            </FluentButton>
+        </div>
+        <div style="pointer-events:auto;">
+            <FluentButton Id="help"
+                          Appearance="Appearance.Stealth"
+                          Title="Open Help"
+                          OnClick="@(() => ShowHelpPanel())">
+                <FluentIcon Value="@(new Icons.Question())" />
+            </FluentButton>
+        </div>
     </FluentStack>
 
     <FluentPopover AnchorId="camera-controls"

@@ -13,7 +13,12 @@ namespace BugViewer
         private bool _helpPopover = false;
         private bool IsAnyPopoverOpen => _cameraPopover || _optionsPopover || _helpPopover;
         private bool _isMouseButtonDown;
-
+        [Parameter]
+        public Orientation ToolsOrientation { get; set; }
+        [Parameter]
+        public HorizontalAlignment ToolsHorizontal { get; set; }
+        [Parameter]
+        public VerticalAlignment ToolsVertical { get; set; }
         [Parameter]
         public string Width { get; set; } = "100%";
 
