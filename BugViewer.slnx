@@ -3,5 +3,8 @@
     <Project Path="samples/SimpleStandalone/SimpleStandalone.csproj" Id="fd4b13c7-fedc-4651-8b9b-ed69c3ac9381" />
     <Project Path="samples/TVGLPresenter/TVGLPresenter.csproj" />
   </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="readme.md" />
+  </Folder>
   <Project Path="BugViewer/BugViewer.csproj" />
 </Solution>
