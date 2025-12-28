@@ -85,8 +85,8 @@
 			Id = Path.GetFileName(filename),
 			Colors = ts.HasUniformColor ? [ConvertFromTVGLColor(ts.SolidColor)]
 			: ts.Faces.Select(f => ConvertFromTVGLColor(f.Color)),
-			Indices = ts.Faces.Select(f => (f.A.IndexInList, f.B.IndexInList, f.C.IndexInList)),
-			Vertices = ts.Vertices.Select(v => new System.Numerics.Vector3((float)v.X, (float)v.Y, (float)v.Z))
+			Indices = ts.Faces.Select(f => (f.A.IndexInList, f.B.IndexInList, f.C.IndexInList)).ToArray(),
+			Vertices = ts.Vertices.Select(v => new System.Numerics.Vector3((float)v.X, (float)v.Y, (float)v.Z)).ToArray()
 		};
 		// Add to WebGPU scene
 		await viewer.AddMeshAsync(meshData);

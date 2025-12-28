@@ -1,3 +1,4 @@
+// Imports for Blazor, FluentUI, and JS interop.
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -6,27 +7,35 @@ using System.Numerics;
 
 namespace BugViewer
 {
+    // Partial class for the BugViewer component. The rest is in the razor file
     public partial class BugViewer
     {
+        // Popover visibility flags.
         private bool _cameraPopover = false;
         private bool _optionsPopover = false;
         private bool _helpPopover = false;
+        // Check if any popover is open.
         private bool IsAnyPopoverOpen => _cameraPopover || _optionsPopover || _helpPopover;
+        // Mouse button state.
         private bool _isMouseButtonDown;
+        // Component parameters for tool orientation and alignment.
         [Parameter]
         public Orientation ToolsOrientation { get; set; }
         [Parameter]
         public HorizontalAlignment ToolsHorizontal { get; set; }
         [Parameter]
         public VerticalAlignment ToolsVertical { get; set; }
+        // Component dimensions.
         [Parameter]
         public string Width { get; set; } = "100%";
 
         [Parameter]
         public string Height { get; set; } = "100vh";
 
+        // Element references for container and canvas.
         private ElementReference? _containerRef;
         private ElementReference? _canvasRef;
+        // Viewer options.
         private BugViewerOptions _options;
 
         [Parameter]
@@ -43,45 +52,63 @@ namespace BugViewer
             }
         }
 
+        // Event callbacks for component readiness and triangle selection.
         [Parameter]
         public EventCallback OnReady { get; set; }
         [Parameter]
         public EventCallback OnTriangleSelected { get; set; }
 
+        // Camera instance.
         public OrbitCamera? Camera { get; private set; }
 
+        // JS interop objects.
         private IJSObjectReference? _module;
         private DotNetObjectReference<BugViewer>? _dotNetRef;
+        // State flags.
         private bool _ready;
         private string? _error;
+        // Mouse interaction flags.
         private bool _isDragging;
         private bool _isPanning;
+        // Last pointer coordinates.
         private double _lastPointerX;
         private double _lastPointerY;
+        // Set of pressed keys.
         public HashSet<string> PressedKeys = new();
+        // Timer for keyboard movement.
         private System.Threading.Timer? _keyboardMoveTimer;
+        // Bounding sphere for the scene.
         private Sphere BoundingSphere;
         public float SphereRadius => BoundingSphere.GetRadius();
         public Vector3 SphereCenter => BoundingSphere.Center;
+        // Bounding spheres for individual objects.
         private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
+        // Lists of 3D objects.
         private List<MeshData> meshes = new();
         private List<LineData> lines = new();
         private List<TextBillboard> billBoards = new();
+        // Dictionaries for tracking sent object IDs.
         private Dictionary<string, int> sentMeshIds;
         private Dictionary<string, int> sentLineIds;
         private Dictionary<string, int> sentBBIds;
+        // Flag for module initialization.
         private bool _moduleInitialized = false;
+        // Canvas dimensions.
         private double _canvasWidth = 800;
         private double _canvasHeight = 600;
+        // Double-click detection variables.
         private DateTime _lastClickTime = DateTime.MinValue;
         private double _lastClickX;
         private double _lastClickY;
         private const double DoubleClickTimeMs = 300;
         private const double DoubleClickDistancePx = 5;
+        // Frame timing.
         public double LatestFrameMs { get; private set; }
 
+        // Selected object details.
         public string SelectedMeshName { get; private set; } = null;
         public int SelectedTriangleInMeshIndex { get; private set; } = -1;
+        // Triangle intersection data.
         List<string> triangleToMesh = new();
         List<int> triangleToInMeshIndex = new();
         List<float> facePlaneDistances = new();
@@ -90,6 +117,7 @@ namespace BugViewer
         List<Vector3> uBarycentricMultipliers = new();
         List<Vector3> vBarycentricMultipliers = new();
 
+        // MSAA sample count options.
         Option<int>? selectedIntOption;
         private List<Option<int>> _sampleCountItems = new()
     {
@@ -98,12 +126,14 @@ namespace BugViewer
         new() { Value = 4, Text = "4x MSAA" },
         new() { Value = 8, Text = "8x MSAA" }
     };
+        // Handles sample count option changes.
         private void SampleCountOptionChanged(string args)
         {
             Options.SampleCount = int.Parse(args);
         }
 
 
+        // Initializes the component.
         protected override void OnInitialized()
         {
             if (Options is null)
@@ -117,6 +147,7 @@ namespace BugViewer
 
 
 
+        // Handles key down events.
         private void OnKeyDown(KeyboardEventArgs e)
         {
             if (e.Key == "Escape")
@@ -153,6 +184,7 @@ namespace BugViewer
             PressedKeys.Add(e.Key.ToLower());
         }
 
+        // Toggles the options panel.
         private void ShowOptionsPanel()
         {
             _optionsPopover = !_optionsPopover;
@@ -160,6 +192,7 @@ namespace BugViewer
             _cameraPopover = false;
         }
 
+        // Toggles the help panel.
         private void ShowHelpPanel()
         {
             _optionsPopover = false;
@@ -167,6 +200,7 @@ namespace BugViewer
             _cameraPopover = false;
         }
 
+        // Toggles the camera panel.
         private void ShowCameraPanel()
         {
             _optionsPopover = false;
@@ -174,11 +208,13 @@ namespace BugViewer
             _cameraPopover = !_cameraPopover;
         }
 
+        // Handles key up events.
         private void OnKeyUp(KeyboardEventArgs e)
         {
             PressedKeys.Remove(e.Key.ToLower());
         }
 
+        // Handles pointer down events.
         private void OnPointerDown(PointerEventArgs e)
         {
             _containerRef?.FocusAsync();
@@ -211,6 +247,7 @@ namespace BugViewer
             }
         }
 
+        // Handles double-click events.
         private async Task OnDoubleClick(PointerEventArgs e)
         {
             if (_module is null || !_ready)
@@ -235,6 +272,7 @@ namespace BugViewer
             else ResetCamera();
         }
 
+        // Checks if a ray intersects with any triangle in the scene.
         bool DoesRayGoThroughTriangle(Vector3 anchor, Vector3 dirVector, out string meshName, out int meshIndex, out float distance, out Vector3 point)
         {
             distance = float.MaxValue;
@@ -272,6 +310,7 @@ namespace BugViewer
             return meshIndex != -1;
         }
 
+        // Represents the bounding client rectangle of an element.
         private class BoundingClientRect
         {
             public double Left { get; set; }
@@ -280,6 +319,7 @@ namespace BugViewer
             public double Height { get; set; }
         }
 
+        // Handles pointer move events for camera orbiting and panning.
         private async Task OnPointerMove(PointerEventArgs e)
         {
             if (_isDragging)
@@ -310,6 +350,7 @@ namespace BugViewer
             }
         }
 
+        // Handles pointer up events to stop dragging or panning.
         private void OnPointerUp(PointerEventArgs e)
         {
             if (e.Button == 0)
@@ -322,6 +363,7 @@ namespace BugViewer
             }
         }
 
+        // Handles mouse wheel events for zooming.
         private async Task OnWheel(WheelEventArgs e)
         {
             Camera.Zoom(e.DeltaY);
@@ -332,6 +374,7 @@ namespace BugViewer
             }
         }
 
+        // Processes keyboard input for camera movement.
         private async void ProcessKeyboardMovement()
         {
             if (PressedKeys.Count == 0 || _module == null || !_ready)
@@ -387,6 +430,7 @@ namespace BugViewer
             }
         }
 
+        // Initializes the WebGPU module after the component is rendered.
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
             if (!firstRender)
@@ -428,11 +472,13 @@ namespace BugViewer
             }
         }
 
+        // Sends options to JavaScript when parameters are set.
         protected override async Task OnParametersSetAsync()
         {
             await SendOptionsToJavaScriptAsync(false);
         }
 
+        // Sends display options to the JavaScript module.
         private async Task SendOptionsToJavaScriptAsync(bool init)
         {
             if (_module is null)
@@ -451,6 +497,7 @@ namespace BugViewer
             }
         }
 
+        // Invoked by JavaScript to update the frame time.
         [JSInvokable]
         public Task OnFrameMsUpdate(double ms)
         {
@@ -458,6 +505,7 @@ namespace BugViewer
             return Task.CompletedTask;
         }
 
+        // Invoked by JavaScript when the WebGPU canvas is ready.
         [JSInvokable]
         public async Task OnWebGpuReady()
         {
@@ -515,6 +563,7 @@ namespace BugViewer
             }
         }
 
+        // Invoked by JavaScript when a WebGPU error occurs.
         [JSInvokable]
         public Task OnWebGpuError(string message)
         {
@@ -524,6 +573,7 @@ namespace BugViewer
             return Task.CompletedTask;
         }
 
+        // Invoked by JavaScript when the canvas is resized.
         [JSInvokable]
         public async Task OnCanvasResized(double w, double h)
         {
@@ -532,6 +582,7 @@ namespace BugViewer
             await SendProjectionMatrixToJavaScriptAsync();
         }
 
+        // Sends the projection matrix to the JavaScript module.
         private async Task SendProjectionMatrixToJavaScriptAsync()
         {
             if (_module is null || !_ready || Camera is null)
@@ -550,6 +601,7 @@ namespace BugViewer
             }
         }
 
+        // Disposes of the component's resources.
         public async ValueTask DisposeAsync()
         {
             //Camera = new OrbitCamera(Camera.Target, Options);
@@ -580,17 +632,20 @@ namespace BugViewer
             _dotNetRef?.Dispose();
         }
 
+        // Resets the camera to its initial position.
         public void ResetCamera()
         {
             Camera.Reset(BoundingSphere);
             _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
         }
 
+        // Handles the camera reset action.
         private async Task HandleCameraReset()
         {
             ResetCamera();
         }
 
+        // Sets the camera to a cardinal view direction.
         private async Task HandleCameraCardinalView(CardinalDirection dir)
         {
             if (Camera is null)
@@ -607,6 +662,7 @@ namespace BugViewer
             }
         }
 
+        // Handles changes to the viewer options.
         private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (e?.PropertyName == nameof(Options.ZIsUp))
@@ -629,6 +685,7 @@ namespace BugViewer
             await SendOptionsToJavaScriptAsync(false);
         }
 
+        // Updates the viewer when data changes.
         private async void UpdateViewer(bool sphereChanged)
         {
             if (Camera is null || _module is null)
@@ -657,6 +714,7 @@ namespace BugViewer
             }
         }
 
+        // Updates the bounding sphere when adding an object.
         private bool UpdateSpheresAdd(AbstractObject3D obj3D)
         {
             var sphere = MinimumSphere.Run(obj3D.Vertices);
@@ -677,6 +735,7 @@ namespace BugViewer
             return need;
         }
 
+        // Updates the bounding sphere when removing an object.
         private bool UpdateSpheresRemove(AbstractObject3D obj3D)
         {
             var sphere = objectSpheres[obj3D];
@@ -697,6 +756,7 @@ namespace BugViewer
             return need;
         }
 
+        // Adds a mesh to the scene.
         public async Task AddMeshAsync(MeshData mesh)
         {
             var index = -1;
@@ -744,6 +804,7 @@ namespace BugViewer
             sentMeshIds[mesh.Id] = meshes.Count - 1;
         }
 
+        // Adds lines to the scene.
         public async Task AddLinesAsync(LineData path)
         {
             var index = -1;
@@ -787,6 +848,7 @@ namespace BugViewer
             }
         }
 
+        // Changes the color of a mesh.
         public async Task ChangeMeshColorAsync(MeshData mesh, System.Drawing.Color color)
         {
             var index = -1;
@@ -820,6 +882,7 @@ namespace BugViewer
                         }
                     });
         }
+        // Removes a mesh from the scene.
         public async Task RemoveMeshAsync(MeshData mesh)
         {
             var index = -1;
@@ -838,6 +901,7 @@ namespace BugViewer
                     await RemoveMeshAsync(index);
             }
         }
+        // Removes a mesh from the scene by its index.
         private async Task RemoveMeshAsync(int index)
         {
             var meshId = meshes[index].Id;
@@ -870,6 +934,7 @@ namespace BugViewer
             }
         }
 
+        // Clears all meshes from the scene.
         public async Task ClearAllMeshesAsync()
         {
             if (meshes.Count == 0)
@@ -890,6 +955,7 @@ namespace BugViewer
         }
 
 
+        // Removes lines from the scene.
         public async Task RemoveLinesAsync(LineData line)
         {
             var index = -1;
@@ -907,6 +973,7 @@ namespace BugViewer
                     await RemoveLinesAsync(index);
             }
         }
+        // Removes lines from the scene by their index.
         private async Task RemoveLinesAsync(int index)
         {
             var lineId = lines[index].Id;
@@ -941,6 +1008,7 @@ namespace BugViewer
         }
 
 
+        // Clears all lines from the scene.
         public async Task ClearAllLinesAsync()
         {
             if (lines.Count == 0)
@@ -954,6 +1022,7 @@ namespace BugViewer
             await _module.InvokeVoidAsync("clearAllLines");
         }
 
+        // Adds a text billboard to the scene.
         public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
         {
             var index = -1;
@@ -978,6 +1047,7 @@ namespace BugViewer
             await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
         }
 
+        // Removes a text billboard from the scene.
         public async Task RemoveTextBillboardAsync(TextBillboard billBoard)
         {
             var index = -1;
@@ -996,6 +1066,7 @@ namespace BugViewer
                     await RemoveTextBillboardAsync(index);
             }
         }
+        // Removes a text billboard from the scene by its index.
         private async Task RemoveTextBillboardAsync(int index)
         {
             var bbId = billBoards[index].Id;
@@ -1027,6 +1098,7 @@ namespace BugViewer
 
         }
 
+        // Clears all text billboards from the scene.
         public async Task ClearAllTextBillboardsAsync()
         {
             billBoards.Clear();
