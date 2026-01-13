@@ -6,6 +6,23 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
+
+    <!-- NuGet package metadata (fill in as desired) -->
+    <PackageId>BugViewer</PackageId>
+    <Version>0.5.0</Version>
+    <Authors>MICampbell</Authors>
+    <Description>
+		BugViewer is a Blazor component that renders a 3D file with the new WebGPU. It includes controls to view a single part (as opposed to being a game engine). The goal is to provide a clear method to view 3D parts with minimal Javascript.
+
+	</Description>
+    <PackageTags>blazor;webassembly;webgpu;3d;viewer;components</PackageTags>
+    <PackageProjectUrl>https://github.com/micampbell/BugViewer</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/micampbell/BugViewer.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,6 +30,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.1" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.13.2" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.13.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
