@@ -52,6 +52,264 @@ namespace BugViewer
             }
         }
 
+        #region Options Parameter Proxies
+        // These parameters allow setting BugViewerOptions properties directly on the component.
+        // They store values in backing fields and apply them in OnParametersSet.
+
+        // Backing fields for parameter proxies
+        private double? _paramLightPolarAngle;
+        private double? _paramLightAzimuthAngle;
+        private double? _paramAmbientLight;
+        private double? _paramSpecularPower;
+        private UpdateTypes? _paramAutoResetCamera;
+        private double? _paramAutoCameraSphereBuffer;
+        private UpdateTypes? _paramAutoUpdateGrid;
+        private double? _paramAutoGridBuffer;
+        private bool? _paramIsDarkTheme;
+        private string? _paramClearColor;
+        private string? _paramLineColor;
+        private double? _paramLineTransparency;
+        private string? _paramBaseColor;
+        private double? _paramBaseTransparency;
+        private bool? _paramDoubleClickIsSelect;
+        private double? _paramLineWidthX;
+        private double? _paramLineWidthY;
+        private int? _paramSampleCount;
+        private bool? _paramIsProjectionCamera;
+        private double? _paramFov;
+        private double? _paramOrthoSize;
+        private double? _paramZNear;
+        private double? _paramZFar;
+        private bool? _paramZIsUp;
+        private double? _paramGridSize;
+        private double? _paramGridSpacing;
+        private bool? _paramConstrainPolar;
+        private double? _paramMaxPolar;
+        private double? _paramMinPolar;
+        private bool? _paramConstrainAzimuth;
+        private double? _paramMaxAzimuth;
+        private double? _paramMinAzimuth;
+        private bool? _paramConstrainDistance;
+        private double? _paramMaxDistance;
+        private double? _paramMinDistance;
+        private double? _paramOrbitSensitivity;
+        private double? _paramZoomSensitivity;
+        private double? _paramPanSensitivity;
+        private double? _paramPanSpeedMultiplier;
+        private double? _paramCoordinateThickness;
+
+        /// <summary>Light polar angle parameter.</summary>
+        [Parameter]
+        public double? LightPolarAngle { get => _paramLightPolarAngle; set => _paramLightPolarAngle = value; }
+
+        /// <summary>Light azimuth angle parameter.</summary>
+        [Parameter]
+        public double? LightAzimuthAngle { get => _paramLightAzimuthAngle; set => _paramLightAzimuthAngle = value; }
+
+        /// <summary>Ambient light intensity parameter.</summary>
+        [Parameter]
+        public double? AmbientLight { get => _paramAmbientLight; set => _paramAmbientLight = value; }
+
+        /// <summary>Specular power parameter.</summary>
+        [Parameter]
+        public double? SpecularPower { get => _paramSpecularPower; set => _paramSpecularPower = value; }
+
+        /// <summary>Auto reset camera parameter.</summary>
+        [Parameter]
+        public UpdateTypes? AutoResetCamera { get => _paramAutoResetCamera; set => _paramAutoResetCamera = value; }
+
+        /// <summary>Auto camera sphere buffer parameter.</summary>
+        [Parameter]
+        public double? AutoCameraSphereBuffer { get => _paramAutoCameraSphereBuffer; set => _paramAutoCameraSphereBuffer = value; }
+
+        /// <summary>Auto update grid parameter.</summary>
+        [Parameter]
+        public UpdateTypes? AutoUpdateGrid { get => _paramAutoUpdateGrid; set => _paramAutoUpdateGrid = value; }
+
+        /// <summary>Auto grid buffer parameter.</summary>
+        [Parameter]
+        public double? AutoGridBuffer { get => _paramAutoGridBuffer; set => _paramAutoGridBuffer = value; }
+
+        /// <summary>Is dark theme parameter.</summary>
+        [Parameter]
+        public bool? IsDarkTheme { get => _paramIsDarkTheme; set => _paramIsDarkTheme = value; }
+
+        /// <summary>Clear color parameter.</summary>
+        [Parameter]
+        public string? ClearColor { get => _paramClearColor; set => _paramClearColor = value; }
+
+        /// <summary>Line color parameter.</summary>
+        [Parameter]
+        public string? LineColor { get => _paramLineColor; set => _paramLineColor = value; }
+
+        /// <summary>Line transparency parameter.</summary>
+        [Parameter]
+        public double? LineTransparency { get => _paramLineTransparency; set => _paramLineTransparency = value; }
+
+        /// <summary>Base color parameter.</summary>
+        [Parameter]
+        public string? BaseColor { get => _paramBaseColor; set => _paramBaseColor = value; }
+
+        /// <summary>Base transparency parameter.</summary>
+        [Parameter]
+        public double? BaseTransparency { get => _paramBaseTransparency; set => _paramBaseTransparency = value; }
+
+        /// <summary>Double click is select parameter.</summary>
+        [Parameter]
+        public bool? DoubleClickIsSelect { get => _paramDoubleClickIsSelect; set => _paramDoubleClickIsSelect = value; }
+
+        /// <summary>Line width X parameter.</summary>
+        [Parameter]
+        public double? LineWidthX { get => _paramLineWidthX; set => _paramLineWidthX = value; }
+
+        /// <summary>Line width Y parameter.</summary>
+        [Parameter]
+        public double? LineWidthY { get => _paramLineWidthY; set => _paramLineWidthY = value; }
+
+        /// <summary>Sample count parameter.</summary>
+        [Parameter]
+        public int? SampleCount { get => _paramSampleCount; set => _paramSampleCount = value; }
+
+        /// <summary>Is projection camera parameter.</summary>
+        [Parameter]
+        public bool? IsProjectionCamera { get => _paramIsProjectionCamera; set => _paramIsProjectionCamera = value; }
+
+        /// <summary>Field of view parameter.</summary>
+        [Parameter]
+        public double? Fov { get => _paramFov; set => _paramFov = value; }
+
+        /// <summary>Orthographic size parameter.</summary>
+        [Parameter]
+        public double? OrthoSize { get => _paramOrthoSize; set => _paramOrthoSize = value; }
+
+        /// <summary>Near clipping plane parameter.</summary>
+        [Parameter]
+        public double? ZNear { get => _paramZNear; set => _paramZNear = value; }
+
+        /// <summary>Far clipping plane parameter.</summary>
+        [Parameter]
+        public double? ZFar { get => _paramZFar; set => _paramZFar = value; }
+
+        /// <summary>Z is up parameter.</summary>
+        [Parameter]
+        public bool? ZIsUp { get => _paramZIsUp; set => _paramZIsUp = value; }
+
+        /// <summary>Grid size parameter.</summary>
+        [Parameter]
+        public double? GridSize { get => _paramGridSize; set => _paramGridSize = value; }
+
+        /// <summary>Grid spacing parameter.</summary>
+        [Parameter]
+        public double? GridSpacing { get => _paramGridSpacing; set => _paramGridSpacing = value; }
+
+        /// <summary>Constrain polar parameter.</summary>
+        [Parameter]
+        public bool? ConstrainPolar { get => _paramConstrainPolar; set => _paramConstrainPolar = value; }
+
+        /// <summary>Max polar parameter.</summary>
+        [Parameter]
+        public double? MaxPolar { get => _paramMaxPolar; set => _paramMaxPolar = value; }
+
+        /// <summary>Min polar parameter.</summary>
+        [Parameter]
+        public double? MinPolar { get => _paramMinPolar; set => _paramMinPolar = value; }
+
+        /// <summary>Constrain azimuth parameter.</summary>
+        [Parameter]
+        public bool? ConstrainAzimuth { get => _paramConstrainAzimuth; set => _paramConstrainAzimuth = value; }
+
+        /// <summary>Max azimuth parameter.</summary>
+        [Parameter]
+        public double? MaxAzimuth { get => _paramMaxAzimuth; set => _paramMaxAzimuth = value; }
+
+        /// <summary>Min azimuth parameter.</summary>
+        [Parameter]
+        public double? MinAzimuth { get => _paramMinAzimuth; set => _paramMinAzimuth = value; }
+
+        /// <summary>Constrain distance parameter.</summary>
+        [Parameter]
+        public bool? ConstrainDistance { get => _paramConstrainDistance; set => _paramConstrainDistance = value; }
+
+        /// <summary>Max distance parameter.</summary>
+        [Parameter]
+        public double? MaxDistance { get => _paramMaxDistance; set => _paramMaxDistance = value; }
+
+        /// <summary>Min distance parameter.</summary>
+        [Parameter]
+        public double? MinDistance { get => _paramMinDistance; set => _paramMinDistance = value; }
+
+        /// <summary>Orbit sensitivity parameter.</summary>
+        [Parameter]
+        public double? OrbitSensitivity { get => _paramOrbitSensitivity; set => _paramOrbitSensitivity = value; }
+
+        /// <summary>Zoom sensitivity parameter.</summary>
+        [Parameter]
+        public double? ZoomSensitivity { get => _paramZoomSensitivity; set => _paramZoomSensitivity = value; }
+
+        /// <summary>Pan sensitivity parameter.</summary>
+        [Parameter]
+        public double? PanSensitivity { get => _paramPanSensitivity; set => _paramPanSensitivity = value; }
+
+        /// <summary>Pan speed multiplier parameter.</summary>
+        [Parameter]
+        public double? PanSpeedMultiplier { get => _paramPanSpeedMultiplier; set => _paramPanSpeedMultiplier = value; }
+
+        /// <summary>Coordinate thickness parameter.</summary>
+        [Parameter]
+        public double? CoordinateThickness { get => _paramCoordinateThickness; set => _paramCoordinateThickness = value; }
+
+        /// <summary>
+        /// Applies parameter proxy values to the Options object.
+        /// Called from OnParametersSet after Options is guaranteed to exist.
+        /// </summary>
+        private void ApplyParameterProxiesToOptions()
+        {
+            if (Options == null) return;
+
+            if (_paramLightPolarAngle.HasValue) Options.LightPolarAngle = _paramLightPolarAngle.Value;
+            if (_paramLightAzimuthAngle.HasValue) Options.LightAzimuthAngle = _paramLightAzimuthAngle.Value;
+            if (_paramAmbientLight.HasValue) Options.AmbientLight = _paramAmbientLight.Value;
+            if (_paramSpecularPower.HasValue) Options.SpecularPower = _paramSpecularPower.Value;
+            if (_paramAutoResetCamera.HasValue) Options.AutoResetCamera = _paramAutoResetCamera.Value;
+            if (_paramAutoCameraSphereBuffer.HasValue) Options.AutoCameraSphereBuffer = _paramAutoCameraSphereBuffer.Value;
+            if (_paramAutoUpdateGrid.HasValue) Options.AutoUpdateGrid = _paramAutoUpdateGrid.Value;
+            if (_paramAutoGridBuffer.HasValue) Options.AutoGridBuffer = _paramAutoGridBuffer.Value;
+            if (_paramIsDarkTheme.HasValue) Options.IsDarkTheme = _paramIsDarkTheme.Value;
+            if (_paramClearColor != null) Options.ClearColor = _paramClearColor;
+            if (_paramLineColor != null) Options.LineColor = _paramLineColor;
+            if (_paramLineTransparency.HasValue) Options.LineTransparency = _paramLineTransparency.Value;
+            if (_paramBaseColor != null) Options.BaseColor = _paramBaseColor;
+            if (_paramBaseTransparency.HasValue) Options.BaseTransparency = _paramBaseTransparency.Value;
+            if (_paramDoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = _paramDoubleClickIsSelect.Value;
+            if (_paramLineWidthX.HasValue) Options.LineWidthX = _paramLineWidthX.Value;
+            if (_paramLineWidthY.HasValue) Options.LineWidthY = _paramLineWidthY.Value;
+            if (_paramSampleCount.HasValue) Options.SampleCount = _paramSampleCount.Value;
+            if (_paramIsProjectionCamera.HasValue) Options.IsProjectionCamera = _paramIsProjectionCamera.Value;
+            if (_paramFov.HasValue) Options.Fov = _paramFov.Value;
+            if (_paramOrthoSize.HasValue) Options.OrthoSize = _paramOrthoSize.Value;
+            if (_paramZNear.HasValue) Options.ZNear = _paramZNear.Value;
+            if (_paramZFar.HasValue) Options.ZFar = _paramZFar.Value;
+            if (_paramZIsUp.HasValue) Options.ZIsUp = _paramZIsUp.Value;
+            if (_paramGridSize.HasValue) Options.GridSize = _paramGridSize.Value;
+            if (_paramGridSpacing.HasValue) Options.GridSpacing = _paramGridSpacing.Value;
+            if (_paramConstrainPolar.HasValue) Options.ConstrainPolar = _paramConstrainPolar.Value;
+            if (_paramMaxPolar.HasValue) Options.MaxPolar = _paramMaxPolar.Value;
+            if (_paramMinPolar.HasValue) Options.MinPolar = _paramMinPolar.Value;
+            if (_paramConstrainAzimuth.HasValue) Options.ConstrainAzimuth = _paramConstrainAzimuth.Value;
+            if (_paramMaxAzimuth.HasValue) Options.MaxAzimuth = _paramMaxAzimuth.Value;
+            if (_paramMinAzimuth.HasValue) Options.MinAzimuth = _paramMinAzimuth.Value;
+            if (_paramConstrainDistance.HasValue) Options.ConstrainDistance = _paramConstrainDistance.Value;
+            if (_paramMaxDistance.HasValue) Options.MaxDistance = _paramMaxDistance.Value;
+            if (_paramMinDistance.HasValue) Options.MinDistance = _paramMinDistance.Value;
+            if (_paramOrbitSensitivity.HasValue) Options.OrbitSensitivity = _paramOrbitSensitivity.Value;
+            if (_paramZoomSensitivity.HasValue) Options.ZoomSensitivity = _paramZoomSensitivity.Value;
+            if (_paramPanSensitivity.HasValue) Options.PanSensitivity = _paramPanSensitivity.Value;
+            if (_paramPanSpeedMultiplier.HasValue) Options.PanSpeedMultiplier = _paramPanSpeedMultiplier.Value;
+            if (_paramCoordinateThickness.HasValue) Options.CoordinateThickness = _paramCoordinateThickness.Value;
+        }
+
+        #endregion
+
         // Event callbacks for component readiness and triangle selection.
         [Parameter]
         public EventCallback OnReady { get; set; }
@@ -475,6 +733,9 @@ namespace BugViewer
         // Sends options to JavaScript when parameters are set.
         protected override async Task OnParametersSetAsync()
         {
+            // Apply any parameter proxy values to Options
+            ApplyParameterProxiesToOptions();
+            
             await SendOptionsToJavaScriptAsync(false);
         }
 
