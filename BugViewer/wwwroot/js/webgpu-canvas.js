@@ -589,6 +589,7 @@ function updateGridUniforms() {
 
 function startRenderLoop() {
     function frameCallback() {
+        if (!device) return;
         requestAnimationFrame(frameCallback);
         const frameStart = performance.now();
 

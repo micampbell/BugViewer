@@ -9,7 +9,7 @@
 
     <!-- NuGet package metadata (fill in as desired) -->
     <PackageId>BugViewer</PackageId>
-    <Version>0.5.0</Version>
+    <Version>0.5.2</Version>
     <Authors>MICampbell</Authors>
     <Description>
 		BugViewer is a Blazor component that renders a 3D file with the new WebGPU. It includes controls to view a single part (as opposed to being a game engine). The goal is to provide a clear method to view 3D parts with minimal Javascript.
