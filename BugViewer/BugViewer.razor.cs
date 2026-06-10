@@ -7,9 +7,13 @@ using System.Numerics;
 
 namespace BugViewer
 {
-    // Partial class for the BugViewer component. The rest is in the razor file
+    /// <summary>
+    /// A Blazor component for viewing 3D models using WebGPU. 
+    /// It provides camera controls, customizable display options, and supports triangle selection.
+    /// </summary>
     public partial class BugViewer
-    {
+    {   // Partial class for the BugViewer component. The rest is in the razor file
+      
         // Popover visibility flags.
         private bool _cameraPopover = false;
         private bool _optionsPopover = false;
@@ -18,17 +22,36 @@ namespace BugViewer
         private bool IsAnyPopoverOpen => _cameraPopover || _optionsPopover || _helpPopover;
         // Mouse button state.
         private bool _isMouseButtonDown;
-        // Component parameters for tool orientation and alignment.
+
+        /// <summary>
+        /// Component parameters for tool orientation and alignment.
+        /// </summary>
         [Parameter]
         public Orientation ToolsOrientation { get; set; }
+
+        /// <summary>
+        /// Component parameters for tool horizontal and vertical alignment.
+        /// </summary>
         [Parameter]
         public HorizontalAlignment ToolsHorizontal { get; set; }
+
+        /// <summary>
+        /// Component parameters for tool vertical alignment.
+        /// </summary>
         [Parameter]
         public VerticalAlignment ToolsVertical { get; set; }
-        // Component dimensions.
+
+        /// <summary>
+        /// Component parameters for canvas width (and height below). 
+        /// Accepts any valid CSS size (e.g., "100%", "800px"). 
+        /// Defaults to full width and height of the viewport.
+        /// </summary>
         [Parameter]
         public string Width { get; set; } = "100%";
 
+        /// <summary>
+        /// Component parameters for canvas height.
+        /// </summary>
         [Parameter]
         public string Height { get; set; } = "100vh";
 
@@ -38,6 +61,10 @@ namespace BugViewer
         // Viewer options.
         private BugViewerOptions _options;
 
+        /// <summary>
+        /// Component parameter for display options. Setting this will 
+        /// update the viewer's appearance and behavior.
+        /// </summary>
         [Parameter]
         public BugViewerOptions Options
         {
@@ -310,13 +337,23 @@ namespace BugViewer
 
         #endregion
 
-        // Event callbacks for component readiness and triangle selection.
+        /// <summary>
+        /// Event callback that is invoked when the WebGPU canvas is ready.
+        /// </summary>
         [Parameter]
         public EventCallback OnReady { get; set; }
+
+        /// <summary>
+        /// Event callback that is invoked when a triangle is selected
+        /// (if DoubleClickIsSelect is true).
+        /// </summary>
         [Parameter]
         public EventCallback OnTriangleSelected { get; set; }
 
-        // Camera instance.
+        /// <summary>
+        /// The camera object that manages the view matrix and 
+        /// projection matrix based on user interactions.
+        /// </summary>
         public OrbitCamera? Camera { get; private set; }
 
         // JS interop objects.
@@ -331,13 +368,24 @@ namespace BugViewer
         // Last pointer coordinates.
         private double _lastPointerX;
         private double _lastPointerY;
-        // Set of pressed keys.
+
+        /// <summary>
+        /// A set of currently pressed keys for keyboard movement.
+        /// </summary>
         public HashSet<string> PressedKeys = new();
         // Timer for keyboard movement.
         private System.Threading.Timer? _keyboardMoveTimer;
         // Bounding sphere for the scene.
         private Sphere BoundingSphere;
+
+        /// <summary>
+        /// Gets the radius of the bounding sphere that encompasses all objects in the scene.
+        /// </summary>
         public float SphereRadius => BoundingSphere.GetRadius();
+
+        /// <summary>
+        /// Gets the center of the bounding sphere that encompasses all objects in the scene.
+        /// </summary>
         public Vector3 SphereCenter => BoundingSphere.Center;
         // Bounding spheres for individual objects.
         private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
@@ -349,8 +397,7 @@ namespace BugViewer
         private Dictionary<string, int> sentMeshIds;
         private Dictionary<string, int> sentLineIds;
         private Dictionary<string, int> sentBBIds;
-        // Flag for module initialization.
-        private bool _moduleInitialized = false;
+
         // Canvas dimensions.
         private double _canvasWidth = 800;
         private double _canvasHeight = 600;
@@ -360,11 +407,21 @@ namespace BugViewer
         private double _lastClickY;
         private const double DoubleClickTimeMs = 300;
         private const double DoubleClickDistancePx = 5;
-        // Frame timing.
+
+        /// <summary>
+        /// Gets the time in milliseconds it took to render the
+        /// latest frame, as reported by the JavaScript module.
+        /// </summary>
         public double LatestFrameMs { get; private set; }
 
-        // Selected object details.
-        public string SelectedMeshName { get; private set; } = null;
+        /// <summary>
+        /// Gets the name of the mesh that contains the currently selected triangle (if any).
+        /// </summary>
+        public string? SelectedMeshName { get; private set; } = null;
+
+        /// <summary>
+        /// Gets the index of the selected triangle within the selected mesh.
+        /// </summary>
         public int SelectedTriangleInMeshIndex { get; private set; } = -1;
         // Triangle intersection data.
         List<string> triangleToMesh = new();
@@ -390,8 +447,9 @@ namespace BugViewer
             Options.SampleCount = int.Parse(args);
         }
 
-
-        // Initializes the component.
+        /// <summary>
+        /// Initializes the component, setting up the camera and starting the keyboard movement timer.
+        /// </summary>
         protected override void OnInitialized()
         {
             if (Options is null)
@@ -688,7 +746,12 @@ namespace BugViewer
             }
         }
 
-        // Initializes the WebGPU module after the component is rendered.
+        /// <summary>
+        /// Called after the component has been rendered. On first render, this method imports the JavaScript module for the WebGPU canvas, 
+        /// initializes the canvas, and sends the initial display options and camera projection matrix to JavaScript.
+        /// </summary>
+        /// <param name="firstRender"></param>
+        /// <returns></returns>
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
             if (!firstRender)
@@ -730,7 +793,10 @@ namespace BugViewer
             }
         }
 
-        // Sends options to JavaScript when parameters are set.
+        /// <summary>
+        /// Called when component parameters are set or updated. This method applies any parameter proxy values to the Options object and sends updated options to the JavaScript module if it is initialized.
+        /// </summary>
+        /// <returns></returns>
         protected override async Task OnParametersSetAsync()
         {
             // Apply any parameter proxy values to Options
@@ -758,7 +824,11 @@ namespace BugViewer
             }
         }
 
-        // Invoked by JavaScript to update the frame time.
+        /// <summary>
+        /// Invoked by JavaScript to update the time it took to render the latest frame.
+        /// </summary>
+        /// <param name="ms"></param>
+        /// <returns></returns>
         [JSInvokable]
         public Task OnFrameMsUpdate(double ms)
         {
@@ -766,7 +836,11 @@ namespace BugViewer
             return Task.CompletedTask;
         }
 
-        // Invoked by JavaScript when the WebGPU canvas is ready.
+        /// <summary>
+        /// Invoked by JavaScript when the WebGPU canvas is ready, marking the viewer as ready, sending any 
+        /// queued meshes and options to JavaScript, and invoking the OnReady event callback.
+        /// </summary>
+        /// <returns></returns>
         [JSInvokable]
         public async Task OnWebGpuReady()
         {
@@ -778,8 +852,7 @@ namespace BugViewer
             // send any queued options/projection
             await SendProjectionMatrixToJavaScriptAsync();
 
-            // Mark module initialized and flush any queued meshes
-            _moduleInitialized = true;
+            //  flush any queued meshes
             if (_module != null)
             {
                 try
@@ -824,7 +897,11 @@ namespace BugViewer
             }
         }
 
-        // Invoked by JavaScript when a WebGPU error occurs.
+        /// <summary>
+        /// Invoked by JavaScript when an error occurs in the WebGPU module, updating the error state and marking the viewer as not ready.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
         [JSInvokable]
         public Task OnWebGpuError(string message)
         {
@@ -834,7 +911,14 @@ namespace BugViewer
             return Task.CompletedTask;
         }
 
-        // Invoked by JavaScript when the canvas is resized.
+        /// <summary>
+        /// Invoked by JavaScript when the WebGPU canvas is resized, updating the stored 
+        /// canvas dimensions and sending an updated projection matrix to JavaScript to 
+        /// account for the new aspect ratio.
+        /// </summary>
+        /// <param name="w"></param>
+        /// <param name="h"></param>
+        /// <returns></returns>
         [JSInvokable]
         public async Task OnCanvasResized(double w, double h)
         {
@@ -862,7 +946,11 @@ namespace BugViewer
             }
         }
 
-        // Disposes of the component's resources.
+        /// <summary>
+        /// Disposes of the component, cleaning up resources and notifying 
+        /// JavaScript to dispose of the WebGPU canvas.
+        /// </summary>
+        /// <returns></returns>
         public async ValueTask DisposeAsync()
         {
             //Camera = new OrbitCamera(Camera.Target, Options);
@@ -893,7 +981,13 @@ namespace BugViewer
             _dotNetRef?.Dispose();
         }
 
-        // Resets the camera to its initial position.
+        /// <summary>
+        /// Resets the camera to frame the entire scene based on the current bounding sphere. 
+        /// This is called automatically based on the AutoResetCamera option when the bounding 
+        /// sphere changes or when data changes, and can also be triggered manually by the user 
+        /// through a double-click (if DoubleClickIsSelect is false) or through a UI button that 
+        /// calls HandleCameraReset.
+        /// </summary>
         public void ResetCamera()
         {
             //if (float.IsNaN(BoundingSphere.RadiusSquared) ||
@@ -930,7 +1024,7 @@ namespace BugViewer
         }
 
         // Handles changes to the viewer options.
-        private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs? e)
         {
             if (e?.PropertyName == nameof(Options.ZIsUp))
             {
@@ -1025,7 +1119,11 @@ namespace BugViewer
             return need;
         }
 
-        // Adds a mesh to the scene.
+        /// <summary>
+        /// Adds a mesh to the scene. If a mesh with the same ID already exists, it will be replaced. If the WebGPU module is not ready, the mesh will be queued and sent when the module becomes ready.
+        /// </summary>
+        /// <param name="mesh"></param>
+        /// <returns></returns>
         public async Task AddMeshAsync(MeshData mesh)
         {
             var index = -1;
@@ -1048,7 +1146,12 @@ namespace BugViewer
             sentMeshIds[mesh.Id] = meshes.Count - 1;
         }
 
-        // Adds multiple meshes to the scene in a single JS interop call.
+        /// <summary>
+        /// Adds multiple meshes to the scene in a single batch operation. If any of the meshes have IDs that already exist in the viewer, they will be 
+        /// replaced. If the WebGPU module is not ready, the meshes will be queued and sent when the module becomes ready.
+        /// </summary>
+        /// <param name="newMeshes"></param>
+        /// <returns></returns>
         public async Task AddMeshesAsync(IEnumerable<MeshData> newMeshes)
         {
             var meshList = newMeshes as IList<MeshData> ?? newMeshes.ToList();
@@ -1116,7 +1219,12 @@ namespace BugViewer
             }
         }
 
-        // Adds lines to the scene.
+        /// <summary>
+        /// Adds a line to the scene. If a line with the same ID already exists, it will be replaced.
+        /// If the WebGPU module is not ready, the line will be queued and sent when the module becomes ready.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public async Task AddLinesAsync(LineData path)
         {
             var index = -1;
@@ -1160,7 +1268,12 @@ namespace BugViewer
             }
         }
 
-        // Changes the color of a mesh.
+        /// <summary>
+        /// Changes the color of a mesh.
+        /// </summary>
+        /// <param name="mesh"></param>
+        /// <param name="color"></param>
+        /// <returns></returns>
         public async Task ChangeMeshColorAsync(MeshData mesh, System.Drawing.Color color)
         {
             var index = -1;
@@ -1194,7 +1307,12 @@ namespace BugViewer
                         }
                     });
         }
-        // Removes a mesh from the scene.
+
+        /// <summary>
+        /// Removes a mesh from the scene.
+        /// </summary>
+        /// <param name="mesh"></param>
+        /// <returns></returns>
         public async Task RemoveMeshAsync(MeshData mesh)
         {
             var index = -1;
@@ -1246,7 +1364,10 @@ namespace BugViewer
             }
         }
 
-        // Clears all meshes from the scene.
+        /// <summary>
+        /// Clears all meshes from the scene. If the WebGPU module is not ready, it will simply clear the queued meshes so that when the module does become ready, those meshes will not be sent to JavaScript.
+        /// </summary>
+        /// <returns></returns>
         public async Task ClearAllMeshesAsync()
         {
             if (meshes.Count == 0)
@@ -1266,8 +1387,11 @@ namespace BugViewer
             await _module.InvokeVoidAsync("clearAllMeshes");
         }
 
-
-        // Removes lines from the scene.
+        /// <summary>
+        /// Removes lines from the scene.
+        /// </summary>
+        /// <param name="line"></param>
+        /// <returns></returns>
         public async Task RemoveLinesAsync(LineData line)
         {
             var index = -1;
@@ -1319,8 +1443,10 @@ namespace BugViewer
             }
         }
 
-
-        // Clears all lines from the scene.
+        /// <summary>
+        /// Clears all lines from the scene. If the WebGPU module is not ready, it will simply clear the queued lines so that when the module does become ready, those lines will not be sent to JavaScript.
+        /// </summary>
+        /// <returns></returns>
         public async Task ClearAllLinesAsync()
         {
             if (lines.Count == 0)
@@ -1334,7 +1460,15 @@ namespace BugViewer
             await _module.InvokeVoidAsync("clearAllLines");
         }
 
-        // Adds a text billboard to the scene.
+        /// <summary>
+        /// Adds a text billboard to the scene at the specified position with the given text and colors. If a billboard with the same ID already exists, it will be replaced.
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="text"></param>
+        /// <param name="position"></param>
+        /// <param name="backgroundColor"></param>
+        /// <param name="textColor"></param>
+        /// <returns></returns>
         public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
         {
             var index = -1;
@@ -1359,7 +1493,11 @@ namespace BugViewer
             await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
         }
 
-        // Removes a text billboard from the scene.
+        /// <summary>
+        /// Removes a text billboard from the scene.
+        /// </summary>
+        /// <param name="billBoard"></param>
+        /// <returns></returns>
         public async Task RemoveTextBillboardAsync(TextBillboard billBoard)
         {
             var index = -1;
@@ -1410,7 +1548,12 @@ namespace BugViewer
 
         }
 
-        // Clears all text billboards from the scene.
+        /// <summary>
+        /// Clears all text billboards from the scene. If the WebGPU module is not ready, it will simply clear the 
+        /// queued billboards so that when the module does become ready, those billboards will not be sent to
+        /// JavaScript.
+        /// </summary>
+        /// <returns></returns>
         public async Task ClearAllTextBillboardsAsync()
         {
             billBoards.Clear();
