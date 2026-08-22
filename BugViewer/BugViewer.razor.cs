@@ -1274,7 +1274,7 @@ namespace BugViewer
         /// <param name="mesh"></param>
         /// <param name="color"></param>
         /// <returns></returns>
-        public async Task ChangeMeshColorAsync(MeshData mesh, System.Drawing.Color color)
+        public async Task ChangeMeshColorAsync(MeshData mesh, ColorRgba color)
         {
             var index = -1;
             if (sentMeshIds is null)
@@ -1469,7 +1469,7 @@ namespace BugViewer
         /// <param name="backgroundColor"></param>
         /// <param name="textColor"></param>
         /// <returns></returns>
-        public async Task AddTextBillboardAsync(string id, string text, Vector3 position, System.Drawing.Color backgroundColor, System.Drawing.Color textColor)
+        public async Task AddTextBillboardAsync(string id, string text, Vector3 position, ColorRgba backgroundColor, ColorRgba textColor)
         {
             var index = -1;
             var nameInSent = sentBBIds?.TryGetValue(id, out index);

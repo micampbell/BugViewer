@@ -50,9 +50,9 @@ internal readonly struct Sphere
 /// </summary>
 internal static class MinimumSphere
 {
+    const float sphereRadiusError = 1.001f;
     internal static Sphere Run(this IEnumerable<Vector3> pointsInput)
     {
-        //throw new NotImplementedException();
         var points = pointsInput.ToArray();
         var numPoints = points.Length;
         var maxNumStalledIterations = 16;
@@ -93,7 +93,7 @@ internal static class MinimumSphere
                 Array.Copy(points, 0, points, 1, indexOfMaxDist);
                 points[0] = maxPoint;
                 sphere = FindSphere(points);
-                maxDistSqared = sphere.RadiusSquared;
+                maxDistSqared = sphereRadiusError * sphere.RadiusSquared;
                 startIndex = 5;
                 lastIndex = indexOfMaxDist;
             }
@@ -366,7 +366,7 @@ internal static class MinimumSphere
     }
 
     private static bool PointIsInSphere(Vector3 point, Sphere s)
-        => (point - s.Center).LengthSquared() <= 1.0001 * s.RadiusSquared;
+        => (point - s.Center).LengthSquared() <= sphereRadiusError * s.RadiusSquared;
 
 
 

@@ -1,4 +1,3 @@
-using System.Drawing;
 using System.Numerics;
 
 namespace BugViewer;
@@ -9,8 +8,8 @@ namespace BugViewer;
 public record TextBillboard : AbstractObject3D
 {
     public required string Text { get; init; }
-    public required Color BackgroundColor { get; init; }
-    public required Color TextColor { get; init; }
+    public required ColorRgba BackgroundColor { get; init; }
+    public required ColorRgba TextColor { get; init; }
     public Vector3 Center  => ((List<Vector3>)Vertices)[0];
     
     internal override object CreateJavascriptData()

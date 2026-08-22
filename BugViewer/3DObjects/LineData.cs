@@ -64,7 +64,7 @@ public record LineData : AbstractObject3D
     ) GenerateStadiumGeometry(
         IList<Vector3> vertexList,
         IEnumerable<double> thicknesses,
-        IEnumerable<System.Drawing.Color> colors,
+        IEnumerable<ColorRgba> colors,
         IEnumerable<double> fadeFactors)
     {
         var thicknessList = thicknesses.ToList();

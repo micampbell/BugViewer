@@ -1,4 +1,3 @@
-using System.Drawing;
 using System.Numerics;
 
 namespace BugViewer;
@@ -18,7 +17,7 @@ public abstract record AbstractObject3D
     /// Per-triangle colors (RGBA, 0-1 range).
     /// Array length should equal Indices.Length / 3 (one color per triangle).
     /// </summary>
-    public IEnumerable<Color> Colors { get; set; }
+    public IEnumerable<ColorRgba> Colors { get; set; } = [];
 
     protected IEnumerable<int> TriangleIndices((int, int, int) faceIndices)
     {
@@ -30,7 +29,7 @@ public abstract record AbstractObject3D
     protected IEnumerable<float> Coordinates(Vector3 v)
     { yield return v.X; yield return v.Y; yield return v.Z; }
 
-    protected IEnumerable<float> ColorToJavaScript(Color c)
+    protected IEnumerable<float> ColorToJavaScript(ColorRgba c)
     {
         yield return c.R / 255f;
         yield return c.G / 255f;
