@@ -29,13 +29,5 @@ public abstract record AbstractObject3D
     protected IEnumerable<float> Coordinates(Vector3 v)
     { yield return v.X; yield return v.Y; yield return v.Z; }
 
-    protected IEnumerable<float> ColorToJavaScript(ColorRgba c)
-    {
-        yield return c.R / 255f;
-        yield return c.G / 255f;
-        yield return c.B / 255f;
-        yield return c.A / 255f;
-    }
-
     internal abstract object CreateJavascriptData();
 }

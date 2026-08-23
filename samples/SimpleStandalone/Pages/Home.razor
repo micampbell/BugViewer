@@ -20,7 +20,7 @@
     private BugViewerOptions viewerOptions = new()
     {
         IsDarkTheme = false,
-        ClearColor = "#828282",
+        ClearColor = new ColorRgba(130, 130, 130),
         AutoResetOnThemeChange = false
     };
 
@@ -81,31 +81,31 @@
 
         // 12 colors (one per triangle) - matches indices.Length / 3
         // Each triangle gets its own solid color for engineering visualization
-        var colors = new System.Drawing.Color[]
+        var colors = new ColorRgba[]
         {
             // Front face triangles (2 triangles)
-            System.Drawing.Color.FromArgb(111,255, 0, 0),    // Triangle 0 - Bright Red
-           System.Drawing. Color.FromArgb(111,200, 0, 0),    // Triangle 1 - Dark Red
+            new ColorRgba(255, 0, 0),    // Triangle 0 - Bright Red
+            new ColorRgba(200, 0, 0),    // Triangle 1 - Dark Red
 
             // Back face triangles (2 triangles)
-           System.Drawing. Color.FromArgb(111,0, 255, 0),    // Triangle 2 - Bright Green
-           System.Drawing. Color.FromArgb(111,0, 200, 0),    // Triangle 3 - Dark Green
+           new ColorRgba(0, 255, 0),    // Triangle 2 - Bright Green
+           new ColorRgba(0, 200, 0),    // Triangle 3 - Dark Green
 
             // Bottom face triangles (2 triangles)
-          System.Drawing.  Color.FromArgb(111,0, 0, 255),    // Triangle 4 - Bright Blue
-           System.Drawing.Color.FromArgb(111,0, 0, 200),    // Triangle 5 - Dark Blue
+          new ColorRgba(0, 0, 255),    // Triangle 4 - Bright Blue
+           new ColorRgba(0, 0, 200),    // Triangle 5 - Dark Blue
 
             // Top face triangles (2 triangles)
-          System.Drawing.  Color.FromArgb(111,255, 255, 0),    // Triangle 6 - Bright Yellow
-          System.Drawing.  Color.FromArgb(111,200, 200, 0),    // Triangle 7 - Dark Yellow
+          new ColorRgba(255, 255, 0),    // Triangle 6 - Bright Yellow
+          new ColorRgba(200, 200, 0),    // Triangle 7 - Dark Yellow
 
             // Left face triangles (2 triangles)
-           System.Drawing. Color.FromArgb(111,0, 255, 255),    // Triangle 8 - Bright Cyan
-           System.Drawing. Color.FromArgb(111,0, 200, 200),    // Triangle 9 - Dark Cyan
+           new ColorRgba(0, 255, 255),    // Triangle 8 - Bright Cyan
+           new ColorRgba(0, 200, 200),    // Triangle 9 - Dark Cyan
 
             // Right face triangles (2 triangles)
-           System.Drawing. Color.FromArgb(111,255, 0, 255),    // Triangle 10 - Bright Magenta
-           System.Drawing. Color.FromArgb(111,200, 0, 200),    // Triangle 11 - Dark Magenta
+           new ColorRgba(255, 0, 255),    // Triangle 10 - Bright Magenta
+           new ColorRgba(200, 0, 200),    // Triangle 11 - Dark Magenta
         };
 
         var cube = new MeshData
@@ -161,13 +161,13 @@
 
         var thicks = new double[] { 0.5, 0.31, 0.25, 0.39, 0.65 };
 
-        var colors = new System.Drawing.Color[]
+        var colors = new ColorRgba[]
         {
-        System.Drawing.    Color.FromArgb(255, 0, 0),    // Bright Red
-       System.Drawing.     Color.FromArgb(0, 255, 0),    // Bright Green
-      System.Drawing.      Color.FromArgb(0, 0, 255),    // Bright Blue
-      System.Drawing.      Color.FromArgb(255, 255, 0),  // Bright Yellow
-     System.Drawing.       Color.FromArgb(255, 0, 255),  // Bright Magenta
+            new ColorRgba(255, 0, 0),    // Bright Red
+            new ColorRgba(0, 255, 0),    // Bright Green
+            new ColorRgba(0, 0, 255),    // Bright Blue
+            new ColorRgba(255, 255, 0),  // Bright Yellow
+            new ColorRgba(255, 0, 255),  // Bright Magenta
         };
 
         return new LineData

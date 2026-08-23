@@ -32,12 +32,10 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 3.0,
         IsDarkTheme = false,
-        ClearColor = "#f2f2ff",
-        BackgroundGradientNegativePolarColor = "#f0f0ff",
-        BackgroundGradientPositivePolarColor = "#ffffff",
-        LineColor = "#d2d2d2",
+        ClearColor = new ColorRgba(242, 242, 255),
+        LineColor = new ColorRgba(210, 210, 210),
         LineTransparency = 0.8f,
-        BaseColor = "#000000",
+        BaseColor = new ColorRgba(0, 0, 0),
         BaseTransparency = 0f,
         DoubleClickIsSelect = true,
         LineWidthX = 0.1,
@@ -78,12 +76,10 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 3.0,
         IsDarkTheme = true,
-        ClearColor = "#202020",
-        BackgroundGradientNegativePolarColor = "#202020",
-        BackgroundGradientPositivePolarColor = "#202020",
-        LineColor = "#d2d2d2",
+        ClearColor = new ColorRgba(32, 32, 32),
+        LineColor = new ColorRgba(210, 210, 210),
         LineTransparency = 0.8f,
-        BaseColor = "#000000",
+        BaseColor = new ColorRgba(0, 0, 0),
         BaseTransparency = 0f,
         DoubleClickIsSelect = true,
         LineWidthX = 0.1,
@@ -134,8 +130,6 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoGridBuffer = newOptions.AutoGridBuffer;
         IsDarkTheme = newOptions.IsDarkTheme;
         ClearColor = newOptions.ClearColor;
-        BackgroundGradientNegativePolarColor = newOptions.BackgroundGradientNegativePolarColor;
-        BackgroundGradientPositivePolarColor = newOptions.BackgroundGradientPositivePolarColor;
         LineColor = newOptions.LineColor;
         LineTransparency = newOptions.LineTransparency;
         BaseColor = newOptions.BaseColor;
@@ -235,9 +229,9 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private string _clearColor = "#f2f2ff"; // Add default value
+    private ColorRgba _clearColor = new ColorRgba(242, 242, 255); // Add default value
     /// <summary>Background clear color for the rendering canvas.</summary>
-    public string ClearColor
+    public ColorRgba ClearColor
     {
         get => _clearColor;
         set
@@ -249,45 +243,6 @@ public class BugViewerOptions : INotifyPropertyChanged
             }
         }
     }
-
-    private string _backgroundGradientNegativePolarColor = "#f2f2ff";
-    /// <summary>
-    /// Background color at a camera polar angle of -90 degrees (-π/2 radians).
-    /// The background is interpolated from this color to <see cref="BackgroundGradientPositivePolarColor"/>
-    /// as the camera polar angle moves from -90 to +90 degrees.
-    /// </summary>
-    public string BackgroundGradientNegativePolarColor
-    {
-        get => _backgroundGradientNegativePolarColor;
-        set
-        {
-            if (_backgroundGradientNegativePolarColor != value)
-            {
-                _backgroundGradientNegativePolarColor = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    private string _backgroundGradientPositivePolarColor = "#f2f2ff";
-    /// <summary>
-    /// Background color at a camera polar angle of +90 degrees (+π/2 radians).
-    /// The background is interpolated from <see cref="BackgroundGradientNegativePolarColor"/>
-    /// to this color as the camera polar angle moves from -90 to +90 degrees.
-    /// </summary>
-    public string BackgroundGradientPositivePolarColor
-    {
-        get => _backgroundGradientPositivePolarColor;
-        set
-        {
-            if (_backgroundGradientPositivePolarColor != value)
-            {
-                _backgroundGradientPositivePolarColor = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
     private double _autoCameraSphereBuffer = 0.2;
     /// <summary>
     /// The amount that the radius of the bounding sphere is increased 
@@ -319,9 +274,9 @@ public class BugViewerOptions : INotifyPropertyChanged
             }
         }
     }
-    private string _lineColor = "#d2d2d2"; // Add default value
+    private ColorRgba _lineColor = new(210, 210, 210); // Add default value
     /// <summary>Color of grid lines.</summary>
-    public string LineColor
+    public ColorRgba LineColor
     {
         get => _lineColor;
         set
@@ -349,9 +304,9 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private string _baseColor = "#000000"; // Add default value
+    private ColorRgba _baseColor = new(0, 0, 0); // Add default value
     /// <summary>Base/background color of the grid.</summary>
-    public string BaseColor
+    public ColorRgba BaseColor
     {
         get => _baseColor;
         set
@@ -820,12 +775,10 @@ public class BugViewerOptions : INotifyPropertyChanged
     /// </summary>
     public object ToJavascriptOptions(double cameraPolarAngle = 0) => new
     {
-        clearColor = ColorToJavaScript(ClearColor, 1).ToArray(),
-        backgroundGradientNegativePolarColor = ColorToJavaScript(BackgroundGradientNegativePolarColor, 1).ToArray(),
-        backgroundGradientPositivePolarColor = ColorToJavaScript(BackgroundGradientPositivePolarColor, 1).ToArray(),
+        clearColor = ColorRgba.ToJavaScript(ClearColor, 1).ToArray(),
         cameraPolarAngle = (float)cameraPolarAngle,
-        lineColor = ColorToJavaScript(LineColor, LineTransparency).ToArray(),
-        baseColor = ColorToJavaScript(BaseColor, BaseTransparency).ToArray(),
+        lineColor = ColorRgba.ToJavaScript(LineColor, LineTransparency).ToArray(),
+        baseColor = ColorRgba.ToJavaScript(BaseColor, BaseTransparency).ToArray(),
         lineWidthX = (float)LineWidthX,
         lineWidthY = (float)LineWidthY,
         sampleCount = SampleCount,
@@ -837,16 +790,4 @@ public class BugViewerOptions : INotifyPropertyChanged
         ambient = (float)AmbientLight,
         specularPower = (float)SpecularPower,
     };
-    internal static IEnumerable<float> ColorToJavaScript(string c, double transparency)
-    {
-        c = c.Substring(1).Trim().ToLower();
-        byte r = 0, g = 0, b = 0;
-        r = Convert.ToByte(c[0..2], 16);
-        g = Convert.ToByte(c[2..4], 16);
-        b = Convert.ToByte(c[4..6], 16);
-        yield return r / 255f;
-        yield return g / 255f;
-        yield return b / 255f;
-        yield return (float)transparency;
-    }
 }

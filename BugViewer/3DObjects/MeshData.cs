@@ -30,7 +30,7 @@ public record MeshData : AbstractObject3D
                 vertices = Indices.SelectMany(face => TriangleIndices(face)).SelectMany(ind => Coordinates(vertexList[ind])).ToArray(),
                 indices = Enumerable.Range(0, 3 * Indices.Count()).ToArray(),
                 colors = Colors.SelectMany(c =>
-                      ColorToJavaScript(c).Concat(ColorToJavaScript(c)).Concat(ColorToJavaScript(c))).ToArray(),
+                      ColorRgba.ToJavaScript(c).Concat(ColorRgba.ToJavaScript(c)).Concat(ColorRgba.ToJavaScript(c))).ToArray(),
                 singleColor = false
             };
         }
@@ -41,7 +41,7 @@ public record MeshData : AbstractObject3D
                 id = Id,
                 vertices = Vertices.SelectMany(v => Coordinates(v)).ToArray(),
                 indices = Indices.SelectMany(face => TriangleIndices(face)).ToArray(),
-                colors = Colors.SelectMany(c => ColorToJavaScript(c)).ToArray(),
+                colors = Colors.SelectMany(c => ColorRgba.ToJavaScript(c)).ToArray(),
                 singleColor = ColorMode == MeshColoring.UniformColor
             };
         }

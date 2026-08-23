@@ -93,10 +93,10 @@ namespace BugViewer
         private UpdateTypes? _paramAutoUpdateGrid;
         private double? _paramAutoGridBuffer;
         private bool? _paramIsDarkTheme;
-        private string? _paramClearColor;
-        private string? _paramLineColor;
+        private ColorRgba? _paramClearColor;
+        private ColorRgba? _paramLineColor;
         private double? _paramLineTransparency;
-        private string? _paramBaseColor;
+        private ColorRgba? _paramBaseColor;
         private double? _paramBaseTransparency;
         private bool? _paramDoubleClickIsSelect;
         private double? _paramLineWidthX;
@@ -163,11 +163,11 @@ namespace BugViewer
 
         /// <summary>Clear color parameter.</summary>
         [Parameter]
-        public string? ClearColor { get => _paramClearColor; set => _paramClearColor = value; }
+        public ColorRgba? ClearColor { get => _paramClearColor; set => _paramClearColor = value; }
 
         /// <summary>Line color parameter.</summary>
         [Parameter]
-        public string? LineColor { get => _paramLineColor; set => _paramLineColor = value; }
+        public ColorRgba? LineColor { get => _paramLineColor; set => _paramLineColor = value; }
 
         /// <summary>Line transparency parameter.</summary>
         [Parameter]
@@ -175,7 +175,7 @@ namespace BugViewer
 
         /// <summary>Base color parameter.</summary>
         [Parameter]
-        public string? BaseColor { get => _paramBaseColor; set => _paramBaseColor = value; }
+        public ColorRgba? BaseColor { get => _paramBaseColor; set => _paramBaseColor = value; }
 
         /// <summary>Base transparency parameter.</summary>
         [Parameter]
@@ -302,10 +302,10 @@ namespace BugViewer
             if (_paramAutoUpdateGrid.HasValue) Options.AutoUpdateGrid = _paramAutoUpdateGrid.Value;
             if (_paramAutoGridBuffer.HasValue) Options.AutoGridBuffer = _paramAutoGridBuffer.Value;
             if (_paramIsDarkTheme.HasValue) Options.IsDarkTheme = _paramIsDarkTheme.Value;
-            if (_paramClearColor != null) Options.ClearColor = _paramClearColor;
-            if (_paramLineColor != null) Options.LineColor = _paramLineColor;
+            if (_paramClearColor != null) Options.ClearColor = (ColorRgba)_paramClearColor;
+            if (_paramLineColor != null) Options.LineColor = (ColorRgba)_paramLineColor;
             if (_paramLineTransparency.HasValue) Options.LineTransparency = _paramLineTransparency.Value;
-            if (_paramBaseColor != null) Options.BaseColor = _paramBaseColor;
+            if (_paramBaseColor != null) Options.BaseColor = (ColorRgba)_paramBaseColor;
             if (_paramBaseTransparency.HasValue) Options.BaseTransparency = _paramBaseTransparency.Value;
             if (_paramDoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = _paramDoubleClickIsSelect.Value;
             if (_paramLineWidthX.HasValue) Options.LineWidthX = _paramLineWidthX.Value;

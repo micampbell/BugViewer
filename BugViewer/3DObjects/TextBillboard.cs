@@ -19,8 +19,8 @@ public record TextBillboard : AbstractObject3D
             id = Id,
             text = Text,
             position = new[] { Center.X, Center.Y, Center.Z },
-            backgroundColor = ColorToJavaScript(BackgroundColor).ToArray(),
-            textColor = ColorToJavaScript(TextColor).ToArray()
+            backgroundColor = ColorRgba.ToJavaScript(BackgroundColor).ToArray(),
+            textColor = ColorRgba.ToJavaScript(TextColor).ToArray()
         };
     }
 }
