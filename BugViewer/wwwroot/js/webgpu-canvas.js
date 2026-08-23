@@ -266,6 +266,19 @@ let colorFormat = 'bgra8unorm';
 let depthFormat = 'depth24plus';
 let sampleCount = 4;
 let clearColor = { r: 0, g: 0, b: 0, a: 1.0 };
+let backgroundGradientNegativePolarColor = [0, 0, 0, 1];
+let backgroundGradientPositivePolarColor = [0, 0, 0, 1];
+let cameraPolarAngle = 0;
+
+function updateBackgroundClearColor() {
+    // -π/2 and +π/2 are the two gradient endpoints. Keep the endpoint colors
+    // stable when an unconstrained camera is tilted beyond either pole.
+    const amount = Math.min(1, Math.max(0, (cameraPolarAngle + Math.PI / 2) / Math.PI));
+    clearColor = backgroundGradientNegativePolarColor.map((color, index) =>
+        color + (backgroundGradientPositivePolarColor[index] - color) * amount);
+
+    if (colorAttachment) colorAttachment.clearValue = clearColor;
+}
 
 // Scene objects (maintained in sync with C#)
 const meshes = [];
@@ -861,8 +874,12 @@ function allocateRenderTargets(width, height) {
 // Updates from C#
 // ============================================================================
 
-export function writeViewMatrix(matrixArray) {
+export function writeViewMatrix(matrixArray, polarAngle) {
     viewMatrix.set(matrixArray);
+    if (typeof polarAngle === 'number') {
+        cameraPolarAngle = polarAngle;
+        updateBackgroundClearColor();
+    }
 }
 
 export function writeProjectionMatrix(matrixArray) {
@@ -956,11 +973,21 @@ export async function updateDisplayOptions(options) {
     }
 
 
-    // Update clear color
+    // Update the polar-angle-driven background gradient. ClearColor remains a
+    // backward-compatible solid-color fallback for callers that do not supply
+    // the two gradient colors.
     if (options.clearColor) {
-        clearColor = options.clearColor;
-        if (colorAttachment) colorAttachment.clearValue = clearColor;
+        backgroundGradientNegativePolarColor = options.clearColor;
+        backgroundGradientPositivePolarColor = options.clearColor;
     }
+    if (options.backgroundGradientNegativePolarColor) {
+        backgroundGradientNegativePolarColor = options.backgroundGradientNegativePolarColor;
+    }
+    if (options.backgroundGradientPositivePolarColor) {
+        backgroundGradientPositivePolarColor = options.backgroundGradientPositivePolarColor;
+    }
+    if (typeof options.cameraPolarAngle === 'number') cameraPolarAngle = options.cameraPolarAngle;
+    updateBackgroundClearColor();
 }
 
 // ============================================================================

@@ -648,7 +648,7 @@ namespace BugViewer
 
                 if (_module != null && _ready)
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
                 }
             }
             else if (_isPanning)
@@ -661,7 +661,7 @@ namespace BugViewer
 
                 if (_module != null && _ready)
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
                 }
             }
         }
@@ -686,7 +686,7 @@ namespace BugViewer
 
             if (_module != null && _ready)
             {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
             }
         }
 
@@ -737,7 +737,7 @@ namespace BugViewer
 
                 try
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
                 }
                 catch
                 {
@@ -815,11 +815,11 @@ namespace BugViewer
 
             if (init)
             {
-                await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(), Camera.ConvertMatrixToJavaScript());
+                await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(Camera.PolarAngle), Camera.ConvertMatrixToJavaScript());
             }
             else
             {
-                await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions());
+                await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions(Camera.PolarAngle));
                 await SendProjectionMatrixToJavaScriptAsync();
             }
         }
@@ -997,7 +997,7 @@ namespace BugViewer
             //    return;
                 //BoundingSphere = new Sphere(Vector3.Zero, 1f);
             Camera.Reset(BoundingSphere);
-            _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+            _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
         }
 
         // Handles the camera reset action.
@@ -1019,7 +1019,7 @@ namespace BugViewer
 
             if (_module != null && _ready)
             {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
             }
         }
 
@@ -1029,7 +1029,7 @@ namespace BugViewer
             if (e?.PropertyName == nameof(Options.ZIsUp))
             {
                 Camera.SwapCameraUp();
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
             }
 
             if (e?.PropertyName == nameof(Options.IsProjectionCamera))
@@ -1060,7 +1060,7 @@ namespace BugViewer
 
                 try
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript());
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
                 }
                 catch
                 {

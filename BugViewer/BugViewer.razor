@@ -50,28 +50,29 @@
         </div>
     </FluentStack>
 
-    <FluentPopover AnchorId="camera-controls"
-                   Style="width:50px;"
-                   @bind-Open="_cameraPopover"
-                   HorizontalPosition="HorizontalPosition.Right">
-        <Body>
-            <FluentStack Orientation="Orientation.Vertical">
-                <FluentButton OnClick="HandleCameraReset" Appearance="Appearance.Stealth" Title="Reset Camera" Class="toolbar-btn reset-btn"><FluentIcon Value="@(new Icons.CameraSwitch())" /></FluentButton>
-                <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))" Appearance="Appearance.Stealth" Title="View -X" Class="toolbar-btn cardinal-btn">-X</FluentButton>
-                <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))" Appearance="Appearance.Stealth" Title="View +X" Class="toolbar-btn cardinal-btn">+X</FluentButton>
-                <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))" Appearance="Appearance.Stealth" Title="View -Y" Class="toolbar-btn cardinal-btn">-Y</FluentButton>
-                <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))" Appearance="Appearance.Stealth" Title="View +Y" Class="toolbar-btn cardinal-btn">+Y</FluentButton>
-                <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))" Appearance="Appearance.Stealth" Title="View -Z" Class="toolbar-btn cardinal-btn">-Z</FluentButton>
-                <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))" Appearance="Appearance.Stealth" Title="View +Z" Class="toolbar-btn cardinal-btn">+Z</FluentButton>
-            </FluentStack>
-        </Body>
-    </FluentPopover>
-    <FluentPopover AnchorId="options"
-                   Style="width:360px;"
-                   @bind-Open="_optionsPopover"
-                   HorizontalPosition="HorizontalPosition.Right">
-        <Body>
-            <div style="max-height:70vh; overflow-y: auto;">
+    @if (_cameraPopover)
+    {
+        <div class="bugviewer-popover bugviewer-camera-popover" @onpointerdown:stopPropagation @onpointermove:stopPropagation @onpointerup:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation @onwheel:stopPropagation @onkeydown:stopPropagation>
+            <div class="bugviewer-popover-content">
+                <div part="body">
+                    <FluentStack Orientation="Orientation.Vertical">
+                        <FluentButton OnClick="HandleCameraReset" Appearance="Appearance.Stealth" Title="Reset Camera" Class="toolbar-btn reset-btn"><FluentIcon Value="@(new Icons.CameraSwitch())" /></FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))" Appearance="Appearance.Stealth" Title="View -X" Class="toolbar-btn cardinal-btn">-X</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))" Appearance="Appearance.Stealth" Title="View +X" Class="toolbar-btn cardinal-btn">+X</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))" Appearance="Appearance.Stealth" Title="View -Y" Class="toolbar-btn cardinal-btn">-Y</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))" Appearance="Appearance.Stealth" Title="View +Y" Class="toolbar-btn cardinal-btn">+Y</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))" Appearance="Appearance.Stealth" Title="View -Z" Class="toolbar-btn cardinal-btn">-Z</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))" Appearance="Appearance.Stealth" Title="View +Z" Class="toolbar-btn cardinal-btn">+Z</FluentButton>
+                    </FluentStack>
+                </div>
+            </div>
+        </div>
+    }
+    @if (_optionsPopover)
+    {
+        <div class="bugviewer-popover bugviewer-options-popover" @onpointerdown:stopPropagation @onpointermove:stopPropagation @onpointerup:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation @onwheel:stopPropagation @onkeydown:stopPropagation>
+            <div class="bugviewer-popover-content">
+              <div part="body" style="max-height:70vh; overflow-y:auto;">
                 <FluentStack Orientation="Orientation.Vertical">
                     <FluentAccordion>
                         <FluentAccordionItem Heading="Lighting">
@@ -177,42 +178,91 @@
                         </FluentAccordionItem>
                     </FluentAccordion>
                 </FluentStack>
+              </div>
             </div>
-        </Body>
-    </FluentPopover>
-    <FluentPopover AnchorId="help"
-                   Style="width:300px;"
-                   @bind-Open="_helpPopover"
-                   HorizontalPosition="HorizontalPosition.Right">
-        <Body>
-            <h4>🎮 Camera Controls</h4>
-            <div class="control-group">
-                <strong>🖱️ Mouse:</strong>
-                <ul>
-                    <li><strong>Left Drag:</strong> Rotate</li>
-                    <li><strong>Right Drag:</strong> Pan</li>
-                    <li><strong>Wheel:</strong> Zoom</li>
-                    <li><strong>Double-Click:</strong> Pick</li>
-                </ul>
+        </div>
+    }
+    @if (_helpPopover)
+    {
+        <div class="bugviewer-popover bugviewer-help-popover" @onpointerdown:stopPropagation @onpointermove:stopPropagation @onpointerup:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation @onwheel:stopPropagation @onkeydown:stopPropagation>
+            <div class="bugviewer-popover-content">
+              <div part="body">
+                <h4>🎮 Camera Controls</h4>
+                <div class="control-group">
+                    <strong>🖱️ Mouse:</strong>
+                    <ul>
+                        <li><strong>Left Drag:</strong> Rotate</li>
+                        <li><strong>Right Drag:</strong> Pan</li>
+                        <li><strong>Wheel:</strong> Zoom</li>
+                        <li><strong>Double-Click:</strong> Pick</li>
+                    </ul>
+                </div>
+                <div class="control-group">
+                    <strong>⌨️ Keyboard:</strong>
+                    <ul>
+                        <li><strong>W/S:</strong> Forward / Back</li>
+                        <li><strong>A/D:</strong> Left / Right</li>
+                        <li><strong>Q/E:</strong> Down / Up</li>
+                        <li><strong>Shift:</strong> Faster</li>
+                        <li><strong>.</strong> Toggle Panel</li>
+                    </ul>
+                </div>
+              </div>
             </div>
-            <div class="control-group">
-                <strong>⌨️ Keyboard:</strong>
-                <ul>
-                    <li><strong>W/S:</strong> Forward / Back</li>
-                    <li><strong>A/D:</strong> Left / Right</li>
-                    <li><strong>Q/E:</strong> Down / Up</li>
-                    <li><strong>Shift:</strong> Faster</li>
-                    <li><strong>.</strong> Toggle Panel</li>
-                </ul>
-            </div>
-        </Body>
-    </FluentPopover>
+        </div>
+    }
 
 </div>
 
 <style>
     .toolbar-buttons {
         animation: fadeToTransparent 5s ease-in-out forwards;
+    }
+
+    .bugviewer-popover {
+        position: absolute;
+        top: 4px;
+        z-index: 1000;
+        box-sizing: border-box;
+        pointer-events: auto;
+        border: 1px solid var(--neutral-stroke-rest, #d1d1d1);
+        border-radius: 4px;
+        background: var(--neutral-layer-floating, #ffffff);
+        color: var(--neutral-foreground-rest, #242424);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, .18);
+    }
+
+    .bugviewer-popover-content {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 1em;
+        font-family: var(--body-font, 'Segoe UI', sans-serif);
+        -webkit-font-smoothing: antialiased;
+        line-height: 27px;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        hyphens: auto;
+    }
+
+    /* The default toolbar is horizontal at the top-left. Keep each panel in the
+       viewer's positioning context, immediately to the right of its own button. */
+    .bugviewer-options-popover {
+        left: 44px;
+        width: min(360px, calc(100% - 48px));
+    }
+
+    .bugviewer-camera-popover {
+        left: 80px;
+        width: 66px;
+    }
+
+    .bugviewer-camera-popover .bugviewer-popover-content {
+        padding: 4px;
+    }
+
+    .bugviewer-help-popover {
+        left: 116px;
+        width: min(300px, calc(100% - 120px));
     }
 
         .toolbar-buttons:hover:not(.mouse-down),

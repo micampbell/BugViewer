@@ -56,10 +56,8 @@ internal static class MinimumSphere
         var points = pointsInput.ToArray();
         var numPoints = points.Length;
         var maxNumStalledIterations = 16;
-        if (numPoints == 0)
-            throw new ArgumentException("No points provided.");
-        else if (numPoints == 1)
-            return new(points[0], 0);
+        if (numPoints <= 1)
+            return new(points[0], 5);
         else if (numPoints == 2)
             return CreateFrom2Points(points[0], points[1]);
         else if (numPoints == 3)

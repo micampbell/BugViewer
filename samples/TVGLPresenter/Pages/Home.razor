@@ -13,34 +13,34 @@
     <div style="padding: 10px;">
         <InputFile OnChange="OpenFile" />
     </div>
-    
+
     <div style="flex: 1; min-height: 0; position: relative;">
-		<BugViewer @ref="viewer" Height="80%" Width="80%" LineWidthX="0.01" />
+        <BugViewer @ref="viewer" Height="80%" Width="80%" LineWidthX="0.01" />
     </div>
-    
+
     <div style="height: 200px; overflow: auto;">
         <LogViewer @ref="logViewer" />
     </div>
 </div>
 
 @code {
-	private BugViewer? viewer;
-	private LogViewer logViewer = new()!;
+    private BugViewer? viewer;
+    private LogViewer logViewer = new()!;
 
-	protected override void OnAfterRender(bool firstRender)
-	{
-		if (firstRender)
-		{
-			TVGL.OutputServices.Logger = logViewer;
-            
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            TVGL.OutputServices.Logger = logViewer;
+
             if (viewer?.Options != null)
             {
                 viewer.Options.AutoResetOnThemeChange = true;
                 viewer.Options.PropertyChanged += OnBugViewerOptionsChanged;
                 ThemeService.IsDarkMode = viewer.Options.IsDarkTheme;
             }
-		}
-	}
+        }
+    }
 
     private void OnBugViewerOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -50,52 +50,52 @@
         }
     }
 
-	private async Task OpenFile(InputFileChangeEventArgs args)
-	{
-		var fileArgs = args.GetMultipleFiles(1)[0];
-		string filename = fileArgs.Name;
-		logViewer.LogInformation($"Loaded polygon from {filename}");
+    private async Task OpenFile(InputFileChangeEventArgs args)
+    {
+        var fileArgs = args.GetMultipleFiles(1)[0];
+        string filename = fileArgs.Name;
+        logViewer.LogInformation($"Loaded polygon from {filename}");
 
-		// Buffer the file into a MemoryStream to allow synchronous reads.
-		await using var memoryStream = new MemoryStream();
-		// The OpenReadStream provides a stream that must be read asynchronously.
-		await using (var stream = fileArgs.OpenReadStream(long.MaxValue))
-		{
-			await stream.CopyToAsync(memoryStream);
-		}
-		// Reset the Center to the beginning of the stream.
-		memoryStream.Position = 0;
-		TessellatedSolid[] solids = null;
-		try
-		{
-			IO.Open(memoryStream, filename, out solids);
-		}
-		catch (Exception ex)
-		{ logViewer.LogError(ex, "opening file with TVGL"); }
-		if (solids == null || solids.Length == 0)
-		{
-			logViewer.LogError("Unable to load file.");
-			return;
-		}
-		var ts = solids[0];
-		MeshData meshData;
-		meshData = new MeshData
-		{
-			ColorMode = ts.HasUniformColor ? MeshColoring.UniformColor : MeshColoring.PerTriangle,
-			Id = Path.GetFileName(filename),
-			Colors = ts.HasUniformColor ? [ConvertFromTVGLColor(ts.SolidColor)]
-			: ts.Faces.Select(f => ConvertFromTVGLColor(f.Color)),
-			Indices = ts.Faces.Select(f => (f.A.IndexInList, f.B.IndexInList, f.C.IndexInList)).ToArray(),
-			Vertices = ts.Vertices.Select(v => new System.Numerics.Vector3((float)v.X, (float)v.Y, (float)v.Z)).ToArray()
-		};
-		// Add to WebGPU scene
-		await viewer.AddMeshAsync(meshData);
-	}
+        // Buffer the file into a MemoryStream to allow synchronous reads.
+        await using var memoryStream = new MemoryStream();
+        // The OpenReadStream provides a stream that must be read asynchronously.
+        await using (var stream = fileArgs.OpenReadStream(long.MaxValue))
+        {
+            await stream.CopyToAsync(memoryStream);
+        }
+        // Reset the Center to the beginning of the stream.
+        memoryStream.Position = 0;
+        TessellatedSolid[] solids = null;
+        try
+        {
+            IO.Open(memoryStream, filename, out solids);
+        }
+        catch (Exception ex)
+        { logViewer.LogError(ex, "opening file with TVGL"); }
+        if (solids == null || solids.Length == 0)
+        {
+            logViewer.LogError("Unable to load file.");
+            return;
+        }
+        var ts = solids[0];
+        MeshData meshData;
+        meshData = new MeshData
+        {
+            ColorMode = ts.HasUniformColor ? MeshColoring.UniformColor : MeshColoring.PerTriangle,
+            Id = Path.GetFileName(filename),
+            Colors = ts.HasUniformColor ? [new ColorRgba(ts.SolidColor.R, ts.SolidColor.G, ts.SolidColor.B, ts.SolidColor.A)]
+            : ts.Faces.Select(f => new ColorRgba(f.Color.R, f.Color.G, f.Color.B, f.Color.A)),
+            Indices = ts.Faces.Select(f => (f.A.IndexInList, f.B.IndexInList, f.C.IndexInList)).ToArray(),
+            Vertices = ts.Vertices.Select(v => new System.Numerics.Vector3((float)v.X, (float)v.Y, (float)v.Z)).ToArray()
+        };
+        // Add to WebGPU scene
+        await viewer.AddMeshAsync(meshData);
+    }
 
-	private static System.Drawing.Color ConvertFromTVGLColor(TVGL.Color c)
-	{
-		if (c == null)
-			c = new TVGL.Color(TVGL.Constants.DefaultColor);
-		return System.Drawing.Color.FromArgb(c.A, c.R, c.G, c.B);
-	}
+    private static System.Drawing.Color ConvertFromTVGLColor(TVGL.Color c)
+    {
+        if (c == null)
+            c = new TVGL.Color(TVGL.Constants.DefaultColor);
+        return System.Drawing.Color.FromArgb(c.A, c.R, c.G, c.B);
+    }
 }

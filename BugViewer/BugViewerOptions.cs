@@ -33,6 +33,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoGridBuffer = 3.0,
         IsDarkTheme = false,
         ClearColor = "#f2f2ff",
+        BackgroundGradientNegativePolarColor = "#f0f0ff",
+        BackgroundGradientPositivePolarColor = "#ffffff",
         LineColor = "#d2d2d2",
         LineTransparency = 0.8f,
         BaseColor = "#000000",
@@ -77,6 +79,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoGridBuffer = 3.0,
         IsDarkTheme = true,
         ClearColor = "#202020",
+        BackgroundGradientNegativePolarColor = "#202020",
+        BackgroundGradientPositivePolarColor = "#202020",
         LineColor = "#d2d2d2",
         LineTransparency = 0.8f,
         BaseColor = "#000000",
@@ -130,6 +134,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoGridBuffer = newOptions.AutoGridBuffer;
         IsDarkTheme = newOptions.IsDarkTheme;
         ClearColor = newOptions.ClearColor;
+        BackgroundGradientNegativePolarColor = newOptions.BackgroundGradientNegativePolarColor;
+        BackgroundGradientPositivePolarColor = newOptions.BackgroundGradientPositivePolarColor;
         LineColor = newOptions.LineColor;
         LineTransparency = newOptions.LineTransparency;
         BaseColor = newOptions.BaseColor;
@@ -239,6 +245,44 @@ public class BugViewerOptions : INotifyPropertyChanged
             if (_clearColor != value)
             {
                 _clearColor = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private string _backgroundGradientNegativePolarColor = "#f2f2ff";
+    /// <summary>
+    /// Background color at a camera polar angle of -90 degrees (-π/2 radians).
+    /// The background is interpolated from this color to <see cref="BackgroundGradientPositivePolarColor"/>
+    /// as the camera polar angle moves from -90 to +90 degrees.
+    /// </summary>
+    public string BackgroundGradientNegativePolarColor
+    {
+        get => _backgroundGradientNegativePolarColor;
+        set
+        {
+            if (_backgroundGradientNegativePolarColor != value)
+            {
+                _backgroundGradientNegativePolarColor = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private string _backgroundGradientPositivePolarColor = "#f2f2ff";
+    /// <summary>
+    /// Background color at a camera polar angle of +90 degrees (+π/2 radians).
+    /// The background is interpolated from <see cref="BackgroundGradientNegativePolarColor"/>
+    /// to this color as the camera polar angle moves from -90 to +90 degrees.
+    /// </summary>
+    public string BackgroundGradientPositivePolarColor
+    {
+        get => _backgroundGradientPositivePolarColor;
+        set
+        {
+            if (_backgroundGradientPositivePolarColor != value)
+            {
+                _backgroundGradientPositivePolarColor = value;
                 OnPropertyChanged();
             }
         }
@@ -502,7 +546,7 @@ public class BugViewerOptions : INotifyPropertyChanged
 
     // Orbit constraints
     private double _maxPolar = Math.PI * 0.49;
-    /// <summary>Maximum polar angle in radians (slightly less than 90� to avoid gimbal lock).</summary>
+    /// <summary>Maximum polar angle in radians (slightly less than 90° to avoid gimbal lock).</summary>
     public double MaxPolar
     {
         get => _maxPolar;
@@ -774,9 +818,12 @@ public class BugViewerOptions : INotifyPropertyChanged
     /// <summary>
     /// Converts this options object to a JS-friendly format with colors normalized to 0-1 floats.
     /// </summary>
-    public object ToJavascriptOptions() => new
+    public object ToJavascriptOptions(double cameraPolarAngle = 0) => new
     {
         clearColor = ColorToJavaScript(ClearColor, 1).ToArray(),
+        backgroundGradientNegativePolarColor = ColorToJavaScript(BackgroundGradientNegativePolarColor, 1).ToArray(),
+        backgroundGradientPositivePolarColor = ColorToJavaScript(BackgroundGradientPositivePolarColor, 1).ToArray(),
+        cameraPolarAngle = (float)cameraPolarAngle,
         lineColor = ColorToJavaScript(LineColor, LineTransparency).ToArray(),
         baseColor = ColorToJavaScript(BaseColor, BaseTransparency).ToArray(),
         lineWidthX = (float)LineWidthX,
