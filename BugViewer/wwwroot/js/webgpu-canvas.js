@@ -34,6 +34,61 @@ const GRID_SHADER = `
   @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f { var grid = PristineGrid(in.uv * gridArgs.spacing, gridArgs.lineWidth); return mix(gridArgs.baseColor, gridArgs.lineColor, grid); }
 `;
 
+const BACKGROUND_GRADIENT_SHADER = `
+  struct BackgroundGradient {
+    color0: vec4f,
+    color1: vec4f,
+    color2: vec4f,
+    color3: vec4f,
+    angles: vec4f,
+    cameraPolarAngle: f32,
+    verticalSpan: f32,
+    padding: vec2f
+  }
+  @group(0) @binding(0) var<uniform> gradient: BackgroundGradient;
+
+  struct VertexOut {
+    @builtin(position) position: vec4f,
+    @location(0) uv: vec2f
+  }
+
+  @vertex fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
+    let positions = array<vec2f, 6>(
+      vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),
+      vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
+    let position = positions[vertexIndex];
+    var out: VertexOut;
+    out.position = vec4f(position, 0.0, 1.0);
+    out.uv = position * 0.5 + vec2f(0.5);
+    return out;
+  }
+
+  fn blend(startColor: vec4f, endColor: vec4f, startAngle: f32, endAngle: f32, polarAngle: f32) -> vec4f {
+    let amount = clamp((polarAngle - startAngle) / max(endAngle - startAngle, 0.00001), 0.0, 1.0);
+    return mix(startColor, endColor, amount);
+  }
+
+  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+    // The center pixel represents the camera pitch. The top and bottom pixels
+    // represent the directions visible above and below it, producing a stable
+    // horizon-like cue instead of a single changing clear color.
+    let polarAngle = gradient.cameraPolarAngle + (in.uv.y - 0.5) * gradient.verticalSpan;
+    var color: vec4f;
+    if (polarAngle <= gradient.angles.x) {
+      color = gradient.color0;
+    } else if (polarAngle <= gradient.angles.y) {
+      color = blend(gradient.color0, gradient.color1, gradient.angles.x, gradient.angles.y, polarAngle);
+    } else if (polarAngle <= gradient.angles.z) {
+      color = blend(gradient.color1, gradient.color2, gradient.angles.y, gradient.angles.z, polarAngle);
+    } else if (polarAngle <= gradient.angles.w) {
+      color = blend(gradient.color2, gradient.color3, gradient.angles.z, gradient.angles.w, polarAngle);
+    } else {
+      color = gradient.color3;
+    }
+    return vec4f(color.rgb, 1.0);
+  }
+`;
+
 const MESH_SHADER = `
   struct Camera { projection: mat4x4f, view: mat4x4f }
   @group(0) @binding(0) var<uniform> camera: Camera;
@@ -220,6 +275,17 @@ let frameUniformBuffer = null;
 let frameBindGroupLayout = null;
 let frameBindGroup = null;
 
+// Background-gradient resources. Colors are packed as four vec4f values,
+// followed by four polar-angle stops and the current camera/view span.
+const BACKGROUND_GRADIENT_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * 24;
+const backgroundGradientUniformArray = new ArrayBuffer(BACKGROUND_GRADIENT_BUFFER_SIZE);
+const backgroundGradientColors = new Float32Array(backgroundGradientUniformArray, 0, 16);
+const backgroundGradientAngles = new Float32Array(backgroundGradientUniformArray, 16 * Float32Array.BYTES_PER_ELEMENT, 4);
+const backgroundGradientCamera = new Float32Array(backgroundGradientUniformArray, 20 * Float32Array.BYTES_PER_ELEMENT, 2);
+let backgroundGradientUniformBuffer = null;
+let backgroundGradientBindGroup = null;
+let backgroundGradientPipeline = null;
+
 // Render targets
 let msaaColorTexture = null;
 let depthTexture = null;
@@ -265,19 +331,32 @@ let axisExtent = gridSize;
 let colorFormat = 'bgra8unorm';
 let depthFormat = 'depth24plus';
 let sampleCount = 4;
-let clearColor = { r: 0, g: 0, b: 0, a: 1.0 };
 let backgroundGradientNegativePolarColor = [0, 0, 0, 1];
+let backgroundGradientFirstIntermediatePolarColor = [0, 0, 0, 1];
+let backgroundGradientFirstIntermediatePolarAngle = -Math.PI / 6;
+let backgroundGradientSecondIntermediatePolarColor = [0, 0, 0, 1];
+let backgroundGradientSecondIntermediatePolarAngle = Math.PI / 6;
 let backgroundGradientPositivePolarColor = [0, 0, 0, 1];
 let cameraPolarAngle = 0;
+let backgroundGradientVerticalSpan = Math.PI / 3;
 
-function updateBackgroundClearColor() {
-    // -π/2 and +π/2 are the two gradient endpoints. Keep the endpoint colors
-    // stable when an unconstrained camera is tilted beyond either pole.
-    const amount = Math.min(1, Math.max(0, (cameraPolarAngle + Math.PI / 2) / Math.PI));
-    clearColor = backgroundGradientNegativePolarColor.map((color, index) =>
-        color + (backgroundGradientPositivePolarColor[index] - color) * amount);
+function updateBackgroundGradientUniforms() {
+    const stops = [
+        { angle: -Math.PI / 2, color: backgroundGradientNegativePolarColor },
+        { angle: backgroundGradientFirstIntermediatePolarAngle, color: backgroundGradientFirstIntermediatePolarColor },
+        { angle: backgroundGradientSecondIntermediatePolarAngle, color: backgroundGradientSecondIntermediatePolarColor },
+        { angle: Math.PI / 2, color: backgroundGradientPositivePolarColor }
+    ].sort((left, right) => left.angle - right.angle);
 
-    if (colorAttachment) colorAttachment.clearValue = clearColor;
+    stops.forEach((stop, index) => {
+        backgroundGradientColors.set(stop.color, index * 4);
+        backgroundGradientAngles[index] = stop.angle;
+    });
+    backgroundGradientCamera.set([cameraPolarAngle, backgroundGradientVerticalSpan]);
+
+    if (device && backgroundGradientUniformBuffer) {
+        device.queue.writeBuffer(backgroundGradientUniformBuffer, 0, backgroundGradientUniformArray);
+    }
 }
 
 // Scene objects (maintained in sync with C#)
@@ -379,9 +458,56 @@ async function initWebGPU() {
         entries: [{ binding: 0, resource: { buffer: lightUniformBuffer } }]
     });
 
-
+    await initBackgroundGradient();
     await initGrid();
     await initCoordinateAxes();
+}
+
+async function initBackgroundGradient() {
+    backgroundGradientUniformBuffer = device.createBuffer({
+        label: 'Background Gradient Uniform Buffer',
+        size: BACKGROUND_GRADIENT_BUFFER_SIZE,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+
+    const bindGroupLayout = device.createBindGroupLayout({
+        label: 'Background Gradient BGL',
+        entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }]
+    });
+
+    backgroundGradientBindGroup = device.createBindGroup({
+        label: 'Background Gradient BG',
+        layout: bindGroupLayout,
+        entries: [{ binding: 0, resource: { buffer: backgroundGradientUniformBuffer } }]
+    });
+
+    const module = device.createShaderModule({
+        label: 'Background Gradient Shader',
+        code: BACKGROUND_GRADIENT_SHADER
+    });
+
+    backgroundGradientPipeline = await device.createRenderPipelineAsync({
+        label: 'Background Gradient Pipeline',
+        layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+        vertex: { module, entryPoint: 'vertexMain' },
+        fragment: {
+            module,
+            entryPoint: 'fragmentMain',
+            targets: [{ format: `${colorFormat}-srgb` }]
+        },
+        // This pipeline is used in the same pass as the scene pipelines,
+        // which always has a depth attachment. It neither tests nor writes
+        // depth, but it must still declare the pass's depth format.
+        depthStencil: {
+            format: depthFormat,
+            depthWriteEnabled: false,
+            depthCompare: 'always'
+        },
+        primitive: { topology: 'triangle-list', cullMode: 'none' },
+        multisample: { count: sampleCount }
+    });
+
+    updateBackgroundGradientUniforms();
 }
 
 async function initGrid() {
@@ -622,6 +748,15 @@ function renderFrame() {
     const encoder = device.createCommandEncoder();
     const pass = encoder.beginRenderPass(renderPass);
 
+    // Draw the full-screen, polar-angle-aware gradient before scene geometry.
+    // It does not write depth, leaving the cleared depth texture available for
+    // the normal opaque and transparent scene passes.
+    if (backgroundGradientPipeline && backgroundGradientBindGroup) {
+        pass.setPipeline(backgroundGradientPipeline);
+        pass.setBindGroup(0, backgroundGradientBindGroup);
+        pass.draw(6);
+    }
+
     // ========================================================================
     // 1. Opaque Pass: Draw all opaque objects first.
     // Depth test and depth write are enabled.
@@ -854,7 +989,7 @@ function allocateRenderTargets(width, height) {
     colorAttachment = {
         view: sampleCount > 1 ? msaaColorTexture.createView() : undefined,
         resolveTarget: undefined,
-        clearValue: clearColor,
+        clearValue: { r: 0, g: 0, b: 0, a: 1.0 },
         loadOp: 'clear',
         storeOp: sampleCount > 1 ? 'discard' : 'store'
     };
@@ -878,7 +1013,7 @@ export function writeViewMatrix(matrixArray, polarAngle) {
     viewMatrix.set(matrixArray);
     if (typeof polarAngle === 'number') {
         cameraPolarAngle = polarAngle;
-        updateBackgroundClearColor();
+        updateBackgroundGradientUniforms();
     }
 }
 
@@ -973,21 +1108,29 @@ export async function updateDisplayOptions(options) {
     }
 
 
-    // Update the polar-angle-driven background gradient. ClearColor remains a
-    // backward-compatible solid-color fallback for callers that do not supply
-    // the two gradient colors.
-    if (options.clearColor) {
-        backgroundGradientNegativePolarColor = options.clearColor;
-        backgroundGradientPositivePolarColor = options.clearColor;
-    }
     if (options.backgroundGradientNegativePolarColor) {
         backgroundGradientNegativePolarColor = options.backgroundGradientNegativePolarColor;
+    }
+    if (options.backgroundGradientFirstIntermediatePolarColor) {
+        backgroundGradientFirstIntermediatePolarColor = options.backgroundGradientFirstIntermediatePolarColor;
+    }
+    if (typeof options.backgroundGradientFirstIntermediatePolarAngle === 'number') {
+        backgroundGradientFirstIntermediatePolarAngle = options.backgroundGradientFirstIntermediatePolarAngle;
+    }
+    if (options.backgroundGradientSecondIntermediatePolarColor) {
+        backgroundGradientSecondIntermediatePolarColor = options.backgroundGradientSecondIntermediatePolarColor;
+    }
+    if (typeof options.backgroundGradientSecondIntermediatePolarAngle === 'number') {
+        backgroundGradientSecondIntermediatePolarAngle = options.backgroundGradientSecondIntermediatePolarAngle;
     }
     if (options.backgroundGradientPositivePolarColor) {
         backgroundGradientPositivePolarColor = options.backgroundGradientPositivePolarColor;
     }
     if (typeof options.cameraPolarAngle === 'number') cameraPolarAngle = options.cameraPolarAngle;
-    updateBackgroundClearColor();
+    if (typeof options.backgroundGradientVerticalSpan === 'number') {
+        backgroundGradientVerticalSpan = options.backgroundGradientVerticalSpan;
+    }
+    updateBackgroundGradientUniforms();
 }
 
 // ============================================================================
@@ -1461,6 +1604,7 @@ export function disposeWebGPU_Canvas() {
     gridVertexBuffer?.destroy();
     gridIndexBuffer?.destroy();
     gridUniformBuffer?.destroy();
+    backgroundGradientUniformBuffer?.destroy();
     frameUniformBuffer?.destroy();
     msaaColorTexture?.destroy();
     depthTexture?.destroy();

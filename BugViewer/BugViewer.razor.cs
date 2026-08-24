@@ -93,7 +93,6 @@ namespace BugViewer
         private UpdateTypes? _paramAutoUpdateGrid;
         private double? _paramAutoGridBuffer;
         private bool? _paramIsDarkTheme;
-        private ColorRgba? _paramClearColor;
         private ColorRgba? _paramLineColor;
         private double? _paramLineTransparency;
         private ColorRgba? _paramBaseColor;
@@ -160,10 +159,6 @@ namespace BugViewer
         /// <summary>Is dark theme parameter.</summary>
         [Parameter]
         public bool? IsDarkTheme { get => _paramIsDarkTheme; set => _paramIsDarkTheme = value; }
-
-        /// <summary>Clear color parameter.</summary>
-        [Parameter]
-        public ColorRgba? ClearColor { get => _paramClearColor; set => _paramClearColor = value; }
 
         /// <summary>Line color parameter.</summary>
         [Parameter]
@@ -302,7 +297,6 @@ namespace BugViewer
             if (_paramAutoUpdateGrid.HasValue) Options.AutoUpdateGrid = _paramAutoUpdateGrid.Value;
             if (_paramAutoGridBuffer.HasValue) Options.AutoGridBuffer = _paramAutoGridBuffer.Value;
             if (_paramIsDarkTheme.HasValue) Options.IsDarkTheme = _paramIsDarkTheme.Value;
-            if (_paramClearColor != null) Options.ClearColor = (ColorRgba)_paramClearColor;
             if (_paramLineColor != null) Options.LineColor = (ColorRgba)_paramLineColor;
             if (_paramLineTransparency.HasValue) Options.LineTransparency = _paramLineTransparency.Value;
             if (_paramBaseColor != null) Options.BaseColor = (ColorRgba)_paramBaseColor;

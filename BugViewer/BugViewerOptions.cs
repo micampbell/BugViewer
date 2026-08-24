@@ -32,7 +32,12 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 3.0,
         IsDarkTheme = false,
-        ClearColor = new ColorRgba(242, 242, 255),
+        BackgroundGradientNegativePolarColor = new ColorRgba(132, 140, 155),
+        BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(242, 246, 255),
+        BackgroundGradientFirstIntermediatePolarAngle = -Math.PI / 6,
+        BackgroundGradientSecondIntermediatePolarColor = new ColorRgba(200, 205, 255),
+        BackgroundGradientSecondIntermediatePolarAngle = Math.PI / 6,
+        BackgroundGradientPositivePolarColor = ColorRgba.White,
         LineColor = new ColorRgba(210, 210, 210),
         LineTransparency = 0.8f,
         BaseColor = new ColorRgba(0, 0, 0),
@@ -76,7 +81,12 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 3.0,
         IsDarkTheme = true,
-        ClearColor = new ColorRgba(32, 32, 32),
+        BackgroundGradientNegativePolarColor = new ColorRgba(12, 20, 34),
+        BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(20, 33, 55),
+        BackgroundGradientFirstIntermediatePolarAngle = -Math.PI / 6,
+        BackgroundGradientSecondIntermediatePolarColor = new ColorRgba(29, 46, 73),
+        BackgroundGradientSecondIntermediatePolarAngle = Math.PI / 6,
+        BackgroundGradientPositivePolarColor = new ColorRgba(42, 63, 95),
         LineColor = new ColorRgba(210, 210, 210),
         LineTransparency = 0.8f,
         BaseColor = new ColorRgba(0, 0, 0),
@@ -129,7 +139,12 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoCameraSphereBuffer = newOptions.AutoCameraSphereBuffer;
         AutoGridBuffer = newOptions.AutoGridBuffer;
         IsDarkTheme = newOptions.IsDarkTheme;
-        ClearColor = newOptions.ClearColor;
+        BackgroundGradientNegativePolarColor = newOptions.BackgroundGradientNegativePolarColor;
+        BackgroundGradientFirstIntermediatePolarColor = newOptions.BackgroundGradientFirstIntermediatePolarColor;
+        BackgroundGradientFirstIntermediatePolarAngle = newOptions.BackgroundGradientFirstIntermediatePolarAngle;
+        BackgroundGradientSecondIntermediatePolarColor = newOptions.BackgroundGradientSecondIntermediatePolarColor;
+        BackgroundGradientSecondIntermediatePolarAngle = newOptions.BackgroundGradientSecondIntermediatePolarAngle;
+        BackgroundGradientPositivePolarColor = newOptions.BackgroundGradientPositivePolarColor;
         LineColor = newOptions.LineColor;
         LineTransparency = newOptions.LineTransparency;
         BaseColor = newOptions.BaseColor;
@@ -229,16 +244,93 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
-    private ColorRgba _clearColor = new ColorRgba(242, 242, 255); // Add default value
-    /// <summary>Background clear color for the rendering canvas.</summary>
-    public ColorRgba ClearColor
+    private ColorRgba _backgroundGradientNegativePolarColor = new(232, 240, 255);
+    /// <summary>Background color at a camera polar angle of -90 degrees (-π/2 radians).</summary>
+    public ColorRgba BackgroundGradientNegativePolarColor
     {
-        get => _clearColor;
+        get => _backgroundGradientNegativePolarColor;
         set
         {
-            if (_clearColor != value)
+            if (_backgroundGradientNegativePolarColor != value)
             {
-                _clearColor = value;
+                _backgroundGradientNegativePolarColor = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private ColorRgba _backgroundGradientFirstIntermediatePolarColor = new(242, 246, 255);
+    /// <summary>First intermediate background color, sampled at <see cref="BackgroundGradientFirstIntermediatePolarAngle"/>.</summary>
+    public ColorRgba BackgroundGradientFirstIntermediatePolarColor
+    {
+        get => _backgroundGradientFirstIntermediatePolarColor;
+        set
+        {
+            if (_backgroundGradientFirstIntermediatePolarColor != value)
+            {
+                _backgroundGradientFirstIntermediatePolarColor = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private double _backgroundGradientFirstIntermediatePolarAngle = -Math.PI / 6;
+    /// <summary>Polar angle in radians for the first intermediate background color, clamped to -90 through +90 degrees.</summary>
+    public double BackgroundGradientFirstIntermediatePolarAngle
+    {
+        get => _backgroundGradientFirstIntermediatePolarAngle;
+        set
+        {
+            var clamped = Math.Clamp(value, -Math.PI / 2, Math.PI / 2);
+            if (ChangeOccurred(_backgroundGradientFirstIntermediatePolarAngle, clamped))
+            {
+                _backgroundGradientFirstIntermediatePolarAngle = clamped;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private ColorRgba _backgroundGradientSecondIntermediatePolarColor = new(250, 252, 255);
+    /// <summary>Second intermediate background color, sampled at <see cref="BackgroundGradientSecondIntermediatePolarAngle"/>.</summary>
+    public ColorRgba BackgroundGradientSecondIntermediatePolarColor
+    {
+        get => _backgroundGradientSecondIntermediatePolarColor;
+        set
+        {
+            if (_backgroundGradientSecondIntermediatePolarColor != value)
+            {
+                _backgroundGradientSecondIntermediatePolarColor = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private double _backgroundGradientSecondIntermediatePolarAngle = Math.PI / 6;
+    /// <summary>Polar angle in radians for the second intermediate background color, clamped to -90 through +90 degrees.</summary>
+    public double BackgroundGradientSecondIntermediatePolarAngle
+    {
+        get => _backgroundGradientSecondIntermediatePolarAngle;
+        set
+        {
+            var clamped = Math.Clamp(value, -Math.PI / 2, Math.PI / 2);
+            if (ChangeOccurred(_backgroundGradientSecondIntermediatePolarAngle, clamped))
+            {
+                _backgroundGradientSecondIntermediatePolarAngle = clamped;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private ColorRgba _backgroundGradientPositivePolarColor = ColorRgba.White;
+    /// <summary>Background color at a camera polar angle of +90 degrees (+π/2 radians).</summary>
+    public ColorRgba BackgroundGradientPositivePolarColor
+    {
+        get => _backgroundGradientPositivePolarColor;
+        set
+        {
+            if (_backgroundGradientPositivePolarColor != value)
+            {
+                _backgroundGradientPositivePolarColor = value;
                 OnPropertyChanged();
             }
         }
@@ -775,8 +867,14 @@ public class BugViewerOptions : INotifyPropertyChanged
     /// </summary>
     public object ToJavascriptOptions(double cameraPolarAngle = 0) => new
     {
-        clearColor = ColorRgba.ToJavaScript(ClearColor, 1).ToArray(),
+        backgroundGradientNegativePolarColor = ColorRgba.ToJavaScript(BackgroundGradientNegativePolarColor).ToArray(),
+        backgroundGradientFirstIntermediatePolarColor = ColorRgba.ToJavaScript(BackgroundGradientFirstIntermediatePolarColor).ToArray(),
+        backgroundGradientFirstIntermediatePolarAngle = (float)BackgroundGradientFirstIntermediatePolarAngle,
+        backgroundGradientSecondIntermediatePolarColor = ColorRgba.ToJavaScript(BackgroundGradientSecondIntermediatePolarColor).ToArray(),
+        backgroundGradientSecondIntermediatePolarAngle = (float)BackgroundGradientSecondIntermediatePolarAngle,
+        backgroundGradientPositivePolarColor = ColorRgba.ToJavaScript(BackgroundGradientPositivePolarColor).ToArray(),
         cameraPolarAngle = (float)cameraPolarAngle,
+        backgroundGradientVerticalSpan = (float)(IsProjectionCamera ? Math.PI * Fov / 180 : Math.PI / 3),
         lineColor = ColorRgba.ToJavaScript(LineColor, LineTransparency).ToArray(),
         baseColor = ColorRgba.ToJavaScript(BaseColor, BaseTransparency).ToArray(),
         lineWidthX = (float)LineWidthX,
