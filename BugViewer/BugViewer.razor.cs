@@ -86,7 +86,10 @@ namespace BugViewer
         // Backing fields for parameter proxies
         private double? _paramLightPolarAngle;
         private double? _paramLightAzimuthAngle;
+        private double? _paramDirectionalLightIntensity;
         private double? _paramAmbientLight;
+        private double? _paramHeadlampIntensity;
+        private double? _paramHeadlampFocus;
         private double? _paramSpecularPower;
         private UpdateTypes? _paramAutoResetCamera;
         private double? _paramAutoCameraSphereBuffer;
@@ -133,9 +136,21 @@ namespace BugViewer
         [Parameter]
         public double? LightAzimuthAngle { get => _paramLightAzimuthAngle; set => _paramLightAzimuthAngle = value; }
 
+        /// <summary>Directional light intensity parameter.</summary>
+        [Parameter]
+        public double? DirectionalLightIntensity { get => _paramDirectionalLightIntensity; set => _paramDirectionalLightIntensity = value; }
+
         /// <summary>Ambient light intensity parameter.</summary>
         [Parameter]
         public double? AmbientLight { get => _paramAmbientLight; set => _paramAmbientLight = value; }
+
+        /// <summary>Camera-mounted headlamp intensity parameter.</summary>
+        [Parameter]
+        public double? HeadlampIntensity { get => _paramHeadlampIntensity; set => _paramHeadlampIntensity = value; }
+
+        /// <summary>Camera-mounted headlamp focus parameter.</summary>
+        [Parameter]
+        public double? HeadlampFocus { get => _paramHeadlampFocus; set => _paramHeadlampFocus = value; }
 
         /// <summary>Specular power parameter.</summary>
         [Parameter]
@@ -295,7 +310,10 @@ namespace BugViewer
 
             if (_paramLightPolarAngle.HasValue) Options.LightPolarAngle = _paramLightPolarAngle.Value;
             if (_paramLightAzimuthAngle.HasValue) Options.LightAzimuthAngle = _paramLightAzimuthAngle.Value;
+            if (_paramDirectionalLightIntensity.HasValue) Options.DirectionalLightIntensity = _paramDirectionalLightIntensity.Value;
             if (_paramAmbientLight.HasValue) Options.AmbientLight = _paramAmbientLight.Value;
+            if (_paramHeadlampIntensity.HasValue) Options.HeadlampIntensity = _paramHeadlampIntensity.Value;
+            if (_paramHeadlampFocus.HasValue) Options.HeadlampFocus = _paramHeadlampFocus.Value;
             if (_paramSpecularPower.HasValue) Options.SpecularPower = _paramSpecularPower.Value;
             if (_paramAutoResetCamera.HasValue) Options.AutoResetCamera = _paramAutoResetCamera.Value;
             if (_paramAutoCameraSphereBuffer.HasValue) Options.AutoCameraSphereBuffer = _paramAutoCameraSphereBuffer.Value;
@@ -769,7 +787,7 @@ namespace BugViewer
 
                 if (_module != null && _ready)
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
                 }
             }
             else
@@ -797,7 +815,7 @@ namespace BugViewer
 
                 if (_module != null && _ready)
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
                 }
             }
         }
@@ -822,7 +840,7 @@ namespace BugViewer
 
             if (_module != null && _ready)
             {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
             }
         }
 
@@ -873,7 +891,7 @@ namespace BugViewer
 
                 try
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
                 }
                 catch
                 {
@@ -951,7 +969,7 @@ namespace BugViewer
 
             if (init)
             {
-                await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(Camera.PolarAngle), Camera.ConvertMatrixToJavaScript());
+                await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(Camera.PolarAngle), Camera.ConvertMatrixToJavaScript(), Camera.ConvertPositionToJavaScript());
             }
             else
             {
@@ -1133,7 +1151,7 @@ namespace BugViewer
             //    return;
             //BoundingSphere = new Sphere(Vector3.Zero, 1f);
             Camera.Reset(BoundingSphere);
-            _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+            _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
         }
 
         // Handles the camera reset action.
@@ -1155,7 +1173,7 @@ namespace BugViewer
 
             if (_module != null && _ready)
             {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
             }
         }
 
@@ -1165,7 +1183,7 @@ namespace BugViewer
             if (e?.PropertyName == nameof(Options.ZIsUp))
             {
                 Camera.SwapCameraUp();
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
             }
 
             if (e?.PropertyName == nameof(Options.IsProjectionCamera))
@@ -1203,7 +1221,7 @@ namespace BugViewer
 
                 try
                 {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
                 }
                 catch
                 {

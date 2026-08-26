@@ -216,6 +216,16 @@ public class OrbitCamera
     }
 
     /// <summary>
+    /// Converts the camera position to a float array for JavaScript interoperability.
+    /// </summary>
+    /// <returns>A three-element world-space camera position.</returns>
+    public float[] ConvertPositionToJavaScript()
+    {
+        var p = Position;
+        return [p.X, p.Y, p.Z];
+    }
+
+    /// <summary>
     /// Updates the camera and view matrices based on the current camera state.
     /// </summary>
     private void UpdateMatrices()

@@ -5,7 +5,7 @@
 // Constants & Shaders
 // ============================================================================
 
-const FRAME_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * 32; // projection + view matrices
+const FRAME_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * 36; // projection + view matrices + camera position
 
 // WGSL Shaders (moved to top for clarity)
 const GRID_SHADER = `
@@ -26,7 +26,7 @@ const GRID_SHADER = `
   }
   struct VertexIn { @location(0) pos: vec3f, @location(1) uv: vec2f }
   struct VertexOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
-  struct Camera { projection: mat4x4f, view: mat4x4f }
+  struct Camera { projection: mat4x4f, view: mat4x4f, cameraPosition: vec3f }
   @group(0) @binding(0) var<uniform> camera: Camera;
   struct GridArgs { lineColor: vec4f, baseColor: vec4f, lineWidth: vec2f, spacing: f32 }
   @group(1) @binding(0) var<uniform> gridArgs: GridArgs;
@@ -90,13 +90,16 @@ const BACKGROUND_GRADIENT_SHADER = `
 `;
 
 const MESH_SHADER = `
-  struct Camera { projection: mat4x4f, view: mat4x4f }
+  struct Camera { projection: mat4x4f, view: mat4x4f, cameraPosition: vec3f }
   @group(0) @binding(0) var<uniform> camera: Camera;
 
   struct LightUniforms {
     lightDir: vec3f,
     ambient: f32,
-    specularPower: f32
+    specularPower: f32,
+    headlampIntensity: f32,
+    directionalLightIntensity: f32,
+    headlampFocus: f32
   }
   @group(1) @binding(0) var<uniform> light: LightUniforms;
 
@@ -117,30 +120,36 @@ const MESH_SHADER = `
     let normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
     let lightDir = normalize(light.lightDir);
 
-    // View space position and view direction (camera at origin in view space)
-    let viewPos = (camera.view * vec4f(in.worldPos, 1.0)).xyz;
-    let viewDir = normalize(-viewPos);
+    let viewDir = normalize(camera.cameraPosition - in.worldPos);
     let halfDir = normalize(lightDir + viewDir);
 
     // Diffuse
-    let diffuse = max(dot(normal, lightDir), 0.0);
+    let diffuse = light.directionalLightIntensity * max(dot(normal, lightDir), 0.0);
     // Specular
     let specAngle = max(dot(normal, halfDir), 0.0);
-    let specular = pow(specAngle, light.specularPower);
+    let specular = light.directionalLightIntensity * pow(specAngle, light.specularPower);
+    // Mesh winding can reverse derivative normals, but a viewer headlamp should illuminate the rendered face.
+    let headlampAngle = abs(dot(normal, viewDir));
+    let headlampDiffuse = light.headlampIntensity * pow(headlampAngle, light.headlampFocus);
+    let headlampSpecular = light.headlampIntensity * pow(headlampAngle, light.specularPower);
 
-    let finalColor = meshUniforms.color.rgb * (light.ambient + diffuse) + vec3f(1.0) * specular;
+    let finalColor = meshUniforms.color.rgb * (light.ambient + diffuse + headlampDiffuse)
+      + vec3f(1.0) * (specular + headlampSpecular);
     return vec4f(finalColor, meshUniforms.color.a);
   }
 `;
 
 const MESH_SHADER_VERTEX_COLOR = `
-  struct Camera { projection: mat4x4f, view: mat4x4f }
+  struct Camera { projection: mat4x4f, view: mat4x4f, cameraPosition: vec3f }
   @group(0) @binding(0) var<uniform> camera: Camera;
 
   struct LightUniforms {
     lightDir: vec3f,
     ambient: f32,
-    specularPower: f32
+    specularPower: f32,
+    headlampIntensity: f32,
+    directionalLightIntensity: f32,
+    headlampFocus: f32
   }
   @group(1) @binding(0) var<uniform> light: LightUniforms;
 
@@ -164,22 +173,25 @@ const MESH_SHADER_VERTEX_COLOR = `
     let normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
     let lightDir = normalize(light.lightDir);
 
-    // View space position and view direction
-    let viewPos = (camera.view * vec4f(in.worldPos, 1.0)).xyz;
-    let viewDir = normalize(-viewPos);
+    let viewDir = normalize(camera.cameraPosition - in.worldPos);
     let halfDir = normalize(lightDir + viewDir);
 
-    let diffuse = max(dot(normal, lightDir), 0.0);
+    let diffuse = light.directionalLightIntensity * max(dot(normal, lightDir), 0.0);
     let specAngle = max(dot(normal, halfDir), 0.0);
-    let specular = pow(specAngle, light.specularPower);
+    let specular = light.directionalLightIntensity * pow(specAngle, light.specularPower);
+    // Mesh winding can reverse derivative normals, but a viewer headlamp should illuminate the rendered face.
+    let headlampAngle = abs(dot(normal, viewDir));
+    let headlampDiffuse = light.headlampIntensity * pow(headlampAngle, light.headlampFocus);
+    let headlampSpecular = light.headlampIntensity * pow(headlampAngle, light.specularPower);
 
-    let finalColor = in.color.rgb * (light.ambient + diffuse) + vec3f(1.0) * specular;
+    let finalColor = in.color.rgb * (light.ambient + diffuse + headlampDiffuse)
+      + vec3f(1.0) * (specular + headlampSpecular);
     return vec4f(finalColor, in.color.a);
   }
 `;
 
 const BILLBOARD_LINE_SHADER = `
-  struct Camera { projection: mat4x4f, view: mat4x4f }
+  struct Camera { projection: mat4x4f, view: mat4x4f, cameraPosition: vec3f }
   @group(0) @binding(0) var<uniform> camera: Camera;
   struct VertexIn {
     @location(0) pos: vec3f,
@@ -228,7 +240,7 @@ const BILLBOARD_LINE_SHADER = `
 `;
 
 const BILLBOARD_SHADER = `
-  struct Camera { projection: mat4x4f, view: mat4x4f }
+  struct Camera { projection: mat4x4f, view: mat4x4f, cameraPosition: vec3f }
   @group(0) @binding(0) var<uniform> camera: Camera;
   @group(1) @binding(0) var sampler0: sampler;
   @group(1) @binding(1) var texture0: texture_2d<f32>;
@@ -276,6 +288,7 @@ let frameMsIndex = 0;
 const frameArrayBuffer = new ArrayBuffer(FRAME_BUFFER_SIZE);
 const projectionMatrix = new Float32Array(frameArrayBuffer, 0, 16);
 const viewMatrix = new Float32Array(frameArrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16);
+const cameraPosition = new Float32Array(frameArrayBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 3);
 
 // GPU resources
 let frameUniformBuffer = null;
@@ -300,10 +313,13 @@ let colorAttachment = null;
 let renderPassDescriptor = null;
 
 // Lighting resources
-let lightUniformArray = new ArrayBuffer(8 * Float32Array.BYTES_PER_ELEMENT); // 3 (vec3f) + 1 (f32) + 1 (f32) + 3 padding
+let lightUniformArray = new ArrayBuffer(8 * Float32Array.BYTES_PER_ELEMENT); // 3 (vec3f) + ambient + specular + headlamp + directional light + headlamp focus
 const lightDirection = new Float32Array(lightUniformArray, 0, 3);
 const lightAmbient = new Float32Array(lightUniformArray, 12, 1);
 const lightSpecularPower = new Float32Array(lightUniformArray, 16, 1);
+const lightHeadlampIntensity = new Float32Array(lightUniformArray, 20, 1);
+const lightDirectionalIntensity = new Float32Array(lightUniformArray, 24, 1);
+const lightHeadlampFocus = new Float32Array(lightUniformArray, 28, 1);
 let lightUniformBuffer = null;
 let lightBindGroupLayout = null;
 let lightBindGroup = null;
@@ -375,7 +391,7 @@ const textBillboards = [];
 // Initialization
 // ============================================================================
 
-export async function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatrix) {
+export async function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatrix, initialCameraPosition) {
     dotNetRef = dotnet;
     canvas = canvasEl;
     context = canvas.getContext('webgpu');
@@ -384,6 +400,7 @@ export async function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatri
 
     // Set initial view matrix from parameter
     viewMatrix.set(initialViewMatrix);
+    cameraPosition.set(initialCameraPosition);
 
     // Apply options
     await updateDisplayOptions(options);
@@ -449,6 +466,7 @@ async function initWebGPU() {
         size: lightUniformArray.byteLength,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    device.queue.writeBuffer(lightUniformBuffer, 0, lightUniformArray);
 
     lightBindGroupLayout = device.createBindGroupLayout({
         label: 'Light BGL',
@@ -1019,8 +1037,9 @@ function allocateRenderTargets(width, height) {
 // Updates from C#
 // ============================================================================
 
-export function writeViewMatrix(matrixArray, polarAngle) {
+export function writeViewMatrix(matrixArray, polarAngle, cameraPositionArray) {
     viewMatrix.set(matrixArray);
+    cameraPosition.set(cameraPositionArray);
     if (typeof polarAngle === 'number') {
         cameraPolarAngle = polarAngle;
         updateBackgroundGradientUniforms();
@@ -1064,6 +1083,9 @@ export async function updateDisplayOptions(options) {
     if (options.lightDir) lightDirection.set(options.lightDir);
     if (typeof options.ambient === 'number') lightAmbient[0] = options.ambient;
     if (typeof options.specularPower === 'number') lightSpecularPower[0] = options.specularPower;
+    if (typeof options.headlampIntensity === 'number') lightHeadlampIntensity[0] = options.headlampIntensity;
+    if (typeof options.directionalLightIntensity === 'number') lightDirectionalIntensity[0] = options.directionalLightIntensity;
+    if (typeof options.headlampFocus === 'number') lightHeadlampFocus[0] = options.headlampFocus;
     if (device) {
         device.queue.writeBuffer(lightUniformBuffer, 0, lightUniformArray);
     }

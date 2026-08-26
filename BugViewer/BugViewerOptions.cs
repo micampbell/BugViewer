@@ -25,8 +25,11 @@ public class BugViewerOptions : INotifyPropertyChanged
     {
         LightPolarAngle = 0.13 * Math.PI,
         LightAzimuthAngle = 0.33 * Math.PI,
-        AmbientLight = 0.3,
+        DirectionalLightIntensity = 1.0,
+        AmbientLight = 0.22,
         SpecularPower = 32.0,
+        HeadlampIntensity = 0.35,
+        HeadlampFocus = 1.0,
         AutoResetCamera = UpdateTypes.SphereChange,
         AutoCameraSphereBuffer = 0.2,
         AutoUpdateGrid = UpdateTypes.SphereChange,
@@ -45,7 +48,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         DoubleClickIsSelect = true,
         LineWidthX = 0.1,
         LineWidthY = 0.1,
-        PathThicknessFactor = 0.0025f,
+        PathThicknessFactor = 0.005f,
         SampleCount = 4,
         IsProjectionCamera = true,
         Fov = 20,
@@ -73,21 +76,24 @@ public class BugViewerOptions : INotifyPropertyChanged
     /// <summary>DefaultLight configuration with sensible values for a basic grid.</summary>
     public static BugViewerOptions DefaultDark = new()
     {
-        LightPolarAngle = 0.13 * Math.PI,
-        LightAzimuthAngle = 0.33 * Math.PI,
-        AmbientLight = 0.3,
-        SpecularPower = 32.0,
+        LightPolarAngle = 0.4,
+        LightAzimuthAngle = 0,
+        DirectionalLightIntensity = 1.0,
+        AmbientLight = 0.22,
+        SpecularPower = 39.25,
+        HeadlampIntensity = 0.8,
+        HeadlampFocus = 25,
         AutoResetCamera = UpdateTypes.SphereChange,
         AutoCameraSphereBuffer = 0.2,
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 8.0,
         IsDarkTheme = true,
-        BackgroundGradientNegativePolarColor = new ColorRgba(12, 20, 34),
-        BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(20, 33, 55),
-        BackgroundGradientFirstIntermediatePolarAngle = -Math.PI / 6,
-        BackgroundGradientSecondIntermediatePolarColor = new ColorRgba(29, 46, 73),
-        BackgroundGradientSecondIntermediatePolarAngle = Math.PI / 6,
-        BackgroundGradientPositivePolarColor = new ColorRgba(42, 63, 95),
+        BackgroundGradientNegativePolarColor = new ColorRgba(255, 255, 255),
+        BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(251, 233, 213),
+        BackgroundGradientFirstIntermediatePolarAngle = 0.2,
+        BackgroundGradientSecondIntermediatePolarColor = new ColorRgba(200, 205, 255),
+        BackgroundGradientSecondIntermediatePolarAngle = 0.8,
+        BackgroundGradientPositivePolarColor = new ColorRgba(173, 173, 173),
         LineColor = new ColorRgba(210, 210, 210),
         LineTransparency = 0.8f,
         BaseColor = new ColorRgba(0, 0, 0),
@@ -95,13 +101,13 @@ public class BugViewerOptions : INotifyPropertyChanged
         DoubleClickIsSelect = true,
         LineWidthX = 0.1,
         LineWidthY = 0.1,
-        PathThicknessFactor = 0.0025f,
+        PathThicknessFactor = 0.005f,
         SampleCount = 4,
         IsProjectionCamera = true,
         Fov = 20,
         OrthoSize = 5.0,
         ZNear = 0.001,
-        ZFar = 999,
+        ZFar = 1200,
         ZIsUp = true,
         GridSize = 100.0,
         GridSpacing = 5.0,
@@ -178,8 +184,11 @@ public class BugViewerOptions : INotifyPropertyChanged
         CoordinateThickness = newOptions.CoordinateThickness;
         LightPolarAngle = newOptions.LightPolarAngle;
         LightAzimuthAngle = newOptions.LightAzimuthAngle;
+        DirectionalLightIntensity = newOptions.DirectionalLightIntensity;
         AmbientLight = newOptions.AmbientLight;
         SpecularPower = newOptions.SpecularPower;
+        HeadlampIntensity = newOptions.HeadlampIntensity;
+        HeadlampFocus = newOptions.HeadlampFocus;
         ZIsUp = newOptions.ZIsUp;
     }
 
@@ -833,6 +842,22 @@ public class BugViewerOptions : INotifyPropertyChanged
         else return [z, x, y];
     }
 
+    private double _directionalLightIntensity = 1.0;
+    /// <summary>Intensity of the directional light controlled by the polar and azimuth angles (0.0 to 1.0).</summary>
+    public double DirectionalLightIntensity
+    {
+        get => _directionalLightIntensity;
+        set
+        {
+            var clampedValue = Math.Clamp(value, 0.0, 1.0);
+            if (ChangeOccurred(_directionalLightIntensity, clampedValue))
+            {
+                _directionalLightIntensity = clampedValue;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     private double _ambientLight = 0.3;
     /// <summary>Ambient light intensity (0.0 to 1.0).</summary>
     public double AmbientLight
@@ -844,6 +869,38 @@ public class BugViewerOptions : INotifyPropertyChanged
             if (ChangeOccurred(_ambientLight, clamp))
             {
                 _ambientLight = clamp;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private double _headlampIntensity = 0.35;
+    /// <summary>Intensity of the white light mounted at the camera (0.0 to 1.0).</summary>
+    public double HeadlampIntensity
+    {
+        get => _headlampIntensity;
+        set
+        {
+            var clampedValue = Math.Clamp(value, 0.0, 1.0);
+            if (ChangeOccurred(_headlampIntensity, clampedValue))
+            {
+                _headlampIntensity = clampedValue;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private double _headlampFocus = 1.0;
+    /// <summary>Concentration of the headlamp diffuse cone (1.0 is broad; higher values are tighter).</summary>
+    public double HeadlampFocus
+    {
+        get => _headlampFocus;
+        set
+        {
+            var clampedValue = Math.Clamp(value, 1.0, 64.0);
+            if (ChangeOccurred(_headlampFocus, clampedValue))
+            {
+                _headlampFocus = clampedValue;
                 OnPropertyChanged();
             }
         }
@@ -908,7 +965,10 @@ public class BugViewerOptions : INotifyPropertyChanged
         zIsUp = ZIsUp,
         coordinateThickness = CoordinateThickness,
         lightDir = GetLightDirection(),
+        directionalLightIntensity = (float)DirectionalLightIntensity,
         ambient = (float)AmbientLight,
         specularPower = (float)SpecularPower,
+        headlampIntensity = (float)HeadlampIntensity,
+        headlampFocus = (float)HeadlampFocus,
     };
 }

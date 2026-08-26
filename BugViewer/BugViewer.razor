@@ -96,7 +96,10 @@
                             </FluentStack>
                             <FluentSlider Label="Light Polar Angle" @bind-Value="Options.LightPolarAngle" Min="0" Max="3.14" Step="0.01" />
                             <FluentSlider Label="Light Azimuthal" @bind-Value="Options.LightAzimuthAngle" Min="1" Max="6.28" Step="0.01" />
+                            <FluentSlider Label="Directional Light Intensity" @bind-Value="Options.DirectionalLightIntensity" Min="0" Max="1" Step="0.01" />
                             <FluentSlider Label="Ambient Light" @bind-Value="Options.AmbientLight" Min="0" Max="1" Step="0.01" />
+                            <FluentSlider Label="Headlamp Intensity" @bind-Value="Options.HeadlampIntensity" Min="0" Max="1" Step="0.01" />
+                            <FluentSlider Label="Headlamp Focus" @bind-Value="Options.HeadlampFocus" Min="1" Max="32" Step="0.25" />
                             <FluentSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
                             <FluentSelect Items=@_sampleCountItems Label="MSAA Sample Count"
                                           TOption="Option<int>"
