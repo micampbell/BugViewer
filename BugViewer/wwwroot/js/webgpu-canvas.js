@@ -232,12 +232,19 @@ const BILLBOARD_SHADER = `
   @group(0) @binding(0) var<uniform> camera: Camera;
   @group(1) @binding(0) var sampler0: sampler;
   @group(1) @binding(1) var texture0: texture_2d<f32>;
-  struct VertexIn { @location(0) pos: vec3f, @location(1) uv: vec2f }
+  struct VertexIn {
+    @location(0) pos: vec3f,
+    @location(1) uv: vec2f,
+    @location(2) aspectRatio: f32,
+    @location(3) scale: f32
+  }
   struct VertexOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
   @vertex fn vertexMain(in: VertexIn) -> VertexOut {
     var out: VertexOut;
-    let size = 1.0;
-    let offset = vec3f((in.uv.x - 0.5) * 2.0 * size, (in.uv.y - 0.5) * 2.0 * size, 0.0);
+    let offset = vec3f(
+      (in.uv.x - 0.5) * 2.0 * in.scale * in.aspectRatio,
+      (in.uv.y - 0.5) * 2.0 * in.scale,
+      0.0);
     let right = vec3f(camera.view[0][0], camera.view[1][0], camera.view[2][0]);
     let up = vec3f(camera.view[0][1], camera.view[1][1], camera.view[2][1]);
     let world_pos = in.pos + right * offset.x + up * offset.y;
@@ -1188,7 +1195,7 @@ export async function addMesh(meshData) {
         pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout, meshBindGroupLayout] });
     } else {
         shaderCode = MESH_SHADER_VERTEX_COLOR;
-        colorBuffer = createBuffer(colors, GPUBufferUsage.VERTEX);
+        colorBuffer = createBuffer(colors, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
         // Check if any vertex has transparency to correctly flag the mesh
         isTransparent = false;
         for (let i = 3; i < colors.length; i += 4) {
@@ -1253,9 +1260,9 @@ export async function addMesh(meshData) {
     });
 }
 
-export function addMeshes(meshArray) {
+export async function addMeshes(meshArray) {
     for (const mesh of meshArray) {
-        addMesh(mesh);
+        await addMesh(mesh);
     }
 }
 
@@ -1275,6 +1282,23 @@ export function changeMeshColor(colorChangeData) {
         device.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(color));
         if (color.length >= 4) {
             mesh.isTransparent = color[3] < 1.0;
+        }
+    }
+}
+
+export function changeMeshColors(colorChangeData) {
+    const { meshId, colors } = colorChangeData;
+    const mesh = meshes.find(candidate => candidate.id === meshId);
+    if (!mesh) throw new Error(`Mesh '${meshId}' was not found in the WebGPU scene.`);
+    if (mesh.singleColor || !mesh.colorBuffer)
+        throw new Error(`Mesh '${meshId}' was not created with per-triangle coloring.`);
+
+    device.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(colors));
+    mesh.isTransparent = false;
+    for (let i = 3; i < colors.length; i += 4) {
+        if (colors[i] < 1.0) {
+            mesh.isTransparent = true;
+            break;
         }
     }
 }
@@ -1363,7 +1387,9 @@ export async function addLines(lineData) {
     });
 }
 
-export function removeLines(index) {
+export function removeLines(lineId) {
+    const index = lines.findIndex(candidate => candidate.id === lineId);
+    if (index < 0) return;
     const line = lines[index];
     line.posBuffer?.destroy();
     line.colorBuffer?.destroy();
@@ -1389,7 +1415,7 @@ export function clearAllLines() {
 }
 
 export async function addTextBillboard(billboardData) {
-    const { id, text, position, backgroundColor, textColor } = billboardData;
+    const { id, text, position, backgroundColor, textColor, scale = 0.5 } = billboardData;
 
     // Create a canvas to render the text
     const canvas = document.createElement('canvas');
@@ -1398,6 +1424,7 @@ export async function addTextBillboard(billboardData) {
     const textMetrics = ctx.measureText(text);
     canvas.width = Math.ceil(textMetrics.width) + 20;
     canvas.height = 30;
+    const aspectRatio = canvas.width / canvas.height;
 
     // Background
     ctx.fillStyle = `rgba(${Math.floor(backgroundColor[0] * 255)}, ${Math.floor(backgroundColor[1] * 255)}, ${Math.floor(backgroundColor[2] * 255)}, ${backgroundColor[3]})`;
@@ -1429,10 +1456,10 @@ export async function addTextBillboard(billboardData) {
 
     // Create billboard geometry
     const vertices = new Float32Array([
-        position[0], position[1], position[2], 0, 1,
-        position[0], position[1], position[2], 1, 1,
-        position[0], position[1], position[2], 0, 0,
-        position[0], position[1], position[2], 1, 0,
+        position[0], position[1], position[2], 0, 1, aspectRatio, scale,
+        position[0], position[1], position[2], 1, 1, aspectRatio, scale,
+        position[0], position[1], position[2], 0, 0, aspectRatio, scale,
+        position[0], position[1], position[2], 1, 0, aspectRatio, scale,
     ]);
 
     const vertexBuffer = createBuffer(vertices, GPUBufferUsage.VERTEX);
@@ -1468,10 +1495,12 @@ export async function addTextBillboard(billboardData) {
             module: shaderModule,
             entryPoint: 'vertexMain',
             buffers: [{
-                arrayStride: 20,
+                arrayStride: 28,
                 attributes: [
                     { shaderLocation: 0, offset: 0, format: 'float32x3' },
-                    { shaderLocation: 1, offset: 12, format: 'float32x2' }
+                    { shaderLocation: 1, offset: 12, format: 'float32x2' },
+                    { shaderLocation: 2, offset: 20, format: 'float32' },
+                    { shaderLocation: 3, offset: 24, format: 'float32' }
                 ]
             }]
         },

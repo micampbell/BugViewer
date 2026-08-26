@@ -10,7 +10,7 @@ public record MeshData : AbstractObject3D
     /// <summary>Triangle indices (3 indices per triangle).</summary>
     public required IList<(int a, int b, int c)> Indices { get; init; }
 
-    public required MeshColoring ColorMode { get; init; }
+    public required MeshColoring ColorMode { get; set; }
     
 
     internal override object CreateJavascriptData()

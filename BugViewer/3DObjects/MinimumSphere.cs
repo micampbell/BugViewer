@@ -56,7 +56,9 @@ internal static class MinimumSphere
         var points = pointsInput.ToArray();
         var numPoints = points.Length;
         var maxNumStalledIterations = 16;
-        if (numPoints <= 1)
+        if (numPoints == 0)
+            return new(Vector3.Zero, 5);
+        if (numPoints == 1)
             return new(points[0], 5);
         else if (numPoints == 2)
             return CreateFrom2Points(points[0], points[1]);

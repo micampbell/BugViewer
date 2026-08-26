@@ -13,7 +13,7 @@ namespace BugViewer
     /// </summary>
     public partial class BugViewer
     {   // Partial class for the BugViewer component. The rest is in the razor file
-      
+
         // Popover visibility flags.
         private bool _cameraPopover = false;
         private bool _optionsPopover = false;
@@ -345,6 +345,20 @@ namespace BugViewer
         public EventCallback OnTriangleSelected { get; set; }
 
         /// <summary>
+        /// Keys that raycast the surface under the pointer while held. Configured keys are
+        /// reserved for inspection and are not also used for camera movement.
+        /// </summary>
+        [Parameter]
+        public IReadOnlyList<string> HoverSelectionKeys { get; set; } = [];
+
+        /// <summary>
+        /// Invoked when the active hover-selection key changes, including a null value
+        /// when no hover-selection key remains pressed.
+        /// </summary>
+        [Parameter]
+        public EventCallback<string?> OnHoverSelectionKeyChanged { get; set; }
+
+        /// <summary>
         /// The camera object that manages the view matrix and 
         /// projection matrix based on user interactions.
         /// </summary>
@@ -362,6 +376,10 @@ namespace BugViewer
         // Last pointer coordinates.
         private double _lastPointerX;
         private double _lastPointerY;
+        private bool _hasPointerPosition;
+        private DateTime _lastHoverSelectionTime = DateTime.MinValue;
+        private const double HoverSelectionIntervalMs = 50;
+        private string? _activeHoverSelectionKey;
 
         /// <summary>
         /// A set of currently pressed keys for keyboard movement.
@@ -375,13 +393,31 @@ namespace BugViewer
         /// <summary>
         /// Gets the radius of the bounding sphere that encompasses all objects in the scene.
         /// </summary>
-        public float SphereRadius => BoundingSphere.GetRadius();
-
+        public float SphereRadius
+        {
+            get
+            {
+                if (double.IsNaN(_sphereRadius))
+                    _sphereRadius = BoundingSphere.GetRadius();
+                return _sphereRadius;
+            }
+        }
+        private float _sphereRadius = float.NaN;
         /// <summary>
         /// Gets the center of the bounding sphere that encompasses all objects in the scene.
         /// </summary>
-        public Vector3 SphereCenter => BoundingSphere.Center;
-        // Bounding spheres for individual objects.
+        public float SphereCenterLength
+        {
+            get
+            {
+                if (double.IsNaN(_sphereCenterLength))
+                    _sphereCenterLength = BoundingSphere.Center.Length();
+                return _sphereCenterLength;
+
+            }
+        }
+        private float _sphereCenterLength = float.NaN;
+
         private Dictionary<AbstractObject3D, Sphere> objectSpheres = new();
         // Lists of 3D objects.
         private List<MeshData> meshes = new();
@@ -417,6 +453,11 @@ namespace BugViewer
         /// Gets the index of the selected triangle within the selected mesh.
         /// </summary>
         public int SelectedTriangleInMeshIndex { get; private set; } = -1;
+
+        /// <summary>
+        /// Gets the world-space ray intersection point of the currently selected triangle.
+        /// </summary>
+        public Vector3 SelectedPoint { get; private set; } = Vector3.NaN;
         // Triangle intersection data.
         List<string> triangleToMesh = new();
         List<int> triangleToInMeshIndex = new();
@@ -458,40 +499,47 @@ namespace BugViewer
 
 
         // Handles key down events.
-        private void OnKeyDown(KeyboardEventArgs e)
+        private async Task OnKeyDown(KeyboardEventArgs e)
         {
             if (e.Key == "Escape")
             {
                 _cameraPopover = false;
                 _optionsPopover = false;
                 _helpPopover = false;
-                PressedKeys.Clear();
+                await ClearPressedKeysAsync();
                 StateHasChanged();
                 return;
             }
             if (e.Key == ",")
             {
                 ShowOptionsPanel();
-                PressedKeys.Clear();
+                await ClearPressedKeysAsync();
                 return;
             }
 
             if (e.Key == ".")
             {
                 ShowCameraPanel();
-                PressedKeys.Clear();
+                await ClearPressedKeysAsync();
                 return;
             }
 
             if (e.Key == "?" || (e.Key == "/"))
             {
                 ShowHelpPanel();
-                PressedKeys.Clear();
+                await ClearPressedKeysAsync();
                 return;
             }
             if (IsAnyPopoverOpen) return;
 
-            PressedKeys.Add(e.Key.ToLower());
+            var key = e.Key.ToLowerInvariant();
+            PressedKeys.Add(key);
+            if (IsHoverSelectionKey(key))
+            {
+                await SetActiveHoverSelectionKeyAsync(key);
+                if (_hasPointerPosition)
+                    await SelectTriangleAtPointerAsync(_lastPointerX, _lastPointerY);
+            }
         }
 
         // Toggles the options panel.
@@ -519,22 +567,64 @@ namespace BugViewer
         }
 
         // Handles key up events.
-        private void OnKeyUp(KeyboardEventArgs e)
+        private async Task OnKeyUp(KeyboardEventArgs e)
         {
-            PressedKeys.Remove(e.Key.ToLower());
+            var key = e.Key.ToLowerInvariant();
+            PressedKeys.Remove(key);
+            if (!string.Equals(key, _activeHoverSelectionKey, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var nextKey = HoverSelectionKeys.FirstOrDefault(candidate =>
+                PressedKeys.Contains(candidate.ToLowerInvariant()));
+            await SetActiveHoverSelectionKeyAsync(nextKey);
+            if (nextKey is not null && _hasPointerPosition)
+                await SelectTriangleAtPointerAsync(_lastPointerX, _lastPointerY);
+        }
+
+        private Task OnFocusLost(FocusEventArgs _) => ClearPressedKeysAsync();
+
+        private async Task ClearPressedKeysAsync()
+        {
+            PressedKeys.Clear();
+            await SetActiveHoverSelectionKeyAsync(null);
+        }
+
+        private async Task SetActiveHoverSelectionKeyAsync(string? key)
+        {
+            if (string.Equals(_activeHoverSelectionKey, key, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _activeHoverSelectionKey = key;
+            await OnHoverSelectionKeyChanged.InvokeAsync(key);
+        }
+
+        private bool IsHoverSelectionKey(string key) =>
+            HoverSelectionKeys.Any(candidate => string.Equals(candidate, key, StringComparison.OrdinalIgnoreCase));
+
+        private bool HasPressedHoverSelectionKey() =>
+            HoverSelectionKeys.Any(candidate => PressedKeys.Contains(candidate.ToLowerInvariant()));
+
+        private async Task OnPointerEnter(PointerEventArgs e)
+        {
+            _lastPointerX = e.ClientX;
+            _lastPointerY = e.ClientY;
+            _hasPointerPosition = true;
+            if (HoverSelectionKeys.Count > 0 && _containerRef.HasValue)
+                await _containerRef.Value.FocusAsync(true);
         }
 
         // Handles pointer down events.
-        private void OnPointerDown(PointerEventArgs e)
+        private async Task OnPointerDown(PointerEventArgs e)
         {
-            _containerRef?.FocusAsync();
+            if (_containerRef.HasValue)
+                await _containerRef.Value.FocusAsync(true);
             var currentTime = DateTime.Now;
             var timeSinceLast = (currentTime - _lastClickTime).TotalMilliseconds;
             var dist = Math.Sqrt(Math.Pow(e.ClientX - _lastClickX, 2) + Math.Pow(e.ClientY - _lastClickY, 2));
 
-            if (e.Button == 0 && timeSinceLast <= DoubleClickTimeMs && dist <= DoubleClickDistancePx)
+            if (HoverSelectionKeys.Count == 0 && e.Button == 0 && timeSinceLast <= DoubleClickTimeMs && dist <= DoubleClickDistancePx)
             {
-                OnDoubleClick(e);
+                await OnDoubleClick(e);
                 return;
             }
 
@@ -576,10 +666,29 @@ namespace BugViewer
                 {
                     SelectedMeshName = meshName;
                     SelectedTriangleInMeshIndex = meshIndex;
+                    SelectedPoint = point;
                     await OnTriangleSelected.InvokeAsync();
                 }
             }
             else ResetCamera();
+        }
+
+        private async Task SelectTriangleAtPointerAsync(double clientX, double clientY)
+        {
+            if (_module is null || !_ready || Camera is null || !OnTriangleSelected.HasDelegate)
+                return;
+
+            var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
+            var rx = clientX - rect.Left;
+            var ry = clientY - rect.Top;
+            (Vector3 anchor, Vector3 dirVector) = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
+            if (!DoesRayGoThroughTriangle(anchor, dirVector, out var meshName, out var meshIndex, out _, out var point))
+                return;
+
+            SelectedMeshName = meshName;
+            SelectedTriangleInMeshIndex = meshIndex;
+            SelectedPoint = point;
+            await OnTriangleSelected.InvokeAsync();
         }
 
         // Checks if a ray intersects with any triangle in the scene.
@@ -622,16 +731,17 @@ namespace BugViewer
 
         // Represents the bounding client rectangle of an element.
         private class BoundingClientRect
-        {
-            public double Left { get; set; }
-            public double Top { get; set; }
-            public double Width { get; set; }
-            public double Height { get; set; }
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
         }
 
         // Handles pointer move events for camera orbiting and panning.
         private async Task OnPointerMove(PointerEventArgs e)
         {
+            _hasPointerPosition = true;
             if (_isDragging)
             {
                 var dx = e.ClientX - _lastPointerX;
@@ -643,6 +753,21 @@ namespace BugViewer
                 if (_module != null && _ready)
                 {
                     await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
+                }
+            }
+            else
+            {
+                _lastPointerX = e.ClientX;
+                _lastPointerY = e.ClientY;
+            }
+
+            if (!_isDragging && !_isPanning && HasPressedHoverSelectionKey())
+            {
+                var now = DateTime.UtcNow;
+                if ((now - _lastHoverSelectionTime).TotalMilliseconds >= HoverSelectionIntervalMs)
+                {
+                    _lastHoverSelectionTime = now;
+                    await SelectTriangleAtPointerAsync(e.ClientX, e.ClientY);
                 }
             }
             else if (_isPanning)
@@ -695,32 +820,32 @@ namespace BugViewer
             double forward = 0, right = 0, up = 0;
             bool shift = PressedKeys.Contains("shift");
 
-            if (PressedKeys.Contains("w"))
+            if (PressedKeys.Contains("w") && !IsHoverSelectionKey("w"))
             {
                 forward += 1;
             }
 
-            if (PressedKeys.Contains("s"))
+            if (PressedKeys.Contains("s") && !IsHoverSelectionKey("s"))
             {
                 forward -= 1;
             }
 
-            if (PressedKeys.Contains("d"))
+            if (PressedKeys.Contains("d") && !IsHoverSelectionKey("d"))
             {
                 right += 1;
             }
 
-            if (PressedKeys.Contains("a"))
+            if (PressedKeys.Contains("a") && !IsHoverSelectionKey("a"))
             {
                 right -= 1;
             }
 
-            if (PressedKeys.Contains("q"))
+            if (PressedKeys.Contains("q") && !IsHoverSelectionKey("q"))
             {
                 up -= 1;
             }
 
-            if (PressedKeys.Contains("e"))
+            if (PressedKeys.Contains("e") && !IsHoverSelectionKey("e"))
             {
                 up += 1;
             }
@@ -989,7 +1114,7 @@ namespace BugViewer
             //    float.IsNaN(BoundingSphere.Center.Y) ||
             //    float.IsNaN(BoundingSphere.Center.Z))
             //    return;
-                //BoundingSphere = new Sphere(Vector3.Zero, 1f);
+            //BoundingSphere = new Sphere(Vector3.Zero, 1f);
             Camera.Reset(BoundingSphere);
             _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle);
         }
@@ -1064,7 +1189,7 @@ namespace BugViewer
 
             if ((sphereChanged && Options.AutoUpdateGrid == UpdateTypes.SphereChange) || Options.AutoUpdateGrid == UpdateTypes.OnDataChange)
             {
-                Options.GridSize = Options.AutoGridBuffer * (BoundingSphere.Center.Length() + BoundingSphere.GetRadius());
+                Options.GridSize = Options.AutoGridBuffer * (SphereCenterLength + SphereRadius);
                 OnOptionsChanged(null, null);
             }
         }
@@ -1073,8 +1198,6 @@ namespace BugViewer
         private bool UpdateSpheresAdd(AbstractObject3D obj3D)
         {
             var sphere = MinimumSphere.Run(obj3D.Vertices);
-            if (float.IsNaN(sphere.RadiusSquared))
-                ;
             objectSpheres[obj3D] = sphere;
             var need = !Sphere.AContainsB(BoundingSphere, sphere);
 
@@ -1086,9 +1209,10 @@ namespace BugViewer
                 if (need)
                 {
                     BoundingSphere = newSphere;
+                    _sphereRadius = float.NaN;
+                    _sphereCenterLength = float.NaN;
                 }
             }
-
             return need;
         }
 
@@ -1107,6 +1231,8 @@ namespace BugViewer
                 if (need)
                 {
                     BoundingSphere = newSphere;
+                    _sphereRadius = float.NaN;
+                    _sphereCenterLength = float.NaN;
                 }
             }
 
@@ -1175,7 +1301,7 @@ namespace BugViewer
 
             UpdateViewer(sphereChanged);
             // Precompute ray-cast data for all new meshes
-            for(var i = initMeshCount; i < meshes.Count; i++)
+            for (var i = initMeshCount; i < meshes.Count; i++)
                 sentMeshIds[meshes[i].Id] = i;
 
             // Single JS interop call with all mesh data
@@ -1221,14 +1347,13 @@ namespace BugViewer
         /// <returns></returns>
         public async Task AddLinesAsync(LineData path)
         {
-            var index = -1;
-            var nameInSent = sentLineIds?.TryGetValue(path.Id, out index);
-            if (nameInSent.GetValueOrDefault(false))
+            var index = lines.FindIndex(line => line.Id == path.Id);
+            if (index >= 0)
             {
                 var former = lines[index];
                 if (path.GetHashCode() == former.GetHashCode())
                     return;
-                RemoveLinesAsync(index);
+                await RemoveLinesAsync(index);
             }
 
             lines.Add(path);
@@ -1300,6 +1425,33 @@ namespace BugViewer
                         color.A / 255f
                         }
                     });
+        }
+
+        /// <summary>
+        /// Changes all per-triangle colors of an existing mesh without replacing its geometry.
+        /// </summary>
+        public async Task ChangeMeshColorsAsync(string meshId, IEnumerable<ColorRgba> colors)
+        {
+            if (sentMeshIds is null || !sentMeshIds.TryGetValue(meshId, out var index))
+                return;
+
+            var mesh = meshes[index];
+            if (mesh.ColorMode != MeshColoring.PerTriangle)
+                throw new InvalidOperationException(
+                    $"Mesh '{meshId}' was not created with per-triangle coloring.");
+
+            var colorList = colors.ToList();
+            if (colorList.Count != mesh.Indices.Count)
+                throw new ArgumentException("The color count must match the mesh triangle count.", nameof(colors));
+
+            mesh.Colors = colorList;
+            var gpuColors = colorList.SelectMany(color =>
+                ColorRgba.ToJavaScript(color)
+                    .Concat(ColorRgba.ToJavaScript(color))
+                    .Concat(ColorRgba.ToJavaScript(color)))
+                .ToArray();
+
+            await _module.InvokeVoidAsync("changeMeshColors", new { meshId, colors = gpuColors });
         }
 
         /// <summary>
@@ -1388,20 +1540,9 @@ namespace BugViewer
         /// <returns></returns>
         public async Task RemoveLinesAsync(LineData line)
         {
-            var index = -1;
-            if (sentLineIds is null)
-            {
-                index = lines.IndexOf(line);
-                if (index < 0)
-                    return;
+            var index = lines.FindIndex(candidate => candidate.Id == line.Id);
+            if (index >= 0)
                 await RemoveLinesAsync(index);
-            }
-            else
-            {
-                var nameInSent = sentLineIds.TryGetValue(line.Id, out index);
-                if (nameInSent)
-                    await RemoveLinesAsync(index);
-            }
         }
         // Removes lines from the scene by their index.
         private async Task RemoveLinesAsync(int index)
@@ -1410,11 +1551,14 @@ namespace BugViewer
             UpdateViewer(UpdateSpheresRemove(lines[index]));
             // Remove from the C# list and update viewer bounds
             lines.RemoveAt(index);
-            sentLineIds.Remove(lineId);
+            ReindexSentLines();
+
+            if (_module is null || !_ready)
+                return;
 
             try
             {
-                await _module.InvokeVoidAsync("removeLines", index);
+                await _module.InvokeVoidAsync("removeLines", lineId);
             }
             catch
             {
@@ -1443,15 +1587,25 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllLinesAsync()
         {
-            if (lines.Count == 0)
-            {
-                return;
-            }
-
             var need = lines.All(l => UpdateSpheresRemove(l));
             lines.Clear();
+            sentLineIds?.Clear();
             UpdateViewer(need);
+
+            if (_module is null || !_ready)
+                return;
+
             await _module.InvokeVoidAsync("clearAllLines");
+        }
+
+        private void ReindexSentLines()
+        {
+            if (sentLineIds is null)
+                return;
+
+            sentLineIds.Clear();
+            for (var i = 0; i < lines.Count; i++)
+                sentLineIds[lines[i].Id] = i;
         }
 
         /// <summary>
@@ -1462,8 +1616,10 @@ namespace BugViewer
         /// <param name="position"></param>
         /// <param name="backgroundColor"></param>
         /// <param name="textColor"></param>
+        /// <param name="scale">The billboard half-height in world-space units.</param>
         /// <returns></returns>
-        public async Task AddTextBillboardAsync(string id, string text, Vector3 position, ColorRgba backgroundColor, ColorRgba textColor)
+        public async Task AddTextBillboardAsync(string id, string text, Vector3 position,
+            ColorRgba backgroundColor, ColorRgba textColor, float scale = 0.5f)
         {
             var index = -1;
             var nameInSent = sentBBIds?.TryGetValue(id, out index);
@@ -1478,7 +1634,8 @@ namespace BugViewer
                 TextColor = textColor,
                 Text = text,
                 Vertices = new List<Vector3> { position },
-                Id = id
+                Id = id,
+                Scale = scale
             };
             billBoards.Add(billboardData);
             if (_module is null || !_ready)
@@ -1550,8 +1707,8 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllTextBillboardsAsync()
         {
-            billBoards.Clear();
-            sentBBIds.Clear();
+            billBoards?.Clear();
+            sentBBIds?.Clear();
             if (_module is null || !_ready)
             {
                 return;

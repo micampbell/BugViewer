@@ -6,12 +6,13 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div @ref="_containerRef" tabindex="0" @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" @onkeydown:stopPropagation="true" class="page-container" style="width:@Width; height:@Height; position:relative;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
+<div @ref="_containerRef" tabindex="0" @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" @onblur="OnFocusLost" @onkeydown:stopPropagation="true" class="page-container" style="width:@Width; height:@Height; position:relative;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
     <canvas id="webgpu-canvas"
             class="webgpu-canvas"
             style="height:100%; width:100%;"
             @ref="_canvasRef"
             @onpointerdown="OnPointerDown"
+            @onpointerenter="OnPointerEnter"
             @onpointermove="OnPointerMove"
             @onpointerup="OnPointerUp"
             @onwheel="OnWheel"
@@ -202,7 +203,10 @@
                         <li><strong>Left Drag:</strong> Rotate</li>
                         <li><strong>Right Drag:</strong> Pan</li>
                         <li><strong>Wheel:</strong> Zoom</li>
-                        <li><strong>Double-Click:</strong> Pick</li>
+                        @if (HoverSelectionKeys.Count == 0)
+                        {
+                            <li><strong>Double-Click:</strong> Pick</li>
+                        }
                     </ul>
                 </div>
                 <div class="control-group">
@@ -210,7 +214,15 @@
                     <ul>
                         <li><strong>W/S:</strong> Forward / Back</li>
                         <li><strong>A/D:</strong> Left / Right</li>
-                        <li><strong>Q/E:</strong> Down / Up</li>
+                        @if (HoverSelectionKeys.Count == 0)
+                        {
+                            <li><strong>Q/E:</strong> Down / Up</li>
+                        }
+                        else
+                        {
+                            <li><strong>Q:</strong> Down</li>
+                            <li><strong>@string.Join("/", HoverSelectionKeys.Select(key => key.ToUpperInvariant())):</strong> Inspect under pointer</li>
+                        }
                         <li><strong>Shift:</strong> Faster</li>
                         <li><strong>.</strong> Toggle Panel</li>
                     </ul>
