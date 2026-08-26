@@ -10,7 +10,7 @@ public record LineData : AbstractObject3D
     /// <summary>
     /// Gets the collection of thickness values to be used for the operation.
     /// </summary>
-    public required IEnumerable<double> Thicknesses { get; init; }
+    public required IEnumerable<float> Thicknesses { get; init; }
 
     /// <summary>
     /// A number from 0.0 to 1.0 representing the fade factor for each path.
@@ -18,7 +18,7 @@ public record LineData : AbstractObject3D
     /// mean that the the path fades from the centerline to transparency at this fraction of the 
     /// half-thickness.
     /// </summary>
-    public required IEnumerable<double> FadeFactors { get; init; }
+    public required IEnumerable<float> FadeFactors { get; init; }
 
 
     internal override object CreateJavascriptData()
@@ -53,19 +53,17 @@ public record LineData : AbstractObject3D
     /// Generates billboard stadium geometry for line segments with rounded end caps.
     /// Returns arrays ready for GPU buffer creation.
     /// </summary>
-    public static (
-        float[] positions,
+    public static (float[] positions,
         float[] colors,
         float[] thickness,
         float[] uvs,
         float[] endPositions,
         float[] fades,
-        ushort[] indices
-    ) GenerateStadiumGeometry(
+        ushort[] indices) GenerateStadiumGeometry(
         IList<Vector3> vertexList,
-        IEnumerable<double> thicknesses,
+        IEnumerable<float> thicknesses,
         IEnumerable<ColorRgba> colors,
-        IEnumerable<double> fadeFactors)
+        IEnumerable<float> fadeFactors)
     {
         var thicknessList = thicknesses.ToList();
         var colorList = colors.ToList();

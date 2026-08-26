@@ -106,6 +106,17 @@
                         </FluentAccordionItem>
                     </FluentAccordion>
                     <FluentAccordion>
+                        <FluentAccordionItem Heading="Display">
+                            <FluentStack Orientation="Orientation.Vertical">
+                                <FluentCheckbox Value="@showAxes" ValueChanged="SetShowAxesAsync" Label="Show Axes" />
+                                <FluentCheckbox Value="@showMeshFaces" ValueChanged="SetShowMeshFacesAsync" Label="Show Faces" />
+                                <FluentCheckbox Value="@showMeshEdges" ValueChanged="SetShowMeshEdgesAsync" Label="Show Edges" />
+                                    <FluentCheckbox Value="@showMeshBorders" ValueChanged="SetShowMeshBordersAsync" Label="Show Borders" />
+                                    <FluentNumberField TValue="float" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor"  />
+                            </FluentStack>
+                        </FluentAccordionItem>
+                    </FluentAccordion>
+                    <FluentAccordion>
                         <FluentAccordionItem Heading="📐 Grid">
                             <FluentStack Orientation="Orientation.Vertical">
                                 <FluentSlider Label="Coordinate Thickness" @bind-Value="Options.CoordinateThickness" Min="0" Max="10" Step="0.1" />

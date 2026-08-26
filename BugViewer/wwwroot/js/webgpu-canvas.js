@@ -733,10 +733,13 @@ function updateGridUniforms() {
 // Rendering
 // ============================================================================
 
+let renderingPaused = false;
+
 function startRenderLoop() {
     function frameCallback() {
         if (!device) return;
         requestAnimationFrame(frameCallback);
+        if (renderingPaused) return;
         const frameStart = performance.now();
 
         device.queue.writeBuffer(frameUniformBuffer, 0, frameArrayBuffer);
@@ -770,7 +773,7 @@ function renderFrame() {
     // ========================================================================
 
     // Draw opaque meshes
-    for (const mesh of meshes.filter(m => !m.isTransparent)) {
+    for (const mesh of meshes.filter(m => m.visible && !m.isTransparent)) {
         if (!mesh.pipeline || !mesh.vertexBuffer || !mesh.indexBuffer) continue;
 
         pass.setPipeline(mesh.pipeline);
@@ -845,7 +848,7 @@ function renderFrame() {
     }
 
     // Add transparent meshes
-    for (const mesh of meshes.filter(m => m.isTransparent)) {
+    for (const mesh of meshes.filter(m => m.visible && m.isTransparent)) {
         if (!mesh.pipeline || !mesh.vertexBuffer || !mesh.indexBuffer) continue;
         const viewSpacePos = transformPoint(mesh.center, viewMatrix);
         transparentDrawables.push({
@@ -1255,6 +1258,7 @@ export async function addMesh(meshData) {
         bindGroup,
         singleColor,
         isTransparent,
+        visible: true,
         indexCount: indices.length,
         pipeline
     });
@@ -1263,6 +1267,20 @@ export async function addMesh(meshData) {
 export async function addMeshes(meshArray) {
     for (const mesh of meshArray) {
         await addMesh(mesh);
+    }
+}
+
+export function removeMeshes(meshIds) {
+    for (const id of meshIds) {
+        const index = meshes.findIndex(mesh => mesh.id === id);
+        if (index >= 0) removeMesh(index);
+    }
+}
+
+export function setMeshesVisible(meshIds, visible) {
+    const ids = new Set(meshIds);
+    for (const mesh of meshes) {
+        if (ids.has(mesh.id)) mesh.visible = visible;
     }
 }
 
@@ -1387,6 +1405,12 @@ export async function addLines(lineData) {
     });
 }
 
+export async function addLinesBatch(lineDataArray) {
+    for (const lineData of lineDataArray) {
+        await addLines(lineData);
+    }
+}
+
 export function removeLines(lineId) {
     const index = lines.findIndex(candidate => candidate.id === lineId);
     if (index < 0) return;
@@ -1399,6 +1423,18 @@ export function removeLines(lineId) {
     line.fadeBuffer?.destroy();
     line.indexBuffer?.destroy();
     lines.splice(index, 1);
+}
+
+export function removeLinesBatch(lineIds) {
+    for (const id of lineIds) removeLines(id);
+}
+
+export function pauseRendering() {
+    renderingPaused = true;
+}
+
+export function resumeRendering() {
+    renderingPaused = false;
 }
 
 export function clearAllLines() {

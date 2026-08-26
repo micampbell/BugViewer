@@ -10,6 +10,9 @@ namespace BugViewer;
 public readonly record struct ColorRgba(byte R, byte G, byte B, byte A = byte.MaxValue)
 {
     public static readonly ColorRgba White = new(byte.MaxValue, byte.MaxValue, byte.MaxValue);
+    public static readonly ColorRgba Black = new(0, 0, 0);
+    public static readonly ColorRgba Red = new(220, 50, 47);
+    public static readonly ColorRgba LightGray = new(211, 211, 211);
 
     public static string ToHtml(ColorRgba c)
     {

@@ -45,6 +45,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         DoubleClickIsSelect = true,
         LineWidthX = 0.1,
         LineWidthY = 0.1,
+        PathThicknessFactor = 0.0025f,
         SampleCount = 4,
         IsProjectionCamera = true,
         Fov = 20,
@@ -94,6 +95,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         DoubleClickIsSelect = true,
         LineWidthX = 0.1,
         LineWidthY = 0.1,
+        PathThicknessFactor = 0.0025f,
         SampleCount = 4,
         IsProjectionCamera = true,
         Fov = 20,
@@ -151,6 +153,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         BaseTransparency = newOptions.BaseTransparency;
         LineWidthX = newOptions.LineWidthX;
         LineWidthY = newOptions.LineWidthY;
+        PathThicknessFactor = newOptions.PathThicknessFactor;
         SampleCount = newOptions.SampleCount;
         IsProjectionCamera = newOptions.IsProjectionCamera;
         Fov = newOptions.Fov;
@@ -690,6 +693,25 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
+
+    private float _pathThicknessFactor = 0.005f;
+    /// <summary>The multiplying factor that defines the thickness of paths as a fraction of the
+    /// encompassing sphere.
+    /// </summary>
+    public float PathThicknessFactor
+    {
+        get => _pathThicknessFactor;
+        set
+        {
+            if (ChangeOccurred(_pathThicknessFactor, value))
+            {
+                _pathThicknessFactor = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+
     private double _minDistance = 0.5;
     /// <summary>Minimum camera distance from the target.</summary>
     public double MinDistance
@@ -879,6 +901,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         baseColor = ColorRgba.ToJavaScript(BaseColor, BaseTransparency).ToArray(),
         lineWidthX = (float)LineWidthX,
         lineWidthY = (float)LineWidthY,
+        pathThicknessFactor = PathThicknessFactor,
         sampleCount = SampleCount,
         gridSize = (float)GridSize,
         gridSpacing = (float)GridSpacing,

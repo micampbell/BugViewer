@@ -100,6 +100,7 @@ namespace BugViewer
         private bool? _paramDoubleClickIsSelect;
         private double? _paramLineWidthX;
         private double? _paramLineWidthY;
+        private float? _paramPathThicknessFactor;
         private int? _paramSampleCount;
         private bool? _paramIsProjectionCamera;
         private double? _paramFov;
@@ -187,6 +188,10 @@ namespace BugViewer
         /// <summary>Line width Y parameter.</summary>
         [Parameter]
         public double? LineWidthY { get => _paramLineWidthY; set => _paramLineWidthY = value; }
+
+        /// <summary>Path thickness factor parameter.</summary>
+        [Parameter]
+        public float? PathThicknessFactor { get => _paramPathThicknessFactor; set => _paramPathThicknessFactor = value; }
 
         /// <summary>Sample count parameter.</summary>
         [Parameter]
@@ -304,6 +309,7 @@ namespace BugViewer
             if (_paramDoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = _paramDoubleClickIsSelect.Value;
             if (_paramLineWidthX.HasValue) Options.LineWidthX = _paramLineWidthX.Value;
             if (_paramLineWidthY.HasValue) Options.LineWidthY = _paramLineWidthY.Value;
+            if (_paramPathThicknessFactor.HasValue) Options.PathThicknessFactor = _paramPathThicknessFactor.Value;
             if (_paramSampleCount.HasValue) Options.SampleCount = _paramSampleCount.Value;
             if (_paramIsProjectionCamera.HasValue) Options.IsProjectionCamera = _paramIsProjectionCamera.Value;
             if (_paramFov.HasValue) Options.Fov = _paramFov.Value;
@@ -390,6 +396,8 @@ namespace BugViewer
         // Bounding sphere for the scene.
         private Sphere BoundingSphere;
 
+        public float PathThickness => Math.Max(1e-6f, Options.PathThicknessFactor * SphereRadius);
+
         /// <summary>
         /// Gets the radius of the bounding sphere that encompasses all objects in the scene.
         /// </summary>
@@ -427,6 +435,15 @@ namespace BugViewer
         private Dictionary<string, int> sentMeshIds;
         private Dictionary<string, int> sentLineIds;
         private Dictionary<string, int> sentBBIds;
+        private int renderPauseDepth;
+        private bool showMeshFaces = true;
+        private bool showMeshEdges;
+        private bool showMeshBorders = true;
+        private bool showAxes = true;
+        private double visibleCoordinateThickness;
+        private double visibleGridLineWidthX;
+        private double visibleGridLineWidthY;
+        private readonly Dictionary<string, LineData> meshDisplayLines = [];
 
         // Canvas dimensions.
         private double _canvasWidth = 800;
@@ -731,11 +748,11 @@ namespace BugViewer
 
         // Represents the bounding client rectangle of an element.
         private class BoundingClientRect
-    {
-        public double Left { get; set; }
-        public double Top { get; set; }
-        public double Width { get; set; }
-        public double Height { get; set; }
+        {
+            public double Left { get; set; }
+            public double Top { get; set; }
+            public double Width { get; set; }
+            public double Height { get; set; }
         }
 
         // Handles pointer move events for camera orbiting and panning.
@@ -1161,6 +1178,13 @@ namespace BugViewer
                 Options.ResetToDefault(Options.IsDarkTheme);
             }
 
+            if (e?.PropertyName == nameof(Options.PathThicknessFactor))
+            {
+                await RemoveLinesAsync(meshDisplayLines.Values.ToList());
+                meshDisplayLines.Clear();
+                await SynchronizeMeshDisplayLinesAsync();
+            }
+
             StateHasChanged();
             await SendOptionsToJavaScriptAsync(false);
         }
@@ -1258,12 +1282,16 @@ namespace BugViewer
             meshes.Add(mesh);
             // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
             if (_module is null || !_ready)
+            {
+                await SynchronizeMeshDisplayLinesAsync();
                 return;
+            }
 
             UpdateViewer(UpdateSpheresAdd(mesh));
             DefineMeshLookups(mesh);
             await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
             sentMeshIds[mesh.Id] = meshes.Count - 1;
+            await SynchronizeMeshDisplayLinesAsync();
         }
 
         /// <summary>
@@ -1297,7 +1325,10 @@ namespace BugViewer
 
             // If module not ready yet, meshes are queued and will be sent from OnWebGpuReady.
             if (_module is null || !_ready)
+            {
+                await SynchronizeMeshDisplayLinesAsync();
                 return;
+            }
 
             UpdateViewer(sphereChanged);
             // Precompute ray-cast data for all new meshes
@@ -1307,6 +1338,7 @@ namespace BugViewer
             // Single JS interop call with all mesh data
             var jsDataArray = meshList.Select(m => m.CreateJavascriptData()).ToArray();
             await _module.InvokeVoidAsync("addMeshes", (object)jsDataArray);
+            await SynchronizeMeshDisplayLinesAsync();
         }
 
         private void DefineMeshLookups(MeshData mesh)
@@ -1384,6 +1416,167 @@ namespace BugViewer
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"AddLinesAsync: Exception adding '{path.Id}': {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Adds multiple lines with one JavaScript interop call. This is useful when a caller
+        /// constructs a scene from many independent paths.
+        /// </summary>
+        public async Task AddLinesAsync(IEnumerable<LineData> newLines)
+        {
+            var lineList = newLines as IList<LineData> ?? newLines.ToList();
+            if (lineList.Count == 0)
+                return;
+
+            var linesToSend = new List<LineData>(lineList.Count);
+            var sphereChanged = false;
+            foreach (var line in lineList)
+            {
+                var existingIndex = lines.FindIndex(candidate => candidate.Id == line.Id);
+                if (existingIndex >= 0)
+                {
+                    var existing = lines[existingIndex];
+                    if (line.GetHashCode() == existing.GetHashCode())
+                        continue;
+                    await RemoveLinesAsync(existing);
+                }
+
+                lines.Add(line);
+                sphereChanged |= UpdateSpheresAdd(line);
+                linesToSend.Add(line);
+            }
+
+            if (linesToSend.Count == 0 || _module is null || !_ready)
+                return;
+
+            UpdateViewer(sphereChanged);
+            sentLineIds ??= new Dictionary<string, int>();
+            ReindexSentLines();
+            await _module.InvokeVoidAsync("addLinesBatch",
+                (object)linesToSend.Select(line => line.CreateJavascriptData()).ToArray());
+        }
+
+        /// <summary>Suspends WebGPU drawing until <see cref="ResumeRenderingAsync"/> is called.</summary>
+        public async Task PauseRenderingAsync()
+        {
+            if (renderPauseDepth++ == 0 && _module is not null && _ready)
+                await _module.InvokeVoidAsync("pauseRendering");
+        }
+
+        /// <summary>Resumes WebGPU drawing after the matching pause.</summary>
+        public async Task ResumeRenderingAsync()
+        {
+            if (renderPauseDepth == 0 || --renderPauseDepth != 0 || _module is null || !_ready)
+                return;
+
+            await _module.InvokeVoidAsync("resumeRendering");
+        }
+
+        private async Task SetShowMeshFacesAsync(bool value)
+        {
+            showMeshFaces = value;
+            if (_module is not null && _ready)
+                await _module.InvokeVoidAsync("setMeshesVisible", (object)meshes.Select(mesh => mesh.Id).ToArray(), value);
+        }
+
+        private async Task SetShowMeshEdgesAsync(bool value)
+        {
+            showMeshEdges = value;
+            await SynchronizeMeshDisplayLinesAsync();
+        }
+
+        private async Task SetShowMeshBordersAsync(bool value)
+        {
+            showMeshBorders = value;
+            await SynchronizeMeshDisplayLinesAsync();
+        }
+
+        private Task SetShowAxesAsync(bool value)
+        {
+            if (showAxes == value)
+                return Task.CompletedTask;
+
+            showAxes = value;
+            if (value)
+            {
+                Options.CoordinateThickness = visibleCoordinateThickness;
+                Options.LineWidthX = visibleGridLineWidthX;
+                Options.LineWidthY = visibleGridLineWidthY;
+            }
+            else
+            {
+                visibleCoordinateThickness = Options.CoordinateThickness;
+                visibleGridLineWidthX = Options.LineWidthX;
+                visibleGridLineWidthY = Options.LineWidthY;
+                Options.CoordinateThickness = 0;
+                Options.LineWidthX = 0;
+                Options.LineWidthY = 0;
+            }
+            return Task.CompletedTask;
+        }
+
+        private async Task SynchronizeMeshDisplayLinesAsync()
+        {
+            var desired = new Dictionary<string, LineData>();
+            foreach (var mesh in meshes)
+            {
+                if (showMeshEdges)
+                    desired.Add($"__mesh-edges-{mesh.Id}", CreateMeshDisplayLines(mesh, false));
+                if (showMeshBorders)
+                    desired.Add($"__mesh-borders-{mesh.Id}", CreateMeshDisplayLines(mesh, true));
+            }
+
+            var linesToRemove = meshDisplayLines.Values
+                .Where(line => !desired.ContainsKey(line.Id)).ToList();
+            var linesToAdd = desired.Values
+                .Where(line => !meshDisplayLines.ContainsKey(line.Id)).ToList();
+            if (linesToRemove.Count > 0)
+                await RemoveLinesAsync(linesToRemove);
+            if (linesToAdd.Count > 0)
+                await AddLinesAsync(linesToAdd);
+
+            meshDisplayLines.Clear();
+            foreach (var line in desired)
+                meshDisplayLines.Add(line.Key, line.Value);
+        }
+
+        private LineData CreateMeshDisplayLines(MeshData mesh, bool bordersOnly)
+        {
+            var edgeCounts = new Dictionary<(int first, int second), int>();
+            foreach (var (a, b, c) in mesh.Indices)
+            {
+                CountEdge(a, b);
+                CountEdge(b, c);
+                CountEdge(c, a);
+            }
+
+            // An internal edge is shared by exactly two triangles in this primitive mesh.
+            // Open and non-manifold edges are both borders.
+            var edges = edgeCounts.Where(pair => !bordersOnly || pair.Value != 2)
+                .Select(pair => pair.Key).ToList();
+            var vertices = new List<Vector3>(edges.Count * 2);
+            foreach (var (first, second) in edges)
+            {
+                vertices.Add(mesh.Vertices[first]);
+                vertices.Add(mesh.Vertices[second]);
+            }
+
+            return new LineData
+            {
+                Id = bordersOnly ? $"__mesh-borders-{mesh.Id}" : $"__mesh-edges-{mesh.Id}",
+                Vertices = vertices,
+                Colors = Enumerable.Repeat(ColorRgba.Black, Math.Max(0, vertices.Count - 1)),
+                Thicknesses = Enumerable.Range(0, Math.Max(0, vertices.Count - 1))
+                    .Select(index => index % 2 == 0 ? PathThickness : 0f),
+                FadeFactors = Enumerable.Repeat(0f, Math.Max(0, vertices.Count - 1))
+            };
+
+            void CountEdge(int first, int second)
+            {
+                var key = first < second ? (first, second) : (second, first);
+                edgeCounts.TryGetValue(key, out var count);
+                edgeCounts[key] = count + 1;
             }
         }
 
@@ -1477,6 +1670,35 @@ namespace BugViewer
                     await RemoveMeshAsync(index);
             }
         }
+        /// <summary>Removes a group of meshes without rebuilding the remaining WebGPU scene.</summary>
+        public async Task RemoveMeshesAsync(IEnumerable<MeshData> meshesToRemove)
+        {
+            var ids = meshesToRemove.Select(mesh => mesh.Id).ToHashSet();
+            if (ids.Count == 0)
+                return;
+
+            var indices = meshes.Select((mesh, index) => (mesh, index))
+                .Where(item => ids.Contains(item.mesh.Id))
+                .Select(item => item.index)
+                .OrderDescending()
+                .ToList();
+            if (indices.Count == 0)
+                return;
+
+            var sphereChanged = false;
+            foreach (var index in indices)
+            {
+                sphereChanged |= UpdateSpheresRemove(meshes[index]);
+                meshes.RemoveAt(index);
+            }
+            ReindexSentMeshes();
+            UpdateViewer(sphereChanged);
+
+            if (_module is not null && _ready)
+                await _module.InvokeVoidAsync("removeMeshes", (object)ids.ToArray());
+            await SynchronizeMeshDisplayLinesAsync();
+        }
+
         // Removes a mesh from the scene by its index.
         private async Task RemoveMeshAsync(int index)
         {
@@ -1516,11 +1738,11 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllMeshesAsync()
         {
-            if (meshes.Count == 0)
-            {
+            if (meshes is null || meshes.Count == 0)
                 return;
-            }
 
+            await RemoveLinesAsync(meshDisplayLines.Values.ToList());
+            meshDisplayLines.Clear();
             meshes.Clear();
             sentMeshIds.Clear();
             UpdateViewer(true);
@@ -1544,6 +1766,34 @@ namespace BugViewer
             if (index >= 0)
                 await RemoveLinesAsync(index);
         }
+        /// <summary>Removes a group of lines without clearing and rebuilding the remaining lines.</summary>
+        public async Task RemoveLinesAsync(IEnumerable<LineData> linesToRemove)
+        {
+            var ids = linesToRemove.Select(line => line.Id).ToHashSet();
+            if (ids.Count == 0)
+                return;
+
+            var indices = lines.Select((line, index) => (line, index))
+                .Where(item => ids.Contains(item.line.Id))
+                .Select(item => item.index)
+                .OrderDescending()
+                .ToList();
+            if (indices.Count == 0)
+                return;
+
+            var sphereChanged = false;
+            foreach (var index in indices)
+            {
+                sphereChanged |= UpdateSpheresRemove(lines[index]);
+                lines.RemoveAt(index);
+            }
+            ReindexSentLines();
+            UpdateViewer(sphereChanged);
+
+            if (_module is not null && _ready)
+                await _module.InvokeVoidAsync("removeLinesBatch", (object)ids.ToArray());
+        }
+
         // Removes lines from the scene by their index.
         private async Task RemoveLinesAsync(int index)
         {
@@ -1587,6 +1837,9 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllLinesAsync()
         {
+            if (lines is null || lines.Count == 0)
+                return;
+
             var need = lines.All(l => UpdateSpheresRemove(l));
             lines.Clear();
             sentLineIds?.Clear();
@@ -1606,6 +1859,16 @@ namespace BugViewer
             sentLineIds.Clear();
             for (var i = 0; i < lines.Count; i++)
                 sentLineIds[lines[i].Id] = i;
+        }
+
+        private void ReindexSentMeshes()
+        {
+            if (sentMeshIds is null)
+                return;
+
+            sentMeshIds.Clear();
+            for (var i = 0; i < meshes.Count; i++)
+                sentMeshIds[meshes[i].Id] = i;
         }
 
         /// <summary>
@@ -1707,8 +1970,10 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllTextBillboardsAsync()
         {
-            billBoards?.Clear();
-            sentBBIds?.Clear();
+            if (billBoards is null || billBoards.Count == 0)
+                return;
+            billBoards.Clear();
+            sentBBIds.Clear();
             if (_module is null || !_ready)
             {
                 return;
