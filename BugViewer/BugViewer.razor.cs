@@ -95,7 +95,6 @@ namespace BugViewer
         private double? _paramAutoCameraSphereBuffer;
         private UpdateTypes? _paramAutoUpdateGrid;
         private double? _paramAutoGridBuffer;
-        private bool? _paramIsDarkTheme;
         private ColorRgba? _paramLineColor;
         private double? _paramLineTransparency;
         private ColorRgba? _paramBaseColor;
@@ -172,10 +171,6 @@ namespace BugViewer
         [Parameter]
         public double? AutoGridBuffer { get => _paramAutoGridBuffer; set => _paramAutoGridBuffer = value; }
 
-        /// <summary>Is dark theme parameter.</summary>
-        [Parameter]
-        public bool? IsDarkTheme { get => _paramIsDarkTheme; set => _paramIsDarkTheme = value; }
-
         /// <summary>Line color parameter.</summary>
         [Parameter]
         public ColorRgba? LineColor { get => _paramLineColor; set => _paramLineColor = value; }
@@ -203,10 +198,6 @@ namespace BugViewer
         /// <summary>Line width Y parameter.</summary>
         [Parameter]
         public double? LineWidthY { get => _paramLineWidthY; set => _paramLineWidthY = value; }
-
-        /// <summary>Path thickness factor parameter.</summary>
-        [Parameter]
-        public float? PathThicknessFactor { get => _paramPathThicknessFactor; set => _paramPathThicknessFactor = value; }
 
         /// <summary>Sample count parameter.</summary>
         [Parameter]
@@ -319,14 +310,12 @@ namespace BugViewer
             if (_paramAutoCameraSphereBuffer.HasValue) Options.AutoCameraSphereBuffer = _paramAutoCameraSphereBuffer.Value;
             if (_paramAutoUpdateGrid.HasValue) Options.AutoUpdateGrid = _paramAutoUpdateGrid.Value;
             if (_paramAutoGridBuffer.HasValue) Options.AutoGridBuffer = _paramAutoGridBuffer.Value;
-            if (_paramIsDarkTheme.HasValue) Options.IsDarkTheme = _paramIsDarkTheme.Value;
             if (_paramLineColor != null) Options.LineColor = (ColorRgba)_paramLineColor;
             if (_paramLineTransparency.HasValue) Options.LineTransparency = _paramLineTransparency.Value;
             if (_paramBaseColor != null) Options.BaseColor = (ColorRgba)_paramBaseColor;
             if (_paramBaseTransparency.HasValue) Options.BaseTransparency = _paramBaseTransparency.Value;
             if (_paramDoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = _paramDoubleClickIsSelect.Value;
-            if (_paramLineWidthX.HasValue) Options.LineWidthX = _paramLineWidthX.Value;
-            if (_paramLineWidthY.HasValue) Options.LineWidthY = _paramLineWidthY.Value;
+            ApplyAxesParameterProxies();
             if (_paramPathThicknessFactor.HasValue) Options.PathThicknessFactor = _paramPathThicknessFactor.Value;
             if (_paramSampleCount.HasValue) Options.SampleCount = _paramSampleCount.Value;
             if (_paramIsProjectionCamera.HasValue) Options.IsProjectionCamera = _paramIsProjectionCamera.Value;
@@ -350,7 +339,21 @@ namespace BugViewer
             if (_paramZoomSensitivity.HasValue) Options.ZoomSensitivity = _paramZoomSensitivity.Value;
             if (_paramPanSensitivity.HasValue) Options.PanSensitivity = _paramPanSensitivity.Value;
             if (_paramPanSpeedMultiplier.HasValue) Options.PanSpeedMultiplier = _paramPanSpeedMultiplier.Value;
-            if (_paramCoordinateThickness.HasValue) Options.CoordinateThickness = _paramCoordinateThickness.Value;
+        }
+
+        private void ApplyAxesParameterProxies()
+        {
+            if (showAxes)
+            {
+                if (_paramCoordinateThickness.HasValue) Options.CoordinateThickness = _paramCoordinateThickness.Value;
+                if (_paramLineWidthX.HasValue) Options.LineWidthX = _paramLineWidthX.Value;
+                if (_paramLineWidthY.HasValue) Options.LineWidthY = _paramLineWidthY.Value;
+                return;
+            }
+
+            if (_paramCoordinateThickness.HasValue) visibleCoordinateThickness = _paramCoordinateThickness.Value;
+            if (_paramLineWidthX.HasValue) visibleGridLineWidthX = _paramLineWidthX.Value;
+            if (_paramLineWidthY.HasValue) visibleGridLineWidthY = _paramLineWidthY.Value;
         }
 
         #endregion
@@ -522,11 +525,7 @@ namespace BugViewer
         /// </summary>
         protected override void OnInitialized()
         {
-            if (Options is null)
-            {
-                Options = BugViewerOptions.DefaultLight;
-            }
-
+            Options ??= BugViewerOptions.Default;
             Camera = new OrbitCamera(Vector3.Zero, Options);
             _keyboardMoveTimer = new System.Threading.Timer(_ => ProcessKeyboardMovement(), null, 0, 16);
         }
@@ -563,6 +562,26 @@ namespace BugViewer
             {
                 ShowHelpPanel();
                 await ClearPressedKeysAsync();
+                return;
+            }
+            if (e.Key == "z")
+            {
+                await SetShowMeshFacesAsync(!showMeshFaces);
+                return;
+            }
+            if (e.Key == "x")
+            {
+                await SetShowAxesAsync(!showAxes);
+                return;
+            }
+            if (e.Key == "m")
+            {
+                await SetShowMeshEdgesAsync(!showMeshEdges);
+                return;
+            }
+            if (e.Key == "t")
+            {
+                await SetShowMeshBordersAsync(!showMeshBorders);
                 return;
             }
             if (IsAnyPopoverOpen) return;
@@ -790,11 +809,11 @@ namespace BugViewer
                     await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
                 }
             }
-            else
-            {
-                _lastPointerX = e.ClientX;
-                _lastPointerY = e.ClientY;
-            }
+        else if (!_isPanning)
+        {
+            _lastPointerX = e.ClientX;
+            _lastPointerY = e.ClientY;
+        }
 
             if (!_isDragging && !_isPanning && HasPressedHoverSelectionKey())
             {
@@ -1000,7 +1019,6 @@ namespace BugViewer
         {
             // mark ready early so Add* methods will attempt to send immediately
             _ready = true;
-            Console.WriteLine($"OnWebGpuReady: ready=true. meshes={meshes.Count}, lines={lines.Count}, billboards={billBoards.Count}");
             _error = null;
 
             // send any queued options/projection
@@ -1016,7 +1034,6 @@ namespace BugViewer
                     {
                         var mesh = meshes[i];
                         sentMeshIds.Add(mesh.Id, i);
-                        Console.WriteLine($"OnWebGpuReady: sending mesh {mesh.Id} -> index {i}");
                         await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
                     }
 
@@ -1025,7 +1042,6 @@ namespace BugViewer
                     {
                         var linesData = lines[i];
                         sentLineIds.Add(linesData.Id, i);
-                        Console.WriteLine($"OnWebGpuReady: sending lines {linesData.Id} -> index {i}");
                         await _module.InvokeVoidAsync("addLines", linesData.CreateJavascriptData());
                     }
 
@@ -1189,11 +1205,6 @@ namespace BugViewer
             if (e?.PropertyName == nameof(Options.IsProjectionCamera))
             {
                 Options.AdjustCameraProjectionParameters();
-            }
-
-            if (e?.PropertyName == nameof(Options.IsDarkTheme) && Options.AutoResetOnThemeChange)
-            {
-                Options.ResetToDefault(Options.IsDarkTheme);
             }
 
             if (e?.PropertyName == nameof(Options.PathThicknessFactor))
@@ -1407,12 +1418,10 @@ namespace BugViewer
             }
 
             lines.Add(path);
-            Console.WriteLine($"AddLinesAsync: queued line '{path.Id}'. _module={(_module != null ? "set" : "null")}, _ready={_ready}, lines.Count={lines.Count}");
 
             // If module not ready yet, queue the line. It will be sent from OnWebGpuReady.
             if (_module is null || !_ready)
             {
-                Console.WriteLine($"AddLinesAsync: module not ready, leaving '{path.Id}' queued");
                 return;
             }
 
@@ -1423,7 +1432,6 @@ namespace BugViewer
 
             try
             {
-                Console.WriteLine($"AddLinesAsync: invoking JS addLines for '{path.Id}'");
                 await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
                 sentLineIds[path.Id] = lines.Count - 1;
             }
@@ -1494,6 +1502,7 @@ namespace BugViewer
         private async Task SetShowMeshFacesAsync(bool value)
         {
             showMeshFaces = value;
+
             if (_module is not null && _ready)
                 await _module.InvokeVoidAsync("setMeshesVisible", (object)meshes.Select(mesh => mesh.Id).ToArray(), value);
         }
@@ -1501,12 +1510,16 @@ namespace BugViewer
         private async Task SetShowMeshEdgesAsync(bool value)
         {
             showMeshEdges = value;
+            if (showMeshEdges)
+                showMeshBorders = false;
             await SynchronizeMeshDisplayLinesAsync();
         }
 
         private async Task SetShowMeshBordersAsync(bool value)
         {
             showMeshBorders = value;
+            if (showMeshBorders)
+                showMeshEdges = false;
             await SynchronizeMeshDisplayLinesAsync();
         }
 
@@ -1900,7 +1913,7 @@ namespace BugViewer
         /// <param name="scale">The billboard half-height in world-space units.</param>
         /// <returns></returns>
         public async Task AddTextBillboardAsync(string id, string text, Vector3 position,
-            ColorRgba backgroundColor, ColorRgba textColor, float scale = 0.5f)
+            ColorRgba backgroundColor, ColorRgba textColor, float scale, float relativeX, float relativeY)
         {
             var index = -1;
             var nameInSent = sentBBIds?.TryGetValue(id, out index);
@@ -1916,7 +1929,9 @@ namespace BugViewer
                 Text = text,
                 Vertices = new List<Vector3> { position },
                 Id = id,
-                Scale = scale
+                Scale = scale,
+                RelativeX = relativeX,
+                RelativeY = relativeY
             };
             billBoards.Add(billboardData);
             if (_module is null || !_ready)

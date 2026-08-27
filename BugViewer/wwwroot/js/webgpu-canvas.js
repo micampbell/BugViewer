@@ -248,14 +248,15 @@ const BILLBOARD_SHADER = `
     @location(0) pos: vec3f,
     @location(1) uv: vec2f,
     @location(2) aspectRatio: f32,
-    @location(3) scale: f32
+    @location(3) scale: f32,
+    @location(4) relativeAnchor: vec2f
   }
   struct VertexOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
   @vertex fn vertexMain(in: VertexIn) -> VertexOut {
     var out: VertexOut;
     let offset = vec3f(
-      (in.uv.x - 0.5) * 2.0 * in.scale * in.aspectRatio,
-      (in.uv.y - 0.5) * 2.0 * in.scale,
+      (in.uv.x - in.relativeAnchor.x) * 2.0 * in.scale * in.aspectRatio,
+      (in.uv.y - in.relativeAnchor.y) * 2.0 * in.scale,
       0.0);
     let right = vec3f(camera.view[0][0], camera.view[1][0], camera.view[2][0]);
     let up = vec3f(camera.view[0][1], camera.view[1][1], camera.view[2][1]);
@@ -1473,7 +1474,9 @@ export function clearAllLines() {
 }
 
 export async function addTextBillboard(billboardData) {
-    const { id, text, position, backgroundColor, textColor, scale = 0.5 } = billboardData;
+    const { id, text, position, backgroundColor, textColor, scale = 0.5, relativeX = 0.5, relativeY = 0.5 } = billboardData;
+    const anchorX = Math.min(1, Math.max(0, relativeX));
+    const anchorY = Math.min(1, Math.max(0, relativeY));
 
     // Create a canvas to render the text
     const canvas = document.createElement('canvas');
@@ -1514,10 +1517,10 @@ export async function addTextBillboard(billboardData) {
 
     // Create billboard geometry
     const vertices = new Float32Array([
-        position[0], position[1], position[2], 0, 1, aspectRatio, scale,
-        position[0], position[1], position[2], 1, 1, aspectRatio, scale,
-        position[0], position[1], position[2], 0, 0, aspectRatio, scale,
-        position[0], position[1], position[2], 1, 0, aspectRatio, scale,
+        position[0], position[1], position[2], 0, 1, aspectRatio, scale, anchorX, anchorY,
+        position[0], position[1], position[2], 1, 1, aspectRatio, scale, anchorX, anchorY,
+        position[0], position[1], position[2], 0, 0, aspectRatio, scale, anchorX, anchorY,
+        position[0], position[1], position[2], 1, 0, aspectRatio, scale, anchorX, anchorY,
     ]);
 
     const vertexBuffer = createBuffer(vertices, GPUBufferUsage.VERTEX);
@@ -1553,12 +1556,13 @@ export async function addTextBillboard(billboardData) {
             module: shaderModule,
             entryPoint: 'vertexMain',
             buffers: [{
-                arrayStride: 28,
+                arrayStride: 36,
                 attributes: [
                     { shaderLocation: 0, offset: 0, format: 'float32x3' },
                     { shaderLocation: 1, offset: 12, format: 'float32x2' },
                     { shaderLocation: 2, offset: 20, format: 'float32' },
-                    { shaderLocation: 3, offset: 24, format: 'float32' }
+                    { shaderLocation: 3, offset: 24, format: 'float32' },
+                    { shaderLocation: 4, offset: 28, format: 'float32x2' }
                 ]
             }]
         },

@@ -20,61 +20,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    /// <summary>DefaultLight configuration with sensible values for a basic grid.</summary>
-    public static BugViewerOptions DefaultLight = new()
-    {
-        LightPolarAngle = 0.13 * Math.PI,
-        LightAzimuthAngle = 0.33 * Math.PI,
-        DirectionalLightIntensity = 1.0,
-        AmbientLight = 0.22,
-        SpecularPower = 32.0,
-        HeadlampIntensity = 0.35,
-        HeadlampFocus = 1.0,
-        AutoResetCamera = UpdateTypes.SphereChange,
-        AutoCameraSphereBuffer = 0.2,
-        AutoUpdateGrid = UpdateTypes.SphereChange,
-        AutoGridBuffer = 8.0,
-        IsDarkTheme = false,
-        BackgroundGradientNegativePolarColor = new ColorRgba(132, 140, 155),
-        BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(242, 246, 255),
-        BackgroundGradientFirstIntermediatePolarAngle = -Math.PI / 6,
-        BackgroundGradientSecondIntermediatePolarColor = new ColorRgba(200, 205, 255),
-        BackgroundGradientSecondIntermediatePolarAngle = Math.PI / 6,
-        BackgroundGradientPositivePolarColor = ColorRgba.White,
-        LineColor = new ColorRgba(210, 210, 210),
-        LineTransparency = 0.8f,
-        BaseColor = new ColorRgba(0, 0, 0),
-        BaseTransparency = 0f,
-        DoubleClickIsSelect = true,
-        LineWidthX = 0.1,
-        LineWidthY = 0.1,
-        PathThicknessFactor = 0.005f,
-        SampleCount = 4,
-        IsProjectionCamera = true,
-        Fov = 20,
-        OrthoSize = 5.0,
-        ZNear = 0.001,
-        ZFar = 999,
-        ZIsUp = true,
-        GridSize = 100.0,
-        GridSpacing = 5.0,
-        ConstrainPolar = true,
-        MaxPolar = Math.PI * 0.49,
-        MinPolar = -Math.PI * 0.49,
-        ConstrainAzimuth = false,
-        MaxAzimuth = 0,
-        MinAzimuth = 0,
-        MaxDistance = 9999.0,
-        MinDistance = 0.5,
-        ConstrainDistance = true,
-        OrbitSensitivity = 0.01,
-        ZoomSensitivity = 0.005,
-        PanSensitivity = 0.005,
-        PanSpeedMultiplier = 3.0,
-        CoordinateThickness = 1
-    };
-    /// <summary>DefaultLight configuration with sensible values for a basic grid.</summary>
-    public static BugViewerOptions DefaultDark = new()
+    /// <summary>Default configuration with sensible values for a basic grid.</summary>
+    public static BugViewerOptions Default = new()
     {
         LightPolarAngle = 0.4,
         LightAzimuthAngle = 0,
@@ -87,7 +34,6 @@ public class BugViewerOptions : INotifyPropertyChanged
         AutoCameraSphereBuffer = 0.2,
         AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 8.0,
-        IsDarkTheme = true,
         BackgroundGradientNegativePolarColor = new ColorRgba(255, 255, 255),
         BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(251, 233, 213),
         BackgroundGradientFirstIntermediatePolarAngle = 0.2,
@@ -133,20 +79,12 @@ public class BugViewerOptions : INotifyPropertyChanged
     /// </summary>
     public bool AutoResetOnThemeChange { get; set; } = false;
 
-    public void ResetToDefault(bool isDarkTheme)
-    {
-        if (isDarkTheme)
-            Set(DefaultDark);
-        else Set(DefaultLight);
-    }
-
     private void Set(BugViewerOptions newOptions)
     {
         AutoResetCamera = newOptions.AutoResetCamera;
         AutoUpdateGrid = newOptions.AutoUpdateGrid;
         AutoCameraSphereBuffer = newOptions.AutoCameraSphereBuffer;
         AutoGridBuffer = newOptions.AutoGridBuffer;
-        IsDarkTheme = newOptions.IsDarkTheme;
         BackgroundGradientNegativePolarColor = newOptions.BackgroundGradientNegativePolarColor;
         BackgroundGradientFirstIntermediatePolarColor = newOptions.BackgroundGradientFirstIntermediatePolarColor;
         BackgroundGradientFirstIntermediatePolarAngle = newOptions.BackgroundGradientFirstIntermediatePolarAngle;
@@ -234,23 +172,6 @@ public class BugViewerOptions : INotifyPropertyChanged
             if (ChangeOccurred(_autoGridBuffer, value))
             {
                 _autoGridBuffer = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    private bool _isDarkTheme = true;       
-    /// <summary>
-    /// Gets or sets a value indicating whether the application is using a light theme.
-    /// </summary>
-    public bool IsDarkTheme
-    {
-        get => _isDarkTheme;
-        set
-        {
-            if (_isDarkTheme != value)
-            {
-                _isDarkTheme = value;
                 OnPropertyChanged();
             }
         }
