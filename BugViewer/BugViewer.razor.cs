@@ -58,8 +58,6 @@ namespace BugViewer
         // Element references for container and canvas.
         private ElementReference? _containerRef;
         private ElementReference? _canvasRef;
-        // Viewer options.
-        private BugViewerOptions _options;
 
         /// <summary>
         /// Component parameter for display options. Setting this will 
@@ -68,7 +66,12 @@ namespace BugViewer
         [Parameter]
         public BugViewerOptions Options
         {
-            get => _options;
+            get
+            {
+                if (_options is null)
+                    _options = BugViewerOptions.Default;
+                return _options;
+            }
             set
             {
                 if (!ReferenceEquals(_options, value))
@@ -78,6 +81,7 @@ namespace BugViewer
                 }
             }
         }
+        private BugViewerOptions _options;
 
         #region Options Parameter Proxies
         // These parameters allow setting BugViewerOptions properties directly on the component.
@@ -417,6 +421,9 @@ namespace BugViewer
         // Bounding sphere for the scene.
         private Sphere BoundingSphere;
 
+        /// <summary>
+        /// Gets the thickness of paths in the scene, calculated as a factor of the bounding sphere radius.
+        /// </summary>
         public float PathThickness => Math.Max(1e-6f, Options.PathThicknessFactor * SphereRadius);
 
         /// <summary>

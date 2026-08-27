@@ -131,6 +131,9 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
     private UpdateTypes _autoResetCamera;
+    /// <summary>
+    /// When true, changing the bounding sphere will automatically reset the camera to view the new sphere.
+    /// </summary>
     public UpdateTypes AutoResetCamera
     {
         get => _autoResetCamera;
@@ -145,6 +148,9 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
     private UpdateTypes _autoUpdateGrid;
+    /// <summary>
+    /// When true, the grid will be automatically updated when the bounding sphere changes.
+    /// </summary>
     public UpdateTypes AutoUpdateGrid
     {
         get => _autoUpdateGrid;
@@ -287,6 +293,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
     private double _lineTransparency = 1.0;
+    /// <summary>Transparency of grid lines (0.0 to 1.0).</summary>
     public double LineTransparency
     {
         get => _lineTransparency;
@@ -316,6 +323,7 @@ public class BugViewerOptions : INotifyPropertyChanged
 
 
     private double _baseTransparency = 1.0;
+    /// <summary>Transparency of the base grid (0.0 to 1.0).</summary>
     public double BaseTransparency
     {
         get => _baseTransparency;
@@ -585,6 +593,9 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
     private bool _zIsUp;
+    /// <summary>
+    /// When true, the Z axis is considered the "up" direction; when false, the Y axis is "up".
+    /// </summary>
     public bool ZIsUp
     {
         get => _zIsUp;

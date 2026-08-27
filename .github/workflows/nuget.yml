@@ -14,6 +14,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Update NuGet packages
+    permissions:
+      contents: read
+      id-token: write
     steps:
 
       - name: Checkout repository
@@ -33,15 +36,19 @@ jobs:
       - name: List packages
         run: ls -la ./packages || true
 
+      - name: NuGet login (OIDC)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Push packages to registry
         if: success() && (github.event_name == 'workflow_dispatch' || github.event_name == 'release')
         run: |
-          set -e
+          set -euo pipefail
           if ls ./packages/*.nupkg 1> /dev/null 2>&1; then
             echo "Pushing packages..."
-            dotnet nuget push "./packages/*.nupkg" -k $NUGET_API_KEY -s https://api.nuget.org/v3/index.json --skip-duplicate
+            dotnet nuget push "./packages/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
           else
             echo "No packages found to push"
           fi
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
