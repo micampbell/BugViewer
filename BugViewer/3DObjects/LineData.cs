@@ -8,6 +8,12 @@ namespace BugViewer;
 public record LineData : AbstractObject3D
 {
     /// <summary>
+    /// Indicates that a segment should use the viewer's path thickness after the scene bounds
+    /// have been established. Zero remains reserved for segments that should not be rendered.
+    /// </summary>
+    public const float AutomaticThickness = -1f;
+
+    /// <summary>
     /// Gets the collection of thickness values to be used for the operation.
     /// </summary>
     public required IEnumerable<float> Thicknesses { get; init; }
@@ -23,11 +29,30 @@ public record LineData : AbstractObject3D
 
     internal override object CreateJavascriptData()
     {
+        if (Thicknesses.Any(thickness => thickness < 0f))
+            throw new InvalidOperationException(
+                "Automatic line thickness must be resolved by BugViewer before creating JavaScript data.");
+
+        return CreateJavascriptDataCore(Thicknesses);
+    }
+
+    internal object CreateJavascriptData(float automaticThickness)
+    {
+        if (!float.IsFinite(automaticThickness) || automaticThickness <= 0f)
+            throw new ArgumentOutOfRangeException(nameof(automaticThickness),
+                "Automatic line thickness must be finite and greater than zero.");
+
+        return CreateJavascriptDataCore(
+            Thicknesses.Select(thickness => thickness < 0f ? automaticThickness : thickness));
+    }
+
+    private object CreateJavascriptDataCore(IEnumerable<float> thicknesses)
+    {
         // Generate stadium geometry in C# instead of JavaScript
         var (positions, colors, thickness, uvs, endPositions, fades, indices) = 
             GenerateStadiumGeometry(
                 Vertices, 
-                Thicknesses, 
+                thicknesses,
                 Colors, 
                 FadeFactors);
 

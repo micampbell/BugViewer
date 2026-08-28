@@ -72,6 +72,17 @@ public class BugViewerOptions : INotifyPropertyChanged
         PanSpeedMultiplier = 3.0,
         CoordinateThickness = 1
     };
+
+    /// <summary>
+    /// Creates an independent copy of these options for a single viewer instance.
+    /// </summary>
+    public BugViewerOptions Clone()
+    {
+        var clone = new BugViewerOptions();
+        clone.Set(this);
+        clone.AutoResetOnThemeChange = AutoResetOnThemeChange;
+        return clone;
+    }
     
     /// <summary>
     /// When true, changing IsDarkTheme will automatically reset all options to the default theme.

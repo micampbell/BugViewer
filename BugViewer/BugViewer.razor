@@ -109,10 +109,10 @@
                         <FluentAccordion>
                             <FluentAccordionItem Heading="Display">
                                 <FluentStack Orientation="Orientation.Vertical">
-                                    <FluentCheckbox Value="@showAxes" ValueChanged="SetShowAxesAsync" Label="Show Axes" />
-                                    <FluentCheckbox Value="@showMeshFaces" ValueChanged="SetShowMeshFacesAsync" Label="Show Faces" />
-                                    <FluentCheckbox Value="@showMeshEdges" ValueChanged="SetShowMeshEdgesAsync" Label="Show Edges" />
-                                    <FluentCheckbox Value="@showMeshBorders" ValueChanged="SetShowMeshBordersAsync" Label="Show Borders" />
+                                    <FluentCheckbox Value="@showAxes" ValueChanged="SetShowAxesAsync" Label="Show Axes (X)" />
+                                    <FluentCheckbox Value="@showMeshFaces" ValueChanged="SetShowMeshFacesAsync" Label="Show Faces (Z)" />
+                                    <FluentCheckbox Value="@showMeshEdges" ValueChanged="SetShowMeshEdgesAsync" Label="Show Edges (M)" />
+                                    <FluentCheckbox Value="@showMeshBorders" ValueChanged="SetShowMeshBordersAsync" Label="Show Borders (T)" />
                                     <FluentNumberField TValue="float" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor" />
                                 </FluentStack>
                             </FluentAccordionItem>

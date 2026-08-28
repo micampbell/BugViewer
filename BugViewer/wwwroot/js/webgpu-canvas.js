@@ -7,6 +7,14 @@
 
 const FRAME_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * 36; // projection + view matrices + camera position
 
+let gpuOperation = Promise.resolve();
+
+function enqueueGpuOperation(operation) {
+    const next = gpuOperation.then(operation);
+    gpuOperation = next.catch(() => { });
+    return next;
+}
+
 // WGSL Shaders (moved to top for clarity)
 const GRID_SHADER = `
   fn PristineGrid(uv: vec2f, lineWidth: vec2f) -> f32 {
@@ -1429,9 +1437,11 @@ export async function addLines(lineData) {
 }
 
 export async function addLinesBatch(lineDataArray) {
-    for (const lineData of lineDataArray) {
-        await addLines(lineData);
-    }
+    return enqueueGpuOperation(async () => {
+        for (const lineData of lineDataArray) {
+            await addLines(lineData);
+        }
+    });
 }
 
 export function removeLines(lineId) {
@@ -1682,24 +1692,26 @@ export function getBoundingClientRect(element) {
 // ============================================================================
 
 export function disposeWebGPU_Canvas() {
-    if (frameIntervalId) {
-        clearInterval(frameIntervalId);
-        frameIntervalId = 0;
-    }
+    return enqueueGpuOperation(() => {
+        if (frameIntervalId) {
+            clearInterval(frameIntervalId);
+            frameIntervalId = 0;
+        }
 
-    // Clean up all GPU resources
-    clearAllMeshes();
-    clearAllLines();
-    clearAllTextBillboards();
+        // Clean up all GPU resources
+        clearAllMeshes();
+        clearAllLines();
+        clearAllTextBillboards();
 
-    gridVertexBuffer?.destroy();
-    gridIndexBuffer?.destroy();
-    gridUniformBuffer?.destroy();
-    backgroundGradientUniformBuffer?.destroy();
-    frameUniformBuffer?.destroy();
-    msaaColorTexture?.destroy();
-    depthTexture?.destroy();
+        gridVertexBuffer?.destroy();
+        gridIndexBuffer?.destroy();
+        gridUniformBuffer?.destroy();
+        backgroundGradientUniformBuffer?.destroy();
+        frameUniformBuffer?.destroy();
+        msaaColorTexture?.destroy();
+        depthTexture?.destroy();
 
-    device = null;
-    dotNetRef = null;
+        device = null;
+        dotNetRef = null;
+    });
 }

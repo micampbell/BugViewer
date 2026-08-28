@@ -69,13 +69,18 @@ namespace BugViewer
             get
             {
                 if (_options is null)
-                    _options = BugViewerOptions.Default;
+                {
+                    _options = BugViewerOptions.Default.Clone();
+                    _options.PropertyChanged += OnOptionsChanged;
+                }
                 return _options;
             }
             set
             {
                 if (!ReferenceEquals(_options, value))
                 {
+                    if (_options is not null)
+                        _options.PropertyChanged -= OnOptionsChanged;
                     _options = value;
                     _options.PropertyChanged += OnOptionsChanged;
                 }
@@ -398,6 +403,8 @@ namespace BugViewer
         // JS interop objects.
         private IJSObjectReference? _module;
         private DotNetObjectReference<BugViewer>? _dotNetRef;
+        private readonly SemaphoreSlim _webGpuInteropGate = new(1, 1);
+        private bool _disposed;
         // State flags.
         private bool _ready;
         private string? _error;
@@ -816,11 +823,11 @@ namespace BugViewer
                     await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
                 }
             }
-        else if (!_isPanning)
-        {
-            _lastPointerX = e.ClientX;
-            _lastPointerY = e.ClientY;
-        }
+            else if (!_isPanning)
+            {
+                _lastPointerX = e.ClientX;
+                _lastPointerY = e.ClientY;
+            }
 
             if (!_isDragging && !_isPanning && HasPressedHoverSelectionKey())
             {
@@ -1049,7 +1056,7 @@ namespace BugViewer
                     {
                         var linesData = lines[i];
                         sentLineIds.Add(linesData.Id, i);
-                        await _module.InvokeVoidAsync("addLines", linesData.CreateJavascriptData());
+                        await _module.InvokeVoidAsync("addLines", linesData.CreateJavascriptData(PathThickness));
                     }
 
                     sentBBIds = new Dictionary<string, int>();
@@ -1133,26 +1140,40 @@ namespace BugViewer
             //Camera = new OrbitCamera(Camera.Target, Options);
             _keyboardMoveTimer?.Dispose();
             Options.PropertyChanged -= OnOptionsChanged;
+            _disposed = true;
+            _ready = false;
 
-            if (_module != null)
+            var module = _module;
+            _module = null;
+
+            await _webGpuInteropGate.WaitAsync();
+            try
             {
-                try
+                if (module is not null)
                 {
-                    await _module.InvokeVoidAsync("disposeWebGPU_Canvas");
-                }
-                catch
-                {
-                    // Handle error silently
-                }
+                    try
+                    {
+                        await module.InvokeVoidAsync("disposeWebGPU_Canvas");
+                    }
+                    catch
+                    {
+                        // Handle error silently
+                    }
 
-                try
-                {
-                    await _module.DisposeAsync();
+                    try
+                    {
+                        await module.DisposeAsync();
+                    }
+                    catch
+                    {
+                        // Handle error silently
+                    }
                 }
-                catch
-                {
-                    // Handle error silently
-                }
+            }
+            finally
+            {
+                _webGpuInteropGate.Release();
+                _webGpuInteropGate.Dispose();
             }
 
             _dotNetRef?.Dispose();
@@ -1206,7 +1227,7 @@ namespace BugViewer
             if (e?.PropertyName == nameof(Options.ZIsUp))
             {
                 Camera.SwapCameraUp();
-            await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
+                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
             }
 
             if (e?.PropertyName == nameof(Options.IsProjectionCamera))
@@ -1316,6 +1337,7 @@ namespace BugViewer
                 await RemoveMeshAsync(index);
             }
             meshes.Add(mesh);
+            var sphereChanged = UpdateSpheresAdd(mesh);
             // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
             if (_module is null || !_ready)
             {
@@ -1323,7 +1345,7 @@ namespace BugViewer
                 return;
             }
 
-            UpdateViewer(UpdateSpheresAdd(mesh));
+            UpdateViewer(sphereChanged);
             DefineMeshLookups(mesh);
             await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
             sentMeshIds[mesh.Id] = meshes.Count - 1;
@@ -1425,6 +1447,7 @@ namespace BugViewer
             }
 
             lines.Add(path);
+            var sphereChanged = UpdateSpheresAdd(path);
 
             // If module not ready yet, queue the line. It will be sent from OnWebGpuReady.
             if (_module is null || !_ready)
@@ -1432,14 +1455,14 @@ namespace BugViewer
                 return;
             }
 
-            UpdateViewer(UpdateSpheresAdd(path));
+            UpdateViewer(sphereChanged);
 
             // Ensure sentLineIds exists (defensive)
             sentLineIds ??= new Dictionary<string, int>();
 
             try
             {
-                await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData());
+                await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData(PathThickness));
                 sentLineIds[path.Id] = lines.Count - 1;
             }
             catch (JSException jsEx)
@@ -1486,8 +1509,34 @@ namespace BugViewer
             UpdateViewer(sphereChanged);
             sentLineIds ??= new Dictionary<string, int>();
             ReindexSentLines();
-            await _module.InvokeVoidAsync("addLinesBatch",
-                (object)linesToSend.Select(line => line.CreateJavascriptData()).ToArray());
+            // Every line in this batch has now contributed its vertices to BoundingSphere.
+            // Resolve automatic thickness once from those complete scene bounds.
+            var automaticThickness = PathThickness;
+            var module = _module;
+            if (module is null || _disposed)
+                return;
+
+            await _webGpuInteropGate.WaitAsync();
+            try
+            {
+                if (_disposed || !_ready || !ReferenceEquals(module, _module))
+                    return;
+
+                await module.InvokeVoidAsync("addLinesBatch",
+                    (object)linesToSend.Select(line => line.CreateJavascriptData(automaticThickness)).ToArray());
+            }
+            catch (JSException jsEx)
+            {
+                Console.Error.WriteLine($"AddLinesAsync: JSException adding batch of {linesToSend.Count} lines: {jsEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"AddLinesAsync: Exception adding batch of {linesToSend.Count} lines: {ex.Message}");
+            }
+            finally
+            {
+                _webGpuInteropGate.Release();
+            }
         }
 
         /// <summary>Suspends WebGPU drawing until <see cref="ResumeRenderingAsync"/> is called.</summary>
@@ -1560,26 +1609,42 @@ namespace BugViewer
             foreach (var mesh in meshes)
             {
                 if (showMeshEdges)
-                    desired.Add($"__mesh-edges-{mesh.Id}", CreateMeshDisplayLines(mesh, false));
+                {
+                    var lineData = CreateMeshDisplayLines(mesh, false);
+                    if (lineData is not null)
+                        desired.Add($"__mesh-edges-{mesh.Id}", lineData);
+                }
                 if (showMeshBorders)
-                    desired.Add($"__mesh-borders-{mesh.Id}", CreateMeshDisplayLines(mesh, true));
+                {
+                    var lineData = CreateMeshDisplayLines(mesh, true);
+                    if (lineData is not null)
+                        desired.Add($"__mesh-borders-{mesh.Id}", lineData);
+                }
             }
 
             var linesToRemove = meshDisplayLines.Values
                 .Where(line => !desired.ContainsKey(line.Id)).ToList();
             var linesToAdd = desired.Values
                 .Where(line => !meshDisplayLines.ContainsKey(line.Id)).ToList();
-            if (linesToRemove.Count > 0)
-                await RemoveLinesAsync(linesToRemove);
-            if (linesToAdd.Count > 0)
-                await AddLinesAsync(linesToAdd);
+            await PauseRenderingAsync();
+            try
+            {
+                if (linesToRemove.Count > 0)
+                    await RemoveLinesAsync(linesToRemove);
+                if (linesToAdd.Count > 0)
+                    await AddLinesAsync(linesToAdd);
 
-            meshDisplayLines.Clear();
-            foreach (var line in desired)
-                meshDisplayLines.Add(line.Key, line.Value);
+                meshDisplayLines.Clear();
+                foreach (var line in desired)
+                    meshDisplayLines.Add(line.Key, line.Value);
+            }
+            finally
+            {
+                await ResumeRenderingAsync();
+            }
         }
 
-        private LineData CreateMeshDisplayLines(MeshData mesh, bool bordersOnly)
+        private LineData? CreateMeshDisplayLines(MeshData mesh, bool bordersOnly)
         {
             var edgeCounts = new Dictionary<(int first, int second), int>();
             foreach (var (a, b, c) in mesh.Indices)
@@ -1593,6 +1658,8 @@ namespace BugViewer
             // Open and non-manifold edges are both borders.
             var edges = edgeCounts.Where(pair => !bordersOnly || pair.Value != 2)
                 .Select(pair => pair.Key).ToList();
+            if (edges.Count == 0)
+                return null;
             var vertices = new List<Vector3>(edges.Count * 2);
             foreach (var (first, second) in edges)
             {
@@ -1859,7 +1926,7 @@ namespace BugViewer
                     {
                         var m = lines[i];
                         sentLineIds.Add(m.Id, i);
-                        await _module.InvokeVoidAsync("addLines", m.CreateJavascriptData());
+                        await _module.InvokeVoidAsync("addLines", m.CreateJavascriptData(PathThickness));
                     }
                 }
                 catch
