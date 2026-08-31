@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using System.ComponentModel;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -23,54 +24,58 @@ public class BugViewerOptions : INotifyPropertyChanged
     /// <summary>Default configuration with sensible values for a basic grid.</summary>
     public static BugViewerOptions Default = new()
     {
-        LightPolarAngle = 0.4,
-        LightAzimuthAngle = 0,
-        DirectionalLightIntensity = 1.0,
-        AmbientLight = 0.22,
-        SpecularPower = 39.25,
-        HeadlampIntensity = 0.8,
-        HeadlampFocus = 25,
-        AutoResetCamera = UpdateTypes.SphereChange,
+        AmbientLight = 0.35,
         AutoCameraSphereBuffer = 0.2,
-        AutoUpdateGrid = UpdateTypes.SphereChange,
         AutoGridBuffer = 8.0,
-        BackgroundGradientNegativePolarColor = new ColorRgba(255, 255, 255),
-        BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(251, 233, 213),
-        BackgroundGradientFirstIntermediatePolarAngle = 0.2,
-        BackgroundGradientSecondIntermediatePolarColor = new ColorRgba(200, 205, 255),
-        BackgroundGradientSecondIntermediatePolarAngle = 0.8,
-        BackgroundGradientPositivePolarColor = new ColorRgba(173, 173, 173),
-        LineColor = new ColorRgba(210, 210, 210),
-        LineTransparency = 0.8f,
+        AutoResetCamera = UpdateTypes.SphereChange,
+        AutoUpdateGrid = UpdateTypes.SphereChange,
+        BackgroundGradientFirstIntermediatePolarAngle = -0.2,
+        BackgroundGradientFirstIntermediatePolarColor = new ColorRgba(254, 236, 215),
+        BackgroundGradientNegativePolarColor = new ColorRgba(88, 88, 88),
+        BackgroundGradientPositivePolarColor = new ColorRgba(255, 255, 255),
+        BackgroundGradientSecondIntermediatePolarAngle = 0.05,
+        BackgroundGradientSecondIntermediatePolarColor = new ColorRgba(219, 222, 255),
         BaseColor = new ColorRgba(0, 0, 0),
         BaseTransparency = 0f,
+        ConstrainAzimuth = false,
+        ConstrainDistance = true,
+        ConstrainPolar = true,
+        CoordinateThickness = 1,
+        DirectionalLightIntensity = 0.45,
         DoubleClickIsSelect = true,
-        LineWidthX = 0.1,
-        LineWidthY = 0.1,
-        PathThicknessFactor = 0.005f,
-        SampleCount = 4,
-        IsProjectionCamera = true,
         Fov = 20,
-        OrthoSize = 5.0,
-        ZNear = 0.001,
-        ZFar = 1200,
-        ZIsUp = true,
         GridSize = 100.0,
         GridSpacing = 5.0,
-        ConstrainPolar = true,
-        MaxPolar = Math.PI * 0.49,
-        MinPolar = -Math.PI * 0.49,
-        ConstrainAzimuth = false,
+        HeadlampFocus = 9,
+        HeadlampIntensity = 0.95,
+        IsProjectionCamera = true,
+        LightAzimuthAngle = 0,
+        LightPolarAngle = 0.4,
+        LineColor = new ColorRgba(210, 210, 210),
+        LineTransparency = 0.8,
+        LineWidthX = 0.1,
+        LineWidthY = 0.1,
         MaxAzimuth = 0,
-        MinAzimuth = 0,
         MaxDistance = 9999.0,
+        MaxPolar = Math.PI * 0.49,
+        MinAzimuth = 0,
         MinDistance = 0.5,
-        ConstrainDistance = true,
+        MinPolar = -Math.PI * 0.49,
         OrbitSensitivity = 0.01,
-        ZoomSensitivity = 0.005,
-        PanSensitivity = 0.005,
+        OrthoSize = 5.0,
+        PanSensitivity = 0.003,
         PanSpeedMultiplier = 3.0,
-        CoordinateThickness = 1
+        PathThicknessFactor = 0.003f,
+        SampleCount = 4,
+        ShowAxes = true,
+        ShowMeshBorders = true,
+        ShowMeshEdges = false,
+        ShowSurfacesAs = MeshFaceDisplay.Surfaces,
+        SpecularPower = 17,
+        ZFar = 1075,
+        ZIsUp = true,
+        ZNear = 0.02,
+        ZoomSensitivity = 0.005,
     };
 
     /// <summary>
@@ -80,16 +85,9 @@ public class BugViewerOptions : INotifyPropertyChanged
     {
         var clone = new BugViewerOptions();
         clone.Set(this);
-        clone.AutoResetOnThemeChange = AutoResetOnThemeChange;
         return clone;
     }
     
-    /// <summary>
-    /// When true, changing IsDarkTheme will automatically reset all options to the default theme.
-    /// When false, IsDarkTheme is just a flag and doesn't trigger resets.
-    /// </summary>
-    public bool AutoResetOnThemeChange { get; set; } = false;
-
     private void Set(BugViewerOptions newOptions)
     {
         AutoResetCamera = newOptions.AutoResetCamera;
@@ -109,6 +107,10 @@ public class BugViewerOptions : INotifyPropertyChanged
         LineWidthX = newOptions.LineWidthX;
         LineWidthY = newOptions.LineWidthY;
         PathThicknessFactor = newOptions.PathThicknessFactor;
+        ShowAxes = newOptions.ShowAxes;
+        ShowMeshBorders = newOptions.ShowMeshBorders;
+        ShowMeshEdges = newOptions.ShowMeshEdges;
+        ShowSurfacesAs = newOptions.ShowSurfacesAs;
         SampleCount = newOptions.SampleCount;
         IsProjectionCamera = newOptions.IsProjectionCamera;
         Fov = newOptions.Fov;
@@ -646,11 +648,11 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
 
-    private float _pathThicknessFactor = 0.005f;
+    private double _pathThicknessFactor = 0.005f;
     /// <summary>The multiplying factor that defines the thickness of paths as a fraction of the
     /// encompassing sphere.
     /// </summary>
-    public float PathThicknessFactor
+    public double PathThicknessFactor
     {
         get => _pathThicknessFactor;
         set
@@ -658,6 +660,74 @@ public class BugViewerOptions : INotifyPropertyChanged
             if (ChangeOccurred(_pathThicknessFactor, value))
             {
                 _pathThicknessFactor = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private MeshFaceDisplay _showSurfacesAs = MeshFaceDisplay.Triangles;
+    /// <summary>
+    /// Specifies how mesh surfaces are displayed. Options include showing triangles, surfaces, or none.
+    /// </summary>
+    public MeshFaceDisplay ShowSurfacesAs
+    {
+        get => _showSurfacesAs;
+        set
+        {
+            if (_showSurfacesAs != value)
+            {
+                _showSurfacesAs = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Specifies whether mesh edges are displayed. When true, edges of the mesh will be visible.
+    /// </summary>
+    private bool _showMeshEdges = false;
+    public bool ShowMeshEdges
+    {
+        get => _showMeshEdges;
+        set
+        {
+            if (_showMeshEdges != value)
+            {
+                _showMeshEdges = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Specifies whether mesh borders are displayed. When true, borders of the mesh will be visible.
+    /// </summary>
+    private bool _showMeshBorders = true;
+    public bool ShowMeshBorders
+    {
+        get => _showMeshBorders;
+        set
+        {
+            if (_showMeshBorders != value)
+            {
+                _showMeshBorders = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Specifies whether axes are displayed in the viewer. When true, coordinate axes will be visible.
+    /// </summary>
+    private bool _showAxes = true;
+    public bool ShowAxes
+    {
+        get => _showAxes;
+        set
+        {
+            if (_showAxes != value)
+            {
+                _showAxes = value;
                 OnPropertyChanged();
             }
         }

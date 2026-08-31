@@ -15,6 +15,20 @@ function enqueueGpuOperation(operation) {
     return next;
 }
 
+function requireDevice(operation) {
+    if (!device) {
+        throw new Error(`WebGPU device is unavailable during ${operation}.`);
+    }
+    return device;
+}
+
+function notifyDotNet(method, ...args) {
+    const callback = dotNetRef?.invokeMethodAsync(method, ...args);
+    callback?.catch(error => {
+        if (!isDisposing) console.error(`BugViewer callback ${method} failed:`, error);
+    });
+}
+
 // WGSL Shaders (moved to top for clarity)
 const GRID_SHADER = `
   fn PristineGrid(uv: vec2f, lineWidth: vec2f) -> f32 {
@@ -77,10 +91,10 @@ const BACKGROUND_GRADIENT_SHADER = `
   }
 
   @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
-    // The center pixel represents the camera pitch. The top and bottom pixels
-    // represent the directions visible above and below it, producing a stable
-    // horizon-like cue instead of a single changing clear color.
-    let polarAngle = gradient.cameraPolarAngle + (in.uv.y - 0.5) * gradient.verticalSpan;
+    // OrbitCamera.PolarAngle describes the camera's position around the target,
+    // so the center viewing ray has the opposite polar angle. WebGPU screen UV
+    // increases toward the top, where the visible ray has the higher angle.
+    let polarAngle = -gradient.cameraPolarAngle + (in.uv.y - 0.5) * gradient.verticalSpan;
     var color: vec4f;
     if (polarAngle <= gradient.angles.x) {
       color = gradient.color0;
@@ -114,18 +128,26 @@ const MESH_SHADER = `
   struct MeshUniforms { color: vec4f }
   @group(1) @binding(1) var<uniform> meshUniforms: MeshUniforms;
 
-  struct VertexIn { @location(0) pos: vec3f }
-  struct VertexOut { @builtin(position) pos: vec4f, @location(0) worldPos: vec3f }
+  struct VertexIn { @location(0) pos: vec3f, @location(1) primitiveSurfaceNormal: vec3f }
+  struct VertexOut {
+    @builtin(position) pos: vec4f,
+    @location(0) worldPos: vec3f,
+    @location(1) primitiveSurfaceNormal: vec3f
+  }
 
   @vertex fn vertexMain(in: VertexIn) -> VertexOut {
     var out: VertexOut;
     out.pos = camera.projection * camera.view * vec4f(in.pos, 1.0);
     out.worldPos = in.pos;
+    out.primitiveSurfaceNormal = in.primitiveSurfaceNormal;
     return out;
   }
 
   @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
-    let normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
+    var normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
+    if (dot(in.primitiveSurfaceNormal, in.primitiveSurfaceNormal) > 1e-12) {
+      normal = normalize(in.primitiveSurfaceNormal);
+    }
     let lightDir = normalize(light.lightDir);
 
     let viewDir = normalize(camera.cameraPosition - in.worldPos);
@@ -163,22 +185,28 @@ const MESH_SHADER_VERTEX_COLOR = `
 
   struct VertexIn {
     @location(0) pos: vec3f,
-    @location(1) color: vec4f
+    @location(1) color: vec4f,
+    @location(2) primitiveSurfaceNormal: vec3f
   }
   struct VertexOut {
     @builtin(position) pos: vec4f,
     @location(0) worldPos: vec3f,
-    @location(1) @interpolate(flat) color: vec4f
+    @location(1) @interpolate(flat) color: vec4f,
+    @location(2) primitiveSurfaceNormal: vec3f
   }
   @vertex fn vertexMain(in: VertexIn) -> VertexOut {
     var out: VertexOut;
     out.pos = camera.projection * camera.view * vec4f(in.pos, 1.0);
     out.worldPos = in.pos;
     out.color = in.color;
+    out.primitiveSurfaceNormal = in.primitiveSurfaceNormal;
     return out;
   }
   @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
-    let normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
+    var normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
+    if (dot(in.primitiveSurfaceNormal, in.primitiveSurfaceNormal) > 1e-12) {
+      normal = normalize(in.primitiveSurfaceNormal);
+    }
     let lightDir = normalize(light.lightDir);
 
     let viewDir = normalize(camera.cameraPosition - in.worldPos);
@@ -247,6 +275,81 @@ const BILLBOARD_LINE_SHADER = `
   }
 `;
 
+// One instance represents one line segment. The vertex shader generates the
+// same body quad and six-triangle rounded caps previously expanded in C#.
+const INSTANCED_BILLBOARD_LINE_SHADER = `
+  struct Camera { projection: mat4x4f, view: mat4x4f, cameraPosition: vec3f }
+  @group(0) @binding(0) var<uniform> camera: Camera;
+  struct SegmentIn {
+    @location(0) startPos: vec3f,
+    @location(1) endPos: vec3f,
+    @location(2) color: vec4f,
+    @location(3) thickness: f32,
+    @location(4) fade: f32
+  }
+  struct VertexOut {
+    @builtin(position) clipPos: vec4f,
+    @location(0) color: vec4f,
+    @location(1) uvY: f32,
+    @location(2) fade: f32
+  }
+  fn stadiumUv(vertexIndex: u32) -> vec2f {
+    let bodyVertices = array<vec2f, 6>(
+      vec2f(0.0, -0.5), vec2f(0.0, 0.5), vec2f(1.0, -0.5),
+      vec2f(0.0, 0.5), vec2f(1.0, 0.5), vec2f(1.0, -0.5));
+    if (vertexIndex < 6u) {
+      return bodyVertices[vertexIndex];
+    }
+
+    let capVertex = vertexIndex - 6u;
+    let triangle = capVertex / 3u;
+    let corner = capVertex % 3u;
+    if (corner == 0u) {
+      return select(vec2f(0.0, 0.0), vec2f(1.0, 0.0), triangle >= 6u);
+    }
+
+    let angleStep = 0.5235987755982988; // PI / 6
+    let pointIndex = triangle % 6u + corner - 1u;
+    let startCap = triangle < 6u;
+    let angle = select(
+      -1.5707963267948966 + f32(pointIndex) * angleStep,
+       1.5707963267948966 + f32(pointIndex) * angleStep,
+      startCap);
+    let axial = select(1.0 + cos(angle) * 0.5, cos(angle) * 0.5, startCap);
+    return vec2f(axial, sin(angle) * 0.5);
+  }
+  @vertex fn vertexMain(@builtin(vertex_index) vertexIndex: u32, input: SegmentIn) -> VertexOut {
+    var out: VertexOut;
+    let uv = stadiumUv(vertexIndex);
+    let viewStart = camera.view * vec4f(input.startPos, 1.0);
+    let viewEnd = camera.view * vec4f(input.endPos, 1.0);
+    let rawDir = viewEnd.xy - viewStart.xy;
+    let rawLength = length(rawDir);
+    let viewDir = select(vec2f(1.0, 0.0), rawDir / rawLength, rawLength > 1e-6);
+    let perp = vec2f(-viewDir.y, viewDir.x);
+    let axial = clamp(uv.x, 0.0, 1.0);
+    let capOffset = uv.x - axial;
+    let interpPos = mix(viewStart, viewEnd, vec4f(axial));
+    let finalXY = interpPos.xy
+      + perp * (input.thickness * uv.y)
+      + viewDir * (input.thickness * capOffset);
+    out.clipPos = camera.projection * vec4f(finalXY, interpPos.z, interpPos.w);
+    out.color = input.color;
+    out.uvY = uv.y;
+    out.fade = input.fade;
+    return out;
+  }
+  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+    var alpha = in.color.a;
+    if (in.fade > 0.0) {
+      let dist = abs(in.uvY);
+      let t = clamp(1.0 - dist / (0.5 * in.fade), 0.0, 1.0);
+      alpha = alpha * t;
+    }
+    return vec4f(in.color.rgb, alpha);
+  }
+`;
+
 const BILLBOARD_SHADER = `
   struct Camera { projection: mat4x4f, view: mat4x4f, cameraPosition: vec3f }
   @group(0) @binding(0) var<uniform> camera: Camera;
@@ -288,6 +391,9 @@ let canvas = null;
 let context = null;
 let device = null;
 let dotNetRef = null;
+let resizeObserver = null;
+let renderFrameId = 0;
+let isDisposing = false;
 
 // Frame timing
 const frameMs = new Array(20);
@@ -303,6 +409,7 @@ const cameraPosition = new Float32Array(frameArrayBuffer, 32 * Float32Array.BYTE
 let frameUniformBuffer = null;
 let frameBindGroupLayout = null;
 let frameBindGroup = null;
+let instancedLinePipeline = null;
 
 // Background-gradient resources. Colors are packed as four vec4f values,
 // followed by four polar-angle stops and the current camera/view span.
@@ -395,12 +502,20 @@ function updateBackgroundGradientUniforms() {
 const meshes = [];
 const lines = [];
 const textBillboards = [];
+let meshFacesVisible = true;
+let usePrimitiveSurfaceNormals = false;
 
 // ============================================================================
 // Initialization
 // ============================================================================
 
-export async function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatrix, initialCameraPosition) {
+export function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatrix, initialCameraPosition) {
+    return enqueueGpuOperation(() => initGPUCanvasCore(dotnet, canvasEl, options,
+        initialViewMatrix, initialCameraPosition));
+}
+
+async function initGPUCanvasCore(dotnet, canvasEl, options, initialViewMatrix, initialCameraPosition) {
+    isDisposing = false;
     dotNetRef = dotnet;
     canvas = canvasEl;
     context = canvas.getContext('webgpu');
@@ -412,7 +527,7 @@ export async function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatri
     cameraPosition.set(initialCameraPosition);
 
     // Apply options
-    await updateDisplayOptions(options);
+    await updateDisplayOptionsCore(options);
 
     // Set up resize observer
     setupResizeObserver();
@@ -428,20 +543,45 @@ export async function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatri
 
         startRenderLoop();
         startFrameTimer();
-        dotNetRef.invokeMethodAsync('OnWebGpuReady');
+        notifyDotNet('OnWebGpuReady');
     } catch (error) {
-        dotNetRef.invokeMethodAsync('OnWebGpuError', error.message);
+        notifyDotNet('OnWebGpuError', error.message);
         throw error;
     }
 }
 
 async function initWebGPU() {
+    if (!navigator.gpu)
+        throw new Error('WebGPU is not available in this browser.');
+
     const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter)
+        throw new Error('No compatible WebGPU adapter was found.');
+
     const requiredFeatures = [];
     if (adapter.features.has('texture-compression-bc')) requiredFeatures.push('texture-compression-bc');
     if (adapter.features.has('texture-compression-etc2')) requiredFeatures.push('texture-compression-etc2');
 
     device = await adapter.requestDevice({ requiredFeatures });
+    const initializedDevice = device;
+    initializedDevice.lost.then(info => {
+        if (isDisposing || device !== initializedDevice) return;
+        renderingPaused = true;
+        if (renderFrameId) {
+            cancelAnimationFrame(renderFrameId);
+            renderFrameId = 0;
+        }
+        if (frameIntervalId) {
+            clearInterval(frameIntervalId);
+            frameIntervalId = 0;
+        }
+        device = null;
+        const reason = info?.message || info?.reason || 'The WebGPU device was lost.';
+        notifyDotNet('OnWebGpuError', `WebGPU device lost: ${reason}`);
+    }).catch(error => {
+        if (!isDisposing)
+            notifyDotNet('OnWebGpuError', `WebGPU device-loss handler failed: ${error.message}`);
+    });
     context.configure({
         device,
         format: colorFormat,
@@ -494,7 +634,53 @@ async function initWebGPU() {
 
     await initBackgroundGradient();
     await initGrid();
+    await initInstancedLinePipeline();
     await initCoordinateAxes();
+}
+
+async function initInstancedLinePipeline() {
+    const module = device.createShaderModule({
+        label: 'Instanced Line Shader',
+        code: INSTANCED_BILLBOARD_LINE_SHADER
+    });
+
+    instancedLinePipeline = await device.createRenderPipelineAsync({
+        label: 'Instanced Line Pipeline',
+        layout: device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout] }),
+        vertex: {
+            module,
+            entryPoint: 'vertexMain',
+            buffers: [{
+                arrayStride: 48,
+                stepMode: 'instance',
+                attributes: [
+                    { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                    { shaderLocation: 1, offset: 12, format: 'float32x3' },
+                    { shaderLocation: 2, offset: 24, format: 'float32x4' },
+                    { shaderLocation: 3, offset: 40, format: 'float32' },
+                    { shaderLocation: 4, offset: 44, format: 'float32' }
+                ]
+            }]
+        },
+        fragment: {
+            module,
+            entryPoint: 'fragmentMain',
+            targets: [{
+                format: `${colorFormat}-srgb`,
+                blend: {
+                    color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+                    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+                }
+            }]
+        },
+        depthStencil: {
+            format: depthFormat,
+            depthWriteEnabled: false,
+            depthCompare: 'less-equal'
+        },
+        multisample: { count: sampleCount },
+        primitive: { topology: 'triangle-list', cullMode: 'none' }
+    });
 }
 
 async function initBackgroundGradient() {
@@ -764,8 +950,11 @@ let renderingPaused = false;
 
 function startRenderLoop() {
     function frameCallback() {
-        if (!device) return;
-        requestAnimationFrame(frameCallback);
+        if (!device || isDisposing) {
+            renderFrameId = 0;
+            return;
+        }
+        renderFrameId = requestAnimationFrame(frameCallback);
         if (renderingPaused) return;
         const frameStart = performance.now();
 
@@ -775,7 +964,8 @@ function startRenderLoop() {
         frameMs[frameMsIndex++ % frameMs.length] = performance.now() - frameStart;
     }
 
-    requestAnimationFrame(frameCallback);
+    if (renderFrameId) cancelAnimationFrame(renderFrameId);
+    renderFrameId = requestAnimationFrame(frameCallback);
 }
 
 function renderFrame() {
@@ -814,6 +1004,7 @@ function renderFrame() {
         if (!mesh.singleColor && mesh.colorBuffer) {
             pass.setVertexBuffer(1, mesh.colorBuffer);
         }
+        pass.setVertexBuffer(mesh.singleColor ? 1 : 2, mesh.primitiveSurfaceNormalBuffer);
         if (!mesh.singleColor) {
             pass.setBindGroup(1, lightBindGroup);
         }
@@ -886,6 +1077,8 @@ function renderFrame() {
                 if (mesh.singleColor && mesh.bindGroup) pass.setBindGroup(1, mesh.bindGroup);
                 pass.setVertexBuffer(0, mesh.vertexBuffer);
                 if (!mesh.singleColor && mesh.colorBuffer) pass.setVertexBuffer(1, mesh.colorBuffer);
+                pass.setVertexBuffer(mesh.singleColor ? 1 : 2, mesh.primitiveSurfaceNormalBuffer);
+                if (!mesh.singleColor) pass.setBindGroup(1, lightBindGroup);
                 pass.setIndexBuffer(mesh.indexBuffer, 'uint16');
                 pass.drawIndexed(mesh.indexCount);
             }
@@ -894,21 +1087,15 @@ function renderFrame() {
 
     // Add lines
     for (const line of lines) {
-        if (!line.pipeline || !line.posBuffer || !line.indexBuffer) continue;
+        if (!instancedLinePipeline || !line.instanceBuffer || line.instanceCount === 0) continue;
         const viewSpacePos = transformPoint(line.center, viewMatrix);
         transparentDrawables.push({
             depth: viewSpacePos[2],
             draw: () => {
-                pass.setPipeline(line.pipeline);
+                pass.setPipeline(instancedLinePipeline);
                 pass.setBindGroup(0, frameBindGroup);
-                pass.setVertexBuffer(0, line.posBuffer);
-                pass.setVertexBuffer(1, line.colorBuffer);
-                pass.setVertexBuffer(2, line.thicknessBuffer);
-                pass.setVertexBuffer(3, line.uvBuffer);
-                pass.setVertexBuffer(4, line.endPosBuffer);
-                pass.setVertexBuffer(5, line.fadeBuffer);
-                pass.setIndexBuffer(line.indexBuffer, 'uint16');
-                pass.drawIndexed(line.indexCount);
+                pass.setVertexBuffer(0, line.instanceBuffer);
+                pass.draw(42, line.instanceCount);
             }
         });
     }
@@ -967,7 +1154,8 @@ function getRenderPassDescriptor() {
 // ============================================================================
 
 function setupResizeObserver() {
-    const observer = new ResizeObserver((entries) => {
+    resizeObserver?.disconnect();
+    resizeObserver = new ResizeObserver((entries) => {
         for (let entry of entries) {
             if (entry.target !== canvas) continue;
 
@@ -986,20 +1174,19 @@ function setupResizeObserver() {
             }
 
             if (width === 0 || height === 0) return;
-
-            canvas.width = width;
-            canvas.height = height;
-
-            // Notify C# to recompute projection matrix
-            dotNetRef?.invokeMethodAsync('OnCanvasResized', width, height);
-
-            if (device) {
-                allocateRenderTargets(width, height);
-            }
+            enqueueGpuOperation(() => {
+                if (isDisposing || !canvas) return;
+                canvas.width = width;
+                canvas.height = height;
+                notifyDotNet('OnCanvasResized', width, height);
+                if (device) allocateRenderTargets(width, height);
+            }).catch(error => {
+                if (!isDisposing) notifyDotNet('OnWebGpuError', `WebGPU resize failed: ${error.message}`);
+            });
         }
     });
 
-    observer.observe(canvas);
+    resizeObserver.observe(canvas);
 }
 
 function allocateRenderTargets(width, height) {
@@ -1047,6 +1234,10 @@ function allocateRenderTargets(width, height) {
 // ============================================================================
 
 export function writeViewMatrix(matrixArray, polarAngle, cameraPositionArray) {
+    return enqueueGpuOperation(() => writeViewMatrixCore(matrixArray, polarAngle, cameraPositionArray));
+}
+
+function writeViewMatrixCore(matrixArray, polarAngle, cameraPositionArray) {
     viewMatrix.set(matrixArray);
     cameraPosition.set(cameraPositionArray);
     if (typeof polarAngle === 'number') {
@@ -1056,10 +1247,18 @@ export function writeViewMatrix(matrixArray, polarAngle, cameraPositionArray) {
 }
 
 export function writeProjectionMatrix(matrixArray) {
+    return enqueueGpuOperation(() => writeProjectionMatrixCore(matrixArray));
+}
+
+function writeProjectionMatrixCore(matrixArray) {
     projectionMatrix.set(matrixArray);
 }
 
-export async function updateDisplayOptions(options) {
+export function updateDisplayOptions(options) {
+    return enqueueGpuOperation(() => updateDisplayOptionsCore(options));
+}
+
+async function updateDisplayOptionsCore(options) {
     let gridChanged = false;
     let needsGridPipelineRecreation = false;
     if (zIsUp !== options.zIsUp) {
@@ -1178,11 +1377,24 @@ export async function updateDisplayOptions(options) {
 // Scene Management (Mesh, Lines, Billboards)
 // ============================================================================
 
-export async function addMesh(meshData) {
-    const { id, vertices, indices, colors, singleColor } = meshData;
+export function addMesh(meshData) {
+    return enqueueGpuOperation(() => addMeshCore(meshData));
+}
+
+async function addMeshCore(meshData) {
+    requireDevice(`adding mesh '${meshData.id}'`);
+    const { id, vertices, indices, colors, primitiveSurfaceNormals, singleColor } = meshData;
 
     const vertexBuffer = createBuffer(vertices, GPUBufferUsage.VERTEX);
     const indexBuffer = createBuffer(indices, GPUBufferUsage.INDEX, Uint16Array);
+    const suppliedPrimitiveSurfaceNormals = primitiveSurfaceNormals?.length === vertices.length
+        ? new Float32Array(primitiveSurfaceNormals)
+        : new Float32Array(vertices.length);
+    const activePrimitiveSurfaceNormals = usePrimitiveSurfaceNormals
+        ? suppliedPrimitiveSurfaceNormals
+        : new Float32Array(vertices.length);
+    const primitiveSurfaceNormalBuffer = createBuffer(activePrimitiveSurfaceNormals,
+        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
 
     // Calculate bounding box and center for sorting
     let min = [Infinity, Infinity, Infinity];
@@ -1255,6 +1467,10 @@ export async function addMesh(meshData) {
             attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x4' }]
         });
     }
+    vertexBufferLayout.push({
+        arrayStride: 12,
+        attributes: [{ shaderLocation: singleColor ? 1 : 2, offset: 0, format: 'float32x3' }]
+    });
 
     const pipeline = await device.createRenderPipelineAsync({
         label: `Mesh ${id} Pipeline`,
@@ -1285,50 +1501,91 @@ export async function addMesh(meshData) {
         center, // Store center for sorting
         vertexBuffer,
         colorBuffer,
+        primitiveSurfaceNormalBuffer,
+        primitiveSurfaceNormals: suppliedPrimitiveSurfaceNormals,
         indexBuffer,
         bindGroup,
         singleColor,
         isTransparent,
-        visible: true,
+        visible: meshFacesVisible,
         indexCount: indices.length,
         pipeline
     });
 }
 
-export async function addMeshes(meshArray) {
+export function addMeshes(meshArray) {
+    return enqueueGpuOperation(() => addMeshesCore(meshArray));
+}
+
+async function addMeshesCore(meshArray) {
     for (const mesh of meshArray) {
-        await addMesh(mesh);
+        await addMeshCore(mesh);
     }
 }
 
 export function removeMeshes(meshIds) {
+    return enqueueGpuOperation(() => removeMeshesCore(meshIds));
+}
+
+function removeMeshesCore(meshIds) {
     for (const id of meshIds) {
         const index = meshes.findIndex(mesh => mesh.id === id);
-        if (index >= 0) removeMesh(index);
+        if (index >= 0) removeMeshCore(index);
     }
 }
 
 export function setMeshesVisible(meshIds, visible) {
+    return enqueueGpuOperation(() => setMeshesVisibleCore(meshIds, visible));
+}
+
+function setMeshesVisibleCore(meshIds, visible) {
     const ids = new Set(meshIds);
     for (const mesh of meshes) {
         if (ids.has(mesh.id)) mesh.visible = visible;
     }
 }
 
+export function setMeshFaceDisplay(visible, useSurfaceNormals) {
+    return enqueueGpuOperation(() => setMeshFaceDisplayCore(visible, useSurfaceNormals));
+}
+
+function setMeshFaceDisplayCore(visible, useSurfaceNormals) {
+    const gpuDevice = requireDevice('updating mesh face display');
+    meshFacesVisible = Boolean(visible);
+    usePrimitiveSurfaceNormals = Boolean(useSurfaceNormals);
+    for (const mesh of meshes) {
+        mesh.visible = meshFacesVisible;
+        const normals = usePrimitiveSurfaceNormals
+            ? mesh.primitiveSurfaceNormals
+            : new Float32Array(mesh.primitiveSurfaceNormals.length);
+        gpuDevice.queue.writeBuffer(mesh.primitiveSurfaceNormalBuffer, 0, normals);
+    }
+}
+
 export function removeMesh(index) {
+    return enqueueGpuOperation(() => removeMeshCore(index));
+}
+
+function removeMeshCore(index) {
     const mesh = meshes[index];
     if (!mesh) return;
     mesh.vertexBuffer?.destroy();
     mesh.colorBuffer?.destroy();
+    mesh.primitiveSurfaceNormalBuffer?.destroy();
     mesh.indexBuffer?.destroy();
     meshes.splice(index, 1);
 }
 
 export function changeMeshColor(colorChangeData) {
+    return enqueueGpuOperation(() => changeMeshColorCore(colorChangeData));
+}
+
+function changeMeshColorCore(colorChangeData) {
+    const gpuDevice = requireDevice('changing a mesh color');
     const { index, color } = colorChangeData;
     const mesh = meshes[index];
     if (mesh && mesh.singleColor && mesh.colorBuffer) {
-        device.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(color));
+        gpuDevice.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(color));
         if (color.length >= 4) {
             mesh.isTransparent = color[3] < 1.0;
         }
@@ -1336,13 +1593,18 @@ export function changeMeshColor(colorChangeData) {
 }
 
 export function changeMeshColors(colorChangeData) {
+    return enqueueGpuOperation(() => changeMeshColorsCore(colorChangeData));
+}
+
+function changeMeshColorsCore(colorChangeData) {
+    const gpuDevice = requireDevice('changing per-triangle mesh colors');
     const { meshId, colors } = colorChangeData;
     const mesh = meshes.find(candidate => candidate.id === meshId);
     if (!mesh) throw new Error(`Mesh '${meshId}' was not found in the WebGPU scene.`);
     if (mesh.singleColor || !mesh.colorBuffer)
         throw new Error(`Mesh '${meshId}' was not created with per-triangle coloring.`);
 
-    device.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(colors));
+    gpuDevice.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(colors));
     mesh.isTransparent = false;
     for (let i = 3; i < colors.length; i += 4) {
         if (colors[i] < 1.0) {
@@ -1353,137 +1615,102 @@ export function changeMeshColors(colorChangeData) {
 }
 
 export function clearAllMeshes() {
+    return enqueueGpuOperation(clearAllMeshesCore);
+}
+
+function clearAllMeshesCore() {
     for (const mesh of meshes) {
         mesh.vertexBuffer?.destroy();
         mesh.colorBuffer?.destroy();
+        mesh.primitiveSurfaceNormalBuffer?.destroy();
         mesh.indexBuffer?.destroy();
     }
     meshes.length = 0;
 }
 
-export async function addLines(lineData) {
-    const { id, vertices, thickness, colors, fades } = lineData;
+export function addLines(lineData) {
+    return enqueueGpuOperation(() => addLinesCore(lineData));
+}
 
-    // Calculate center for sorting
-    let min = [Infinity, Infinity, Infinity];
-    let max = [-Infinity, -Infinity, -Infinity];
-    for (let i = 0; i < vertices.length; i += 3) {
-        min[0] = Math.min(min[0], vertices[i]);
-        min[1] = Math.min(min[1], vertices[i + 1]);
-        min[2] = Math.min(min[2], vertices[i + 2]);
-        max[0] = Math.max(max[0], vertices[i]);
-        max[1] = Math.max(max[1], vertices[i + 1]);
-        max[2] = Math.max(max[2], vertices[i + 2]);
-    }
-    const center = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+async function addLinesCore(lineData) {
+    requireDevice(`adding line '${lineData.id}'`);
+    const { id, segments, center } = lineData;
+    const instanceCount = segments.length / 12;
+    if (instanceCount === 0) return;
 
-    // Geometry buffers are created from pre-computed data from C#
-    const posBuffer = createBuffer(vertices, GPUBufferUsage.VERTEX);
-    const colorBuffer = createBuffer(colors, GPUBufferUsage.VERTEX);
-    const thicknessBuffer = createBuffer(thickness, GPUBufferUsage.VERTEX);
-    const uvBuffer = createBuffer(lineData.uvs, GPUBufferUsage.VERTEX);
-    const endPosBuffer = createBuffer(lineData.endPositions, GPUBufferUsage.VERTEX);
-    const fadeBuffer = createBuffer(fades, GPUBufferUsage.VERTEX);
-    const indexBuffer = createBuffer(lineData.indices, GPUBufferUsage.INDEX, Uint16Array);
-
-    const shaderModule = device.createShaderModule({ label: `Line ${id} Shader`, code: BILLBOARD_LINE_SHADER });
-
-    const vertexBufferLayout = [
-        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-        { arrayStride: 16, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x4' }] },
-        { arrayStride: 4, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32' }] },
-        { arrayStride: 8, attributes: [{ shaderLocation: 3, offset: 0, format: 'float32x2' }] },
-        { arrayStride: 12, attributes: [{ shaderLocation: 4, offset: 0, format: 'float32x3' }] },
-        { arrayStride: 4, attributes: [{ shaderLocation: 5, offset: 0, format: 'float32' }] }
-    ];
-
-    const pipeline = await device.createRenderPipelineAsync({
-        label: `Line ${id} Pipeline`,
-        layout: device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout] }),
-        vertex: { module: shaderModule, entryPoint: 'vertexMain', buffers: vertexBufferLayout },
-        fragment: {
-            module: shaderModule,
-            entryPoint: 'fragmentMain',
-            targets: [{
-                format: `${colorFormat}-srgb`,
-                blend: {
-                    color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                }
-            }]
-        },
-        depthStencil: {
-            format: depthFormat,
-            depthWriteEnabled: false, // Transparent objects test depth but don't write to it
-            depthCompare: 'less-equal'
-        },
-        multisample: { count: sampleCount },
-        primitive: { topology: 'triangle-list', cullMode: 'none' }
-    });
+    const instanceBuffer = createBuffer(segments, GPUBufferUsage.VERTEX);
 
     lines.push({
         id,
-        center, // Store center for sorting
-        posBuffer,
-        colorBuffer,
-        thicknessBuffer,
-        uvBuffer,
-        endPosBuffer,
-        fadeBuffer,
-        indexBuffer,
-        indexCount: lineData.indices.length,
-        pipeline
+        center,
+        instanceBuffer,
+        instanceCount
     });
 }
 
-export async function addLinesBatch(lineDataArray) {
-    return enqueueGpuOperation(async () => {
-        for (const lineData of lineDataArray) {
-            await addLines(lineData);
-        }
-    });
+export function addLinesBatch(lineDataArray) {
+    return enqueueGpuOperation(() => addLinesBatchCore(lineDataArray));
+}
+
+async function addLinesBatchCore(lineDataArray) {
+    for (const lineData of lineDataArray) {
+        await addLinesCore(lineData);
+    }
 }
 
 export function removeLines(lineId) {
+    return enqueueGpuOperation(() => removeLinesCore(lineId));
+}
+
+function removeLinesCore(lineId) {
     const index = lines.findIndex(candidate => candidate.id === lineId);
     if (index < 0) return;
     const line = lines[index];
-    line.posBuffer?.destroy();
-    line.colorBuffer?.destroy();
-    line.thicknessBuffer?.destroy();
-    line.uvBuffer?.destroy();
-    line.endPosBuffer?.destroy();
-    line.fadeBuffer?.destroy();
-    line.indexBuffer?.destroy();
+    line.instanceBuffer?.destroy();
     lines.splice(index, 1);
 }
 
 export function removeLinesBatch(lineIds) {
-    for (const id of lineIds) removeLines(id);
+    return enqueueGpuOperation(() => removeLinesBatchCore(lineIds));
+}
+
+function removeLinesBatchCore(lineIds) {
+    for (const id of lineIds) removeLinesCore(id);
 }
 
 export function pauseRendering() {
+    return enqueueGpuOperation(pauseRenderingCore);
+}
+
+function pauseRenderingCore() {
     renderingPaused = true;
 }
 
 export function resumeRendering() {
+    return enqueueGpuOperation(resumeRenderingCore);
+}
+
+function resumeRenderingCore() {
     renderingPaused = false;
 }
 
 export function clearAllLines() {
+    return enqueueGpuOperation(clearAllLinesCore);
+}
+
+function clearAllLinesCore() {
     for (const line of lines) {
-        line.posBuffer?.destroy();
-        line.colorBuffer?.destroy();
-        line.thicknessBuffer?.destroy();
-        line.uvBuffer?.destroy();
-        line.endPosBuffer?.destroy();
-        line.fadeBuffer?.destroy();
-        line.indexBuffer?.destroy();
+        line.instanceBuffer?.destroy();
     }
     lines.length = 0;
 }
 
-export async function addTextBillboard(billboardData) {
+export function addTextBillboard(billboardData) {
+    return enqueueGpuOperation(() => addTextBillboardCore(billboardData));
+}
+
+async function addTextBillboardCore(billboardData) {
+    requireDevice(`adding text billboard '${billboardData.id}'`);
     const { id, text, position, backgroundColor, textColor, scale = 0.5, relativeX = 0.5, relativeY = 0.5 } = billboardData;
     const anchorX = Math.min(1, Math.max(0, relativeX));
     const anchorY = Math.min(1, Math.max(0, relativeY));
@@ -1609,7 +1836,12 @@ export async function addTextBillboard(billboardData) {
 }
 
 export function removeTextBillboard(index) {
+    return enqueueGpuOperation(() => removeTextBillboardCore(index));
+}
+
+function removeTextBillboardCore(index) {
     const billboard = textBillboards[index];
+    if (!billboard) return;
     billboard.vertexBuffer?.destroy();
     billboard.indexBuffer?.destroy();
     billboard.texture?.destroy();
@@ -1617,6 +1849,10 @@ export function removeTextBillboard(index) {
 }
 
 export function clearAllTextBillboards() {
+    return enqueueGpuOperation(clearAllTextBillboardsCore);
+}
+
+function clearAllTextBillboardsCore() {
     for (const billboard of textBillboards) {
         billboard.vertexBuffer?.destroy();
         billboard.indexBuffer?.destroy();
@@ -1639,7 +1875,7 @@ function startFrameTimer() {
             avg += v;
         }
         const ms = avg / frameMs.length;
-        dotNetRef?.invokeMethodAsync('OnFrameMsUpdate', ms);
+        notifyDotNet('OnFrameMsUpdate', ms);
     }, 1000);
 }
 
@@ -1657,14 +1893,15 @@ function transformPoint(point, matrix) {
     ];
 }
 
-function createBuffer(data, usage, ArrayType = Float32Array) {
+function createBuffer(data, usage, ArrayType = Float32Array, operation = 'creating a GPU buffer') {
+    const gpuDevice = requireDevice(operation);
     const typedArray = data instanceof ArrayType ? data : new ArrayType(data);
     // Align buffer size to 4 bytes because createBuffer with mappedAtCreation=true
     // requires the size to be a multiple of 4 on many WebGPU implementations.
     const byteLength = typedArray.byteLength;
     const alignedSize = (byteLength + 3) & ~3; // round up to next multiple of 4
 
-    const buffer = device.createBuffer({
+    const buffer = gpuDevice.createBuffer({
         size: alignedSize,
         usage,
         mappedAtCreation: true
@@ -1692,26 +1929,68 @@ export function getBoundingClientRect(element) {
 // ============================================================================
 
 export function disposeWebGPU_Canvas() {
-    return enqueueGpuOperation(() => {
+    isDisposing = true;
+    return enqueueGpuOperation(disposeWebGPUCanvasCore);
+}
+
+function disposeWebGPUCanvasCore() {
+        resizeObserver?.disconnect();
+        resizeObserver = null;
+        if (renderFrameId) {
+            cancelAnimationFrame(renderFrameId);
+            renderFrameId = 0;
+        }
         if (frameIntervalId) {
             clearInterval(frameIntervalId);
             frameIntervalId = 0;
         }
 
-        // Clean up all GPU resources
-        clearAllMeshes();
-        clearAllLines();
-        clearAllTextBillboards();
+        clearAllMeshesCore();
+        clearAllLinesCore();
+        clearAllTextBillboardsCore();
 
+        coordinateAxes?.posBuffer?.destroy();
+        coordinateAxes?.colorBuffer?.destroy();
+        coordinateAxes?.thicknessBuffer?.destroy();
+        coordinateAxes?.uvBuffer?.destroy();
+        coordinateAxes?.endPosBuffer?.destroy();
+        coordinateAxes?.fadeBuffer?.destroy();
+        coordinateAxes?.indexBuffer?.destroy();
         gridVertexBuffer?.destroy();
         gridIndexBuffer?.destroy();
         gridUniformBuffer?.destroy();
         backgroundGradientUniformBuffer?.destroy();
+        lightUniformBuffer?.destroy();
         frameUniformBuffer?.destroy();
         msaaColorTexture?.destroy();
         depthTexture?.destroy();
 
+        coordinateAxes = null;
+        gridVertexBuffer = null;
+        gridIndexBuffer = null;
+        gridUniformBuffer = null;
+        gridBindGroup = null;
+        gridBindGroupLayout = null;
+        gridPipeline = null;
+        backgroundGradientUniformBuffer = null;
+        backgroundGradientBindGroup = null;
+        backgroundGradientPipeline = null;
+        lightUniformBuffer = null;
+        lightBindGroup = null;
+        lightBindGroupLayout = null;
+        frameUniformBuffer = null;
+        frameBindGroup = null;
+        frameBindGroupLayout = null;
+        msaaColorTexture = null;
+        depthTexture = null;
+        colorAttachment = null;
+        renderPassDescriptor = null;
+        instancedLinePipeline = null;
+        renderingPaused = true;
+        context?.unconfigure?.();
+        device?.destroy();
         device = null;
+        context = null;
+        canvas = null;
         dotNetRef = null;
-    });
 }

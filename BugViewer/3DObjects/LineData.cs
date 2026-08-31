@@ -48,24 +48,50 @@ public record LineData : AbstractObject3D
 
     private object CreateJavascriptDataCore(IEnumerable<float> thicknesses)
     {
-        // Generate stadium geometry in C# instead of JavaScript
-        var (positions, colors, thickness, uvs, endPositions, fades, indices) = 
-            GenerateStadiumGeometry(
-                Vertices, 
-                thicknesses,
-                Colors, 
-                FadeFactors);
+        var thicknessList = thicknesses as IList<float> ?? thicknesses.ToList();
+        var colorList = Colors as IList<ColorRgba> ?? Colors.ToList();
+        var fadeList = FadeFactors as IList<float> ?? FadeFactors.ToList();
+        var segments = new List<float>(Math.Max(0, Vertices.Count - 1) * 12);
+
+        var min = new Vector3(float.PositiveInfinity);
+        var max = new Vector3(float.NegativeInfinity);
+
+        for (var i = 0; i < Vertices.Count - 1; i++)
+        {
+            var thickness = thicknessList[i];
+            if (thickness <= 0f)
+                continue;
+
+            var start = Vertices[i];
+            var end = Vertices[i + 1];
+            var color = colorList.Count > i ? colorList[i] : ColorRgba.White;
+            var fade = fadeList.Count > i ? Math.Clamp(fadeList[i], 0f, 1f) : 0f;
+
+            // Interleaved 48-byte instance: start, end, RGBA, thickness, fade.
+            segments.Add(start.X);
+            segments.Add(start.Y);
+            segments.Add(start.Z);
+            segments.Add(end.X);
+            segments.Add(end.Y);
+            segments.Add(end.Z);
+            segments.Add(color.R / 255f);
+            segments.Add(color.G / 255f);
+            segments.Add(color.B / 255f);
+            segments.Add(color.A / 255f);
+            segments.Add(thickness);
+            segments.Add(fade);
+
+            min = Vector3.Min(min, Vector3.Min(start, end));
+            max = Vector3.Max(max, Vector3.Max(start, end));
+        }
 
         return new
         {
             id = Id,
-            vertices = positions,
-            colors,
-            thickness,
-            uvs,
-            endPositions,
-            fades,
-            indices
+            segments = segments.ToArray(),
+            center = segments.Count == 0
+                ? new float[] { 0f, 0f, 0f }
+                : new[] { (min.X + max.X) / 2f, (min.Y + max.Y) / 2f, (min.Z + max.Z) / 2f }
         };
     }
 

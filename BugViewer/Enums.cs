@@ -30,6 +30,20 @@ namespace BugViewer
         /// <summary>Assigns a color to each triangle of the mesh.</summary>
         PerTriangle
     }
+
+    /// <summary>
+    /// Specifies how mesh faces are displayed.
+    /// </summary>
+    public enum MeshFaceDisplay
+    {
+        /// <summary>Uses one flat normal for each triangle.</summary>
+        Triangles,
+        /// <summary>Uses interpolated normals supplied by primitive surfaces.</summary>
+        Surfaces,
+        /// <summary>Hides mesh faces.</summary>
+        None
+    }
+
     /// <summary>
     /// Defines when an automatic update should be triggered.
     /// </summary>

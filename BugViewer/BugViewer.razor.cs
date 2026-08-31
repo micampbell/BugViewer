@@ -92,213 +92,227 @@ namespace BugViewer
         // These parameters allow setting BugViewerOptions properties directly on the component.
         // They store values in backing fields and apply them in OnParametersSet.
 
-        // Backing fields for parameter proxies
-        private double? _paramLightPolarAngle;
-        private double? _paramLightAzimuthAngle;
-        private double? _paramDirectionalLightIntensity;
-        private double? _paramAmbientLight;
-        private double? _paramHeadlampIntensity;
-        private double? _paramHeadlampFocus;
-        private double? _paramSpecularPower;
-        private UpdateTypes? _paramAutoResetCamera;
-        private double? _paramAutoCameraSphereBuffer;
-        private UpdateTypes? _paramAutoUpdateGrid;
-        private double? _paramAutoGridBuffer;
-        private ColorRgba? _paramLineColor;
-        private double? _paramLineTransparency;
-        private ColorRgba? _paramBaseColor;
-        private double? _paramBaseTransparency;
-        private bool? _paramDoubleClickIsSelect;
-        private double? _paramLineWidthX;
-        private double? _paramLineWidthY;
-        private float? _paramPathThicknessFactor;
-        private int? _paramSampleCount;
-        private bool? _paramIsProjectionCamera;
-        private double? _paramFov;
-        private double? _paramOrthoSize;
-        private double? _paramZNear;
-        private double? _paramZFar;
-        private bool? _paramZIsUp;
-        private double? _paramGridSize;
-        private double? _paramGridSpacing;
-        private bool? _paramConstrainPolar;
-        private double? _paramMaxPolar;
-        private double? _paramMinPolar;
-        private bool? _paramConstrainAzimuth;
-        private double? _paramMaxAzimuth;
-        private double? _paramMinAzimuth;
-        private bool? _paramConstrainDistance;
-        private double? _paramMaxDistance;
-        private double? _paramMinDistance;
-        private double? _paramOrbitSensitivity;
-        private double? _paramZoomSensitivity;
-        private double? _paramPanSensitivity;
-        private double? _paramPanSpeedMultiplier;
-        private double? _paramCoordinateThickness;
-
         /// <summary>Light polar angle parameter.</summary>
         [Parameter]
-        public double? LightPolarAngle { get => _paramLightPolarAngle; set => _paramLightPolarAngle = value; }
+        public double? LightPolarAngle { get; set; }
 
         /// <summary>Light azimuth angle parameter.</summary>
         [Parameter]
-        public double? LightAzimuthAngle { get => _paramLightAzimuthAngle; set => _paramLightAzimuthAngle = value; }
+        public double? LightAzimuthAngle { get; set; }
 
         /// <summary>Directional light intensity parameter.</summary>
         [Parameter]
-        public double? DirectionalLightIntensity { get => _paramDirectionalLightIntensity; set => _paramDirectionalLightIntensity = value; }
+        public double? DirectionalLightIntensity { get; set; }
 
         /// <summary>Ambient light intensity parameter.</summary>
         [Parameter]
-        public double? AmbientLight { get => _paramAmbientLight; set => _paramAmbientLight = value; }
+        public double? AmbientLight { get; set; }
 
         /// <summary>Camera-mounted headlamp intensity parameter.</summary>
         [Parameter]
-        public double? HeadlampIntensity { get => _paramHeadlampIntensity; set => _paramHeadlampIntensity = value; }
+        public double? HeadlampIntensity { get; set; }
 
         /// <summary>Camera-mounted headlamp focus parameter.</summary>
         [Parameter]
-        public double? HeadlampFocus { get => _paramHeadlampFocus; set => _paramHeadlampFocus = value; }
+        public double? HeadlampFocus { get; set; }
 
         /// <summary>Specular power parameter.</summary>
         [Parameter]
-        public double? SpecularPower { get => _paramSpecularPower; set => _paramSpecularPower = value; }
+        public double? SpecularPower { get; set; }
 
         /// <summary>Auto reset camera parameter.</summary>
         [Parameter]
-        public UpdateTypes? AutoResetCamera { get => _paramAutoResetCamera; set => _paramAutoResetCamera = value; }
+        public UpdateTypes? AutoResetCamera { get; set; }
 
         /// <summary>Auto camera sphere buffer parameter.</summary>
         [Parameter]
-        public double? AutoCameraSphereBuffer { get => _paramAutoCameraSphereBuffer; set => _paramAutoCameraSphereBuffer = value; }
+        public double? AutoCameraSphereBuffer { get; set; }
 
         /// <summary>Auto update grid parameter.</summary>
         [Parameter]
-        public UpdateTypes? AutoUpdateGrid { get => _paramAutoUpdateGrid; set => _paramAutoUpdateGrid = value; }
+        public UpdateTypes? AutoUpdateGrid { get; set; }
 
         /// <summary>Auto grid buffer parameter.</summary>
         [Parameter]
-        public double? AutoGridBuffer { get => _paramAutoGridBuffer; set => _paramAutoGridBuffer = value; }
+        public double? AutoGridBuffer { get; set; }
+
+        /// <summary>Whether changing the theme automatically resets theme-related options.</summary>
+        [Parameter]
+        public bool? AutoResetOnThemeChange { get; set; }
+
+        /// <summary>Background color at a camera polar angle of -90 degrees.</summary>
+        [Parameter]
+        public ColorRgba? BackgroundGradientNegativePolarColor { get; set; }
+
+        /// <summary>First intermediate background gradient color.</summary>
+        [Parameter]
+        public ColorRgba? BackgroundGradientFirstIntermediatePolarColor { get; set; }
+
+        /// <summary>Polar angle for the first intermediate background gradient color.</summary>
+        [Parameter]
+        public double? BackgroundGradientFirstIntermediatePolarAngle { get; set; }
+
+        /// <summary>Second intermediate background gradient color.</summary>
+        [Parameter]
+        public ColorRgba? BackgroundGradientSecondIntermediatePolarColor { get; set; }
+
+        /// <summary>Polar angle for the second intermediate background gradient color.</summary>
+        [Parameter]
+        public double? BackgroundGradientSecondIntermediatePolarAngle { get; set; }
+
+        /// <summary>Background color at a camera polar angle of +90 degrees.</summary>
+        [Parameter]
+        public ColorRgba? BackgroundGradientPositivePolarColor { get; set; }
 
         /// <summary>Line color parameter.</summary>
         [Parameter]
-        public ColorRgba? LineColor { get => _paramLineColor; set => _paramLineColor = value; }
+        public ColorRgba? LineColor { get; set; }
 
         /// <summary>Line transparency parameter.</summary>
         [Parameter]
-        public double? LineTransparency { get => _paramLineTransparency; set => _paramLineTransparency = value; }
+        public double? LineTransparency { get; set; }
 
         /// <summary>Base color parameter.</summary>
         [Parameter]
-        public ColorRgba? BaseColor { get => _paramBaseColor; set => _paramBaseColor = value; }
+        public ColorRgba? BaseColor { get; set; }
 
         /// <summary>Base transparency parameter.</summary>
         [Parameter]
-        public double? BaseTransparency { get => _paramBaseTransparency; set => _paramBaseTransparency = value; }
+        public double? BaseTransparency { get; set; }
 
         /// <summary>Double click is select parameter.</summary>
         [Parameter]
-        public bool? DoubleClickIsSelect { get => _paramDoubleClickIsSelect; set => _paramDoubleClickIsSelect = value; }
+        public bool? DoubleClickIsSelect { get; set; }
 
         /// <summary>Line width X parameter.</summary>
         [Parameter]
-        public double? LineWidthX { get => _paramLineWidthX; set => _paramLineWidthX = value; }
+        public double? LineWidthX { get; set; }
 
         /// <summary>Line width Y parameter.</summary>
         [Parameter]
-        public double? LineWidthY { get => _paramLineWidthY; set => _paramLineWidthY = value; }
+        public double? LineWidthY { get; set; }
+
+        /// <summary>Path thickness factor parameter.</summary>
+        [Parameter]
+        public float? PathThicknessFactor { get; set; }
+
+        /// <summary>
+        /// Specifies how mesh surfaces are displayed. Options include showing triangles, surfaces, or none.
+        /// </summary>
+        [Parameter]
+        public MeshFaceDisplay ShowSurfaceAs { get; set; } = MeshFaceDisplay.Triangles;
+
+        /// <summary>
+        /// Specifies whether mesh edges are displayed. When true, edges of the mesh will be visible.
+        /// </summary>
+        [Parameter]
+        public bool ShowMeshEdges { get; set; } = false;
+
+        /// <summary>
+        /// Specifies whether mesh borders are displayed. When true, borders of the mesh will be visible.
+        /// </summary>
+        [Parameter]
+        public bool ShowMeshBorders { get; set; } = true;
+
+        /// <summary>
+        /// Specifies whether axes are displayed in the viewer. When true, coordinate axes will be visible.
+        /// </summary>
+        [Parameter]
+        public bool ShowAxes { get; set; } = true;
+
+
 
         /// <summary>Sample count parameter.</summary>
         [Parameter]
-        public int? SampleCount { get => _paramSampleCount; set => _paramSampleCount = value; }
+        public int? SampleCount { get; set; }
 
         /// <summary>Is projection camera parameter.</summary>
         [Parameter]
-        public bool? IsProjectionCamera { get => _paramIsProjectionCamera; set => _paramIsProjectionCamera = value; }
+        public bool? IsProjectionCamera { get; set; }
 
         /// <summary>Field of view parameter.</summary>
         [Parameter]
-        public double? Fov { get => _paramFov; set => _paramFov = value; }
+        public double? Fov { get; set; }
 
         /// <summary>Orthographic size parameter.</summary>
         [Parameter]
-        public double? OrthoSize { get => _paramOrthoSize; set => _paramOrthoSize = value; }
+        public double? OrthoSize { get; set; }
 
         /// <summary>Near clipping plane parameter.</summary>
         [Parameter]
-        public double? ZNear { get => _paramZNear; set => _paramZNear = value; }
+        public double? ZNear { get; set; }
 
         /// <summary>Far clipping plane parameter.</summary>
         [Parameter]
-        public double? ZFar { get => _paramZFar; set => _paramZFar = value; }
+        public double? ZFar { get; set; }
 
         /// <summary>Z is up parameter.</summary>
         [Parameter]
-        public bool? ZIsUp { get => _paramZIsUp; set => _paramZIsUp = value; }
+        public bool? ZIsUp { get; set; }
 
         /// <summary>Grid size parameter.</summary>
         [Parameter]
-        public double? GridSize { get => _paramGridSize; set => _paramGridSize = value; }
+        public double? GridSize { get; set; }
 
         /// <summary>Grid spacing parameter.</summary>
         [Parameter]
-        public double? GridSpacing { get => _paramGridSpacing; set => _paramGridSpacing = value; }
+        public double? GridSpacing { get; set; }
 
         /// <summary>Constrain polar parameter.</summary>
         [Parameter]
-        public bool? ConstrainPolar { get => _paramConstrainPolar; set => _paramConstrainPolar = value; }
+        public bool? ConstrainPolar { get; set; }
 
         /// <summary>Max polar parameter.</summary>
         [Parameter]
-        public double? MaxPolar { get => _paramMaxPolar; set => _paramMaxPolar = value; }
+        public double? MaxPolar { get; set; }
 
         /// <summary>Min polar parameter.</summary>
         [Parameter]
-        public double? MinPolar { get => _paramMinPolar; set => _paramMinPolar = value; }
+        public double? MinPolar { get; set; }
 
         /// <summary>Constrain azimuth parameter.</summary>
         [Parameter]
-        public bool? ConstrainAzimuth { get => _paramConstrainAzimuth; set => _paramConstrainAzimuth = value; }
+        public bool? ConstrainAzimuth { get; set; }
 
         /// <summary>Max azimuth parameter.</summary>
         [Parameter]
-        public double? MaxAzimuth { get => _paramMaxAzimuth; set => _paramMaxAzimuth = value; }
+        public double? MaxAzimuth { get; set; }
 
         /// <summary>Min azimuth parameter.</summary>
         [Parameter]
-        public double? MinAzimuth { get => _paramMinAzimuth; set => _paramMinAzimuth = value; }
+        public double? MinAzimuth { get; set; }
 
         /// <summary>Constrain distance parameter.</summary>
         [Parameter]
-        public bool? ConstrainDistance { get => _paramConstrainDistance; set => _paramConstrainDistance = value; }
+        public bool? ConstrainDistance { get; set; }
 
         /// <summary>Max distance parameter.</summary>
         [Parameter]
-        public double? MaxDistance { get => _paramMaxDistance; set => _paramMaxDistance = value; }
+        public double? MaxDistance { get; set; }
 
         /// <summary>Min distance parameter.</summary>
         [Parameter]
-        public double? MinDistance { get => _paramMinDistance; set => _paramMinDistance = value; }
+        public double? MinDistance { get; set; }
 
         /// <summary>Orbit sensitivity parameter.</summary>
         [Parameter]
-        public double? OrbitSensitivity { get => _paramOrbitSensitivity; set => _paramOrbitSensitivity = value; }
+        public double? OrbitSensitivity { get; set; }
 
         /// <summary>Zoom sensitivity parameter.</summary>
         [Parameter]
-        public double? ZoomSensitivity { get => _paramZoomSensitivity; set => _paramZoomSensitivity = value; }
+        public double? ZoomSensitivity { get; set; }
 
         /// <summary>Pan sensitivity parameter.</summary>
         [Parameter]
-        public double? PanSensitivity { get => _paramPanSensitivity; set => _paramPanSensitivity = value; }
+        public double? PanSensitivity { get; set; }
 
         /// <summary>Pan speed multiplier parameter.</summary>
         [Parameter]
-        public double? PanSpeedMultiplier { get => _paramPanSpeedMultiplier; set => _paramPanSpeedMultiplier = value; }
+        public double? PanSpeedMultiplier { get; set; }
 
         /// <summary>Coordinate thickness parameter.</summary>
         [Parameter]
-        public double? CoordinateThickness { get => _paramCoordinateThickness; set => _paramCoordinateThickness = value; }
+        public double? CoordinateThickness { get; set; }
 
         /// <summary>
         /// Applies parameter proxy values to the Options object.
@@ -308,61 +322,67 @@ namespace BugViewer
         {
             if (Options == null) return;
 
-            if (_paramLightPolarAngle.HasValue) Options.LightPolarAngle = _paramLightPolarAngle.Value;
-            if (_paramLightAzimuthAngle.HasValue) Options.LightAzimuthAngle = _paramLightAzimuthAngle.Value;
-            if (_paramDirectionalLightIntensity.HasValue) Options.DirectionalLightIntensity = _paramDirectionalLightIntensity.Value;
-            if (_paramAmbientLight.HasValue) Options.AmbientLight = _paramAmbientLight.Value;
-            if (_paramHeadlampIntensity.HasValue) Options.HeadlampIntensity = _paramHeadlampIntensity.Value;
-            if (_paramHeadlampFocus.HasValue) Options.HeadlampFocus = _paramHeadlampFocus.Value;
-            if (_paramSpecularPower.HasValue) Options.SpecularPower = _paramSpecularPower.Value;
-            if (_paramAutoResetCamera.HasValue) Options.AutoResetCamera = _paramAutoResetCamera.Value;
-            if (_paramAutoCameraSphereBuffer.HasValue) Options.AutoCameraSphereBuffer = _paramAutoCameraSphereBuffer.Value;
-            if (_paramAutoUpdateGrid.HasValue) Options.AutoUpdateGrid = _paramAutoUpdateGrid.Value;
-            if (_paramAutoGridBuffer.HasValue) Options.AutoGridBuffer = _paramAutoGridBuffer.Value;
-            if (_paramLineColor != null) Options.LineColor = (ColorRgba)_paramLineColor;
-            if (_paramLineTransparency.HasValue) Options.LineTransparency = _paramLineTransparency.Value;
-            if (_paramBaseColor != null) Options.BaseColor = (ColorRgba)_paramBaseColor;
-            if (_paramBaseTransparency.HasValue) Options.BaseTransparency = _paramBaseTransparency.Value;
-            if (_paramDoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = _paramDoubleClickIsSelect.Value;
+            if (LightPolarAngle.HasValue) Options.LightPolarAngle = LightPolarAngle.Value;
+            if (LightAzimuthAngle.HasValue) Options.LightAzimuthAngle = LightAzimuthAngle.Value;
+            if (DirectionalLightIntensity.HasValue) Options.DirectionalLightIntensity = DirectionalLightIntensity.Value;
+            if (AmbientLight.HasValue) Options.AmbientLight = AmbientLight.Value;
+            if (HeadlampIntensity.HasValue) Options.HeadlampIntensity = HeadlampIntensity.Value;
+            if (HeadlampFocus.HasValue) Options.HeadlampFocus = HeadlampFocus.Value;
+            if (SpecularPower.HasValue) Options.SpecularPower = SpecularPower.Value;
+            if (AutoResetCamera.HasValue) Options.AutoResetCamera = AutoResetCamera.Value;
+            if (AutoCameraSphereBuffer.HasValue) Options.AutoCameraSphereBuffer = AutoCameraSphereBuffer.Value;
+            if (AutoUpdateGrid.HasValue) Options.AutoUpdateGrid = AutoUpdateGrid.Value;
+            if (AutoGridBuffer.HasValue) Options.AutoGridBuffer = AutoGridBuffer.Value;
+            if (BackgroundGradientNegativePolarColor.HasValue) Options.BackgroundGradientNegativePolarColor = BackgroundGradientNegativePolarColor.Value;
+            if (BackgroundGradientFirstIntermediatePolarColor.HasValue) Options.BackgroundGradientFirstIntermediatePolarColor = BackgroundGradientFirstIntermediatePolarColor.Value;
+            if (BackgroundGradientFirstIntermediatePolarAngle.HasValue) Options.BackgroundGradientFirstIntermediatePolarAngle = BackgroundGradientFirstIntermediatePolarAngle.Value;
+            if (BackgroundGradientSecondIntermediatePolarColor.HasValue) Options.BackgroundGradientSecondIntermediatePolarColor = BackgroundGradientSecondIntermediatePolarColor.Value;
+            if (BackgroundGradientSecondIntermediatePolarAngle.HasValue) Options.BackgroundGradientSecondIntermediatePolarAngle = BackgroundGradientSecondIntermediatePolarAngle.Value;
+            if (BackgroundGradientPositivePolarColor.HasValue) Options.BackgroundGradientPositivePolarColor = BackgroundGradientPositivePolarColor.Value;
+            if (LineColor.HasValue) Options.LineColor = LineColor.Value;
+            if (LineTransparency.HasValue) Options.LineTransparency = LineTransparency.Value;
+            if (BaseColor.HasValue) Options.BaseColor = BaseColor.Value;
+            if (BaseTransparency.HasValue) Options.BaseTransparency = BaseTransparency.Value;
+            if (DoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = DoubleClickIsSelect.Value;
             ApplyAxesParameterProxies();
-            if (_paramPathThicknessFactor.HasValue) Options.PathThicknessFactor = _paramPathThicknessFactor.Value;
-            if (_paramSampleCount.HasValue) Options.SampleCount = _paramSampleCount.Value;
-            if (_paramIsProjectionCamera.HasValue) Options.IsProjectionCamera = _paramIsProjectionCamera.Value;
-            if (_paramFov.HasValue) Options.Fov = _paramFov.Value;
-            if (_paramOrthoSize.HasValue) Options.OrthoSize = _paramOrthoSize.Value;
-            if (_paramZNear.HasValue) Options.ZNear = _paramZNear.Value;
-            if (_paramZFar.HasValue) Options.ZFar = _paramZFar.Value;
-            if (_paramZIsUp.HasValue) Options.ZIsUp = _paramZIsUp.Value;
-            if (_paramGridSize.HasValue) Options.GridSize = _paramGridSize.Value;
-            if (_paramGridSpacing.HasValue) Options.GridSpacing = _paramGridSpacing.Value;
-            if (_paramConstrainPolar.HasValue) Options.ConstrainPolar = _paramConstrainPolar.Value;
-            if (_paramMaxPolar.HasValue) Options.MaxPolar = _paramMaxPolar.Value;
-            if (_paramMinPolar.HasValue) Options.MinPolar = _paramMinPolar.Value;
-            if (_paramConstrainAzimuth.HasValue) Options.ConstrainAzimuth = _paramConstrainAzimuth.Value;
-            if (_paramMaxAzimuth.HasValue) Options.MaxAzimuth = _paramMaxAzimuth.Value;
-            if (_paramMinAzimuth.HasValue) Options.MinAzimuth = _paramMinAzimuth.Value;
-            if (_paramConstrainDistance.HasValue) Options.ConstrainDistance = _paramConstrainDistance.Value;
-            if (_paramMaxDistance.HasValue) Options.MaxDistance = _paramMaxDistance.Value;
-            if (_paramMinDistance.HasValue) Options.MinDistance = _paramMinDistance.Value;
-            if (_paramOrbitSensitivity.HasValue) Options.OrbitSensitivity = _paramOrbitSensitivity.Value;
-            if (_paramZoomSensitivity.HasValue) Options.ZoomSensitivity = _paramZoomSensitivity.Value;
-            if (_paramPanSensitivity.HasValue) Options.PanSensitivity = _paramPanSensitivity.Value;
-            if (_paramPanSpeedMultiplier.HasValue) Options.PanSpeedMultiplier = _paramPanSpeedMultiplier.Value;
+            if (PathThicknessFactor.HasValue) Options.PathThicknessFactor = PathThicknessFactor.Value;
+            if (SampleCount.HasValue) Options.SampleCount = SampleCount.Value;
+            if (IsProjectionCamera.HasValue) Options.IsProjectionCamera = IsProjectionCamera.Value;
+            if (Fov.HasValue) Options.Fov = Fov.Value;
+            if (OrthoSize.HasValue) Options.OrthoSize = OrthoSize.Value;
+            if (ZNear.HasValue) Options.ZNear = ZNear.Value;
+            if (ZFar.HasValue) Options.ZFar = ZFar.Value;
+            if (ZIsUp.HasValue) Options.ZIsUp = ZIsUp.Value;
+            if (GridSize.HasValue) Options.GridSize = GridSize.Value;
+            if (GridSpacing.HasValue) Options.GridSpacing = GridSpacing.Value;
+            if (ConstrainPolar.HasValue) Options.ConstrainPolar = ConstrainPolar.Value;
+            if (MaxPolar.HasValue) Options.MaxPolar = MaxPolar.Value;
+            if (MinPolar.HasValue) Options.MinPolar = MinPolar.Value;
+            if (ConstrainAzimuth.HasValue) Options.ConstrainAzimuth = ConstrainAzimuth.Value;
+            if (MaxAzimuth.HasValue) Options.MaxAzimuth = MaxAzimuth.Value;
+            if (MinAzimuth.HasValue) Options.MinAzimuth = MinAzimuth.Value;
+            if (ConstrainDistance.HasValue) Options.ConstrainDistance = ConstrainDistance.Value;
+            if (MaxDistance.HasValue) Options.MaxDistance = MaxDistance.Value;
+            if (MinDistance.HasValue) Options.MinDistance = MinDistance.Value;
+            if (OrbitSensitivity.HasValue) Options.OrbitSensitivity = OrbitSensitivity.Value;
+            if (ZoomSensitivity.HasValue) Options.ZoomSensitivity = ZoomSensitivity.Value;
+            if (PanSensitivity.HasValue) Options.PanSensitivity = PanSensitivity.Value;
+            if (PanSpeedMultiplier.HasValue) Options.PanSpeedMultiplier = PanSpeedMultiplier.Value;
         }
 
         private void ApplyAxesParameterProxies()
         {
-            if (showAxes)
+            if (ShowAxes)
             {
-                if (_paramCoordinateThickness.HasValue) Options.CoordinateThickness = _paramCoordinateThickness.Value;
-                if (_paramLineWidthX.HasValue) Options.LineWidthX = _paramLineWidthX.Value;
-                if (_paramLineWidthY.HasValue) Options.LineWidthY = _paramLineWidthY.Value;
+                if (CoordinateThickness.HasValue) Options.CoordinateThickness = CoordinateThickness.Value;
+                if (LineWidthX.HasValue) Options.LineWidthX = LineWidthX.Value;
+                if (LineWidthY.HasValue) Options.LineWidthY = LineWidthY.Value;
                 return;
             }
 
-            if (_paramCoordinateThickness.HasValue) visibleCoordinateThickness = _paramCoordinateThickness.Value;
-            if (_paramLineWidthX.HasValue) visibleGridLineWidthX = _paramLineWidthX.Value;
-            if (_paramLineWidthY.HasValue) visibleGridLineWidthY = _paramLineWidthY.Value;
+            if (CoordinateThickness.HasValue) visibleCoordinateThickness = CoordinateThickness.Value;
+            if (LineWidthX.HasValue) visibleGridLineWidthX = LineWidthX.Value;
+            if (LineWidthY.HasValue) visibleGridLineWidthY = LineWidthY.Value;
         }
 
         #endregion
@@ -400,13 +420,26 @@ namespace BugViewer
         /// </summary>
         public OrbitCamera? Camera { get; private set; }
 
-        // JS interop objects.
+        private enum ViewerLifecycleState
+        {
+            Uninitialized,
+            Initializing,
+            Flushing,
+            Ready,
+            Failed,
+            Disposing,
+            Disposed
+        }
+
+        // JS interop objects. The semaphore owns access to the module and to all
+        // scene state that can be mirrored to JavaScript.
         private IJSObjectReference? _module;
         private DotNetObjectReference<BugViewer>? _dotNetRef;
         private readonly SemaphoreSlim _webGpuInteropGate = new(1, 1);
-        private bool _disposed;
-        // State flags.
-        private bool _ready;
+        private readonly object _disposeSync = new();
+        private Task? _disposeTask;
+        private volatile ViewerLifecycleState _lifecycleState = ViewerLifecycleState.Uninitialized;
+        private bool _suppressOptionsChanged;
         private string? _error;
         // Mouse interaction flags.
         private bool _isDragging;
@@ -431,7 +464,7 @@ namespace BugViewer
         /// <summary>
         /// Gets the thickness of paths in the scene, calculated as a factor of the bounding sphere radius.
         /// </summary>
-        public float PathThickness => Math.Max(1e-6f, Options.PathThicknessFactor * SphereRadius);
+        public float PathThickness => Math.Max(1e-6f, (float)Options.PathThicknessFactor * SphereRadius);
 
         /// <summary>
         /// Gets the radius of the bounding sphere that encompasses all objects in the scene.
@@ -467,18 +500,17 @@ namespace BugViewer
         private List<LineData> lines = new();
         private List<TextBillboard> billBoards = new();
         // Dictionaries for tracking sent object IDs.
-        private Dictionary<string, int> sentMeshIds;
-        private Dictionary<string, int> sentLineIds;
-        private Dictionary<string, int> sentBBIds;
+        private Dictionary<string, int> sentMeshIds = [];
+        private Dictionary<string, int> sentLineIds = [];
+        private Dictionary<string, int> sentBBIds = [];
         private int renderPauseDepth;
-        private bool showMeshFaces = true;
-        private bool showMeshEdges;
-        private bool showMeshBorders = true;
-        private bool showAxes = true;
         private double visibleCoordinateThickness;
         private double visibleGridLineWidthX;
         private double visibleGridLineWidthY;
         private readonly Dictionary<string, LineData> meshDisplayLines = [];
+        private bool CanShowPrimitiveSurfaces => meshes.Any(mesh => mesh.HasPrimitiveSurfaces
+            && mesh.PrimitiveSurfaceNormals.Count == mesh.Vertices.Count);
+        private bool CanShowMeshBorders => meshes.Any(mesh => mesh.HasPrimitiveSurfaces);
 
         // Canvas dimensions.
         private double _canvasWidth = 800;
@@ -578,24 +610,31 @@ namespace BugViewer
                 await ClearPressedKeysAsync();
                 return;
             }
-            if (e.Key == "z")
+            if (e.Key == "t")
             {
-                await SetShowMeshFacesAsync(!showMeshFaces);
+                Options.ShowSurfacesAs = Options.ShowSurfacesAs switch
+                {
+                    MeshFaceDisplay.Triangles when CanShowPrimitiveSurfaces => MeshFaceDisplay.Surfaces,
+                    MeshFaceDisplay.Triangles => MeshFaceDisplay.None,
+                    MeshFaceDisplay.Surfaces => MeshFaceDisplay.None,
+                    _ => MeshFaceDisplay.Triangles
+                };
                 return;
             }
             if (e.Key == "x")
             {
-                await SetShowAxesAsync(!showAxes);
+                Options.ShowAxes = !Options.ShowAxes;
                 return;
             }
             if (e.Key == "m")
             {
-                await SetShowMeshEdgesAsync(!showMeshEdges);
+                Options.ShowMeshEdges = !Options.ShowMeshEdges;
                 return;
             }
-            if (e.Key == "t")
+            if (e.Key == "b")
             {
-                await SetShowMeshBordersAsync(!showMeshBorders);
+                if (CanShowMeshBorders)
+                    Options.ShowMeshBorders = !Options.ShowMeshBorders;
                 return;
             }
             if (IsAnyPopoverOpen) return;
@@ -718,45 +757,38 @@ namespace BugViewer
         // Handles double-click events.
         private async Task OnDoubleClick(PointerEventArgs e)
         {
-            if (_module is null || !_ready)
+            if (!Options.DoubleClickIsSelect)
             {
+                ResetCamera();
                 return;
             }
 
-            var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
-            var rx = e.ClientX - rect.Left;
-            var ry = e.ClientY - rect.Top;
-            if (Options.DoubleClickIsSelect)
-            {
-                if (!OnTriangleSelected.HasDelegate) return;
-                (Vector3 anchor, Vector3 dirVector) = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
-                if (DoesRayGoThroughTriangle(anchor, dirVector, out var meshName, out var meshIndex, out var distance, out var point))
-                {
-                    SelectedMeshName = meshName;
-                    SelectedTriangleInMeshIndex = meshIndex;
-                    SelectedPoint = point;
-                    await OnTriangleSelected.InvokeAsync();
-                }
-            }
-            else ResetCamera();
+            await SelectTriangleAtPointerAsync(e.ClientX, e.ClientY);
         }
 
         private async Task SelectTriangleAtPointerAsync(double clientX, double clientY)
         {
-            if (_module is null || !_ready || Camera is null || !OnTriangleSelected.HasDelegate)
+            if (Camera is null || !OnTriangleSelected.HasDelegate)
                 return;
 
-            var rect = await _module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
-            var rx = clientX - rect.Left;
-            var ry = clientY - rect.Top;
-            (Vector3 anchor, Vector3 dirVector) = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
-            if (!DoesRayGoThroughTriangle(anchor, dirVector, out var meshName, out var meshIndex, out _, out var point))
-                return;
+            var selected = false;
+            await ExecuteReadyInteropAsync("pointer selection", async module =>
+            {
+                var rect = await module.InvokeAsync<BoundingClientRect>("getBoundingClientRect", _canvasRef);
+                var rx = clientX - rect.Left;
+                var ry = clientY - rect.Top;
+                (Vector3 anchor, Vector3 dirVector) = Camera.CreateRayFromScreenPoint(rx, ry, rect.Width, rect.Height);
+                if (!DoesRayGoThroughTriangle(anchor, dirVector, out var meshName, out var meshIndex, out _, out var point))
+                    return;
 
-            SelectedMeshName = meshName;
-            SelectedTriangleInMeshIndex = meshIndex;
-            SelectedPoint = point;
-            await OnTriangleSelected.InvokeAsync();
+                SelectedMeshName = meshName;
+                SelectedTriangleInMeshIndex = meshIndex;
+                SelectedPoint = point;
+                selected = true;
+            });
+
+            if (selected)
+                await OnTriangleSelected.InvokeAsync();
         }
 
         // Checks if a ray intersects with any triangle in the scene.
@@ -818,10 +850,7 @@ namespace BugViewer
                 _lastPointerY = e.ClientY;
                 Camera.Orbit(dx, dy);
 
-                if (_module != null && _ready)
-                {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
-                }
+                await WriteViewMatrixAsync("camera orbit");
             }
             else if (!_isPanning)
             {
@@ -846,10 +875,7 @@ namespace BugViewer
                 _lastPointerY = e.ClientY;
                 Camera.PanWithMouse(dx, dy, e.ShiftKey);
 
-                if (_module != null && _ready)
-                {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
-                }
+                await WriteViewMatrixAsync("camera pan");
             }
         }
 
@@ -871,19 +897,14 @@ namespace BugViewer
         {
             Camera.Zoom(e.DeltaY);
 
-            if (_module != null && _ready)
-            {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
-            }
+            await WriteViewMatrixAsync("camera zoom");
         }
 
         // Processes keyboard input for camera movement.
         private async void ProcessKeyboardMovement()
         {
-            if (PressedKeys.Count == 0 || _module == null || !_ready)
-            {
+            if (PressedKeys.Count == 0 || _lifecycleState != ViewerLifecycleState.Ready)
                 return;
-            }
 
             double forward = 0, right = 0, up = 0;
             bool shift = PressedKeys.Contains("shift");
@@ -922,61 +943,125 @@ namespace BugViewer
             {
                 Camera.PanWithKeyboard(forward, right, up, shift);
 
-                try
-                {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
-                }
-                catch
-                {
-                    // Handle error silently
-                }
+                await WriteViewMatrixAsync("keyboard camera movement");
+            }
+        }
+
+        private Task WriteViewMatrixAsync(string operation) =>
+            ExecuteReadyInteropAsync(operation, module => WriteViewMatrixCoreAsync(module));
+
+        private async Task WriteViewMatrixCoreAsync(IJSObjectReference module)
+        {
+            if (Camera is null)
+                return;
+
+            await module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(),
+                Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
+        }
+
+        private bool IsTearingDown => _lifecycleState is ViewerLifecycleState.Disposing or ViewerLifecycleState.Disposed;
+
+        private void FailInteropLocked(string operation, Exception exception)
+        {
+            if (IsTearingDown)
+                return;
+
+            _lifecycleState = ViewerLifecycleState.Failed;
+            _error ??= $"WebGPU {operation} failed: {exception.Message}";
+            _ = InvokeAsync(StateHasChanged);
+        }
+
+        private async Task ExecuteSceneOperationAsync(
+            string operation,
+            Func<IJSObjectReference?, Task> operationCore)
+        {
+            await _webGpuInteropGate.WaitAsync();
+            try
+            {
+                if (IsTearingDown)
+                    return;
+
+                var module = _lifecycleState == ViewerLifecycleState.Ready ? _module : null;
+                await operationCore(module);
+            }
+            catch (JSDisconnectedException exception)
+            {
+                if (!IsTearingDown)
+                    FailInteropLocked(operation, exception);
+            }
+            catch (JSException exception)
+            {
+                FailInteropLocked(operation, exception);
+            }
+            finally
+            {
+                _webGpuInteropGate.Release();
+            }
+        }
+
+        private async Task ExecuteReadyInteropAsync(
+            string operation,
+            Func<IJSObjectReference, Task> operationCore)
+        {
+            await _webGpuInteropGate.WaitAsync();
+            try
+            {
+                if (_lifecycleState != ViewerLifecycleState.Ready || _module is null)
+                    return;
+
+                await operationCore(_module);
+            }
+            catch (JSDisconnectedException exception)
+            {
+                if (!IsTearingDown)
+                    FailInteropLocked(operation, exception);
+            }
+            catch (JSException exception)
+            {
+                FailInteropLocked(operation, exception);
+            }
+            finally
+            {
+                _webGpuInteropGate.Release();
             }
         }
 
         /// <summary>
-        /// Called after the component has been rendered. On first render, this method imports the JavaScript module for the WebGPU canvas, 
-        /// initializes the canvas, and sends the initial display options and camera projection matrix to JavaScript.
+        /// Imports and initializes the WebGPU module after the canvas exists.
         /// </summary>
-        /// <param name="firstRender"></param>
-        /// <returns></returns>
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
             if (!firstRender)
-            {
                 return;
-            }
+
             if (_containerRef.HasValue)
-            {
                 await _containerRef.Value.FocusAsync();
-            }
 
+            await _webGpuInteropGate.WaitAsync();
             try
             {
+                if (_lifecycleState != ViewerLifecycleState.Uninitialized)
+                    return;
+
+                _lifecycleState = ViewerLifecycleState.Initializing;
                 _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
+                _dotNetRef = DotNetObjectReference.Create(this);
+                await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef,
+                    Options.ToJavascriptOptions(Camera.PolarAngle), Camera.ConvertMatrixToJavaScript(),
+                    Camera.ConvertPositionToJavaScript());
             }
-            catch (JSException jse)
+            catch (JSDisconnectedException exception)
             {
-                _error = $"Failed to import webgpu module: {jse.Message}";
-                StateHasChanged();
-                return;
+                if (!IsTearingDown)
+                    FailInteropLocked("initialization", exception);
             }
-            catch (Exception ex)
+            catch (JSException exception)
             {
-                _error = $"Unexpected error importing webgpu module: {ex.Message}";
-                StateHasChanged();
-                return;
+                FailInteropLocked("initialization", exception);
             }
-
-            _dotNetRef = DotNetObjectReference.Create(this);
-
-            try
+            finally
             {
-                await SendOptionsToJavaScriptAsync(true);
-            }
-            catch (Exception ex)
-            {
-                _error = $"Error initializing WebGPU canvas: {ex.Message}";
-                StateHasChanged();
+                _webGpuInteropGate.Release();
             }
         }
 
@@ -986,30 +1071,16 @@ namespace BugViewer
         /// <returns></returns>
         protected override async Task OnParametersSetAsync()
         {
-            // Apply any parameter proxy values to Options
             ApplyParameterProxiesToOptions();
-
-            await SendOptionsToJavaScriptAsync(false);
+            await SendOptionsToJavaScriptAsync();
         }
 
-        // Sends display options to the JavaScript module.
-        private async Task SendOptionsToJavaScriptAsync(bool init)
-        {
-            if (_module is null)
+        private Task SendOptionsToJavaScriptAsync() =>
+            ExecuteReadyInteropAsync("display-options update", async module =>
             {
-                return;
-            }
-
-            if (init)
-            {
-                await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef, Options.ToJavascriptOptions(Camera.PolarAngle), Camera.ConvertMatrixToJavaScript(), Camera.ConvertPositionToJavaScript());
-            }
-            else
-            {
-                await _module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions(Camera.PolarAngle));
-                await SendProjectionMatrixToJavaScriptAsync();
-            }
-        }
+                await module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions(Camera.PolarAngle));
+                await WriteProjectionMatrixCoreAsync(module);
+            });
 
         /// <summary>
         /// Invoked by JavaScript to update the time it took to render the latest frame.
@@ -1031,54 +1102,68 @@ namespace BugViewer
         [JSInvokable]
         public async Task OnWebGpuReady()
         {
-            // mark ready early so Add* methods will attempt to send immediately
-            _ready = true;
-            _error = null;
-
-            // send any queued options/projection
-            await SendProjectionMatrixToJavaScriptAsync();
-
-            //  flush any queued meshes
-            if (_module != null)
+            var invokeReady = false;
+            await _webGpuInteropGate.WaitAsync();
+            try
             {
-                try
-                {
-                    sentMeshIds = new Dictionary<string, int>();
-                    for (int i = 0; i < meshes.Count; i++)
-                    {
-                        var mesh = meshes[i];
-                        sentMeshIds.Add(mesh.Id, i);
-                        await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
-                    }
+                if (_lifecycleState != ViewerLifecycleState.Initializing || _module is null)
+                    return;
 
-                    sentLineIds = new Dictionary<string, int>();
-                    for (int i = 0; i < lines.Count; i++)
-                    {
-                        var linesData = lines[i];
-                        sentLineIds.Add(linesData.Id, i);
-                        await _module.InvokeVoidAsync("addLines", linesData.CreateJavascriptData(PathThickness));
-                    }
+                _lifecycleState = ViewerLifecycleState.Flushing;
+                var module = _module;
 
-                    sentBBIds = new Dictionary<string, int>();
-                    for (int i = 0; i < billBoards.Count; i++)
-                    {
-                        var bb = billBoards[i];
-                        sentBBIds.Add(bb.Id, i);
-                        await _module.InvokeVoidAsync("addTextBillboard", bb.CreateJavascriptData());
-                    }
-                }
-                catch (JSException jsEx)
+                await module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions(Camera.PolarAngle));
+                await module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(),
+                    Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
+                await WriteProjectionMatrixCoreAsync(module);
+
+                await module.InvokeVoidAsync("clearAllMeshes");
+                sentMeshIds = [];
+                if (meshes.Count > 0)
+                    await module.InvokeVoidAsync("addMeshes", (object)meshes.Select(mesh => mesh.CreateJavascriptData()).ToArray());
+                ReindexSentMeshes();
+                await ApplyMeshFaceDisplayCoreAsync(module);
+
+                await module.InvokeVoidAsync("clearAllLines");
+                sentLineIds = [];
+                if (lines.Count > 0)
                 {
-                    Console.Error.WriteLine(jsEx.Message);
+                    var automaticThickness = PathThickness;
+                    await module.InvokeVoidAsync("addLinesBatch",
+                        (object)lines.Select(line => line.CreateJavascriptData(automaticThickness)).ToArray());
                 }
+                ReindexSentLines();
+
+                await module.InvokeVoidAsync("clearAllTextBillboards");
+                sentBBIds = [];
+                for (var index = 0; index < billBoards.Count; index++)
+                    await module.InvokeVoidAsync("addTextBillboard", billBoards[index].CreateJavascriptData());
+                ReindexSentBillboards();
+
+                if (renderPauseDepth > 0)
+                    await module.InvokeVoidAsync("pauseRendering");
+
+                _error = null;
+                _lifecycleState = ViewerLifecycleState.Ready;
+                invokeReady = true;
+            }
+            catch (JSDisconnectedException exception)
+            {
+                if (!IsTearingDown)
+                    FailInteropLocked("queued-scene upload", exception);
+            }
+            catch (JSException exception)
+            {
+                FailInteropLocked("queued-scene upload", exception);
+            }
+            finally
+            {
+                _webGpuInteropGate.Release();
             }
 
-            StateHasChanged();
-
-            if (OnReady.HasDelegate)
-            {
+            await InvokeAsync(StateHasChanged);
+            if (invokeReady && OnReady.HasDelegate)
                 await OnReady.InvokeAsync();
-            }
         }
 
         /// <summary>
@@ -1087,12 +1172,23 @@ namespace BugViewer
         /// <param name="message"></param>
         /// <returns></returns>
         [JSInvokable]
-        public Task OnWebGpuError(string message)
+        public async Task OnWebGpuError(string message)
         {
-            _ready = false;
-            _error = message;
-            StateHasChanged();
-            return Task.CompletedTask;
+            await _webGpuInteropGate.WaitAsync();
+            try
+            {
+                if (!IsTearingDown)
+                {
+                    _lifecycleState = ViewerLifecycleState.Failed;
+                    _error ??= message;
+                }
+            }
+            finally
+            {
+                _webGpuInteropGate.Release();
+            }
+
+            await InvokeAsync(StateHasChanged);
         }
 
         /// <summary>
@@ -1106,28 +1202,25 @@ namespace BugViewer
         [JSInvokable]
         public async Task OnCanvasResized(double w, double h)
         {
-            _canvasWidth = w;
-            _canvasHeight = h;
-            await SendProjectionMatrixToJavaScriptAsync();
+            await ExecuteSceneOperationAsync("canvas resize", async module =>
+            {
+                _canvasWidth = w;
+                _canvasHeight = h;
+                if (module is not null)
+                    await WriteProjectionMatrixCoreAsync(module);
+            });
         }
 
-        // Sends the projection matrix to the JavaScript module.
-        private async Task SendProjectionMatrixToJavaScriptAsync()
-        {
-            if (_module is null || !_ready || Camera is null)
-            {
-                return;
-            }
+        private Task SendProjectionMatrixToJavaScriptAsync() =>
+            ExecuteReadyInteropAsync("projection update", WriteProjectionMatrixCoreAsync);
 
-            try
-            {
-                var proj = Camera.ConvertProjectionMatrixToJavaScript(_canvasWidth, _canvasHeight);
-                await _module.InvokeVoidAsync("writeProjectionMatrix", proj);
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine(ex.Message);
-            }
+        private async Task WriteProjectionMatrixCoreAsync(IJSObjectReference module)
+        {
+            if (Camera is null)
+                return;
+
+            var projection = Camera.ConvertProjectionMatrixToJavaScript(_canvasWidth, _canvasHeight);
+            await module.InvokeVoidAsync("writeProjectionMatrix", projection);
         }
 
         /// <summary>
@@ -1135,48 +1228,63 @@ namespace BugViewer
         /// JavaScript to dispose of the WebGPU canvas.
         /// </summary>
         /// <returns></returns>
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync()
         {
-            //Camera = new OrbitCamera(Camera.Target, Options);
+            lock (_disposeSync)
+                return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+        }
+
+        private async Task DisposeCoreAsync()
+        {
+            _lifecycleState = ViewerLifecycleState.Disposing;
             _keyboardMoveTimer?.Dispose();
             Options.PropertyChanged -= OnOptionsChanged;
-            _disposed = true;
-            _ready = false;
 
-            var module = _module;
-            _module = null;
-
+            Exception? cleanupException = null;
             await _webGpuInteropGate.WaitAsync();
             try
             {
+                var module = _module;
                 if (module is not null)
                 {
                     try
                     {
                         await module.InvokeVoidAsync("disposeWebGPU_Canvas");
                     }
-                    catch
+                    catch (JSDisconnectedException)
                     {
-                        // Handle error silently
+                        // The browser connection may already be gone during teardown.
+                    }
+                    catch (Exception exception)
+                    {
+                        cleanupException = exception;
                     }
 
                     try
                     {
                         await module.DisposeAsync();
                     }
-                    catch
+                    catch (JSDisconnectedException)
                     {
-                        // Handle error silently
+                        // The browser connection may already be gone during teardown.
+                    }
+                    catch (Exception exception)
+                    {
+                        cleanupException ??= exception;
                     }
                 }
             }
             finally
             {
+                _module = null;
+                _dotNetRef?.Dispose();
+                _dotNetRef = null;
+                _lifecycleState = ViewerLifecycleState.Disposed;
                 _webGpuInteropGate.Release();
-                _webGpuInteropGate.Dispose();
             }
 
-            _dotNetRef?.Dispose();
+            if (cleanupException is not null)
+                throw cleanupException;
         }
 
         /// <summary>
@@ -1194,14 +1302,17 @@ namespace BugViewer
             //    float.IsNaN(BoundingSphere.Center.Z))
             //    return;
             //BoundingSphere = new Sphere(Vector3.Zero, 1f);
-            Camera.Reset(BoundingSphere);
-            _module?.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
+            ResetCameraCore();
+            _ = WriteViewMatrixAsync("camera reset");
         }
 
+        private void ResetCameraCore() => Camera?.Reset(BoundingSphere);
+
         // Handles the camera reset action.
-        private async Task HandleCameraReset()
+        private Task HandleCameraReset()
         {
             ResetCamera();
+            return Task.CompletedTask;
         }
 
         // Sets the camera to a cardinal view direction.
@@ -1212,22 +1323,21 @@ namespace BugViewer
                 return;
             }
 
-            ResetCamera();
+            ResetCameraCore();
             Camera.SetCardinalView(dir);
-
-            if (_module != null && _ready)
-            {
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
-            }
+            await WriteViewMatrixAsync("cardinal camera view");
         }
 
         // Handles changes to the viewer options.
         private async void OnOptionsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs? e)
         {
+            if (_suppressOptionsChanged || IsTearingDown)
+                return;
+
             if (e?.PropertyName == nameof(Options.ZIsUp))
             {
                 Camera.SwapCameraUp();
-                await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
+                await WriteViewMatrixAsync("camera up-axis update");
             }
 
             if (e?.PropertyName == nameof(Options.IsProjectionCamera))
@@ -1242,36 +1352,98 @@ namespace BugViewer
                 await SynchronizeMeshDisplayLinesAsync();
             }
 
-            StateHasChanged();
-            await SendOptionsToJavaScriptAsync(false);
+            if (e?.PropertyName == nameof(Options.ShowSurfacesAs))
+            {
+                if (Options.ShowSurfacesAs == MeshFaceDisplay.Surfaces && !CanShowPrimitiveSurfaces)
+                {
+                    Options.ShowSurfacesAs = MeshFaceDisplay.Triangles;
+                    return;
+                }
+
+                await ApplyMeshFaceDisplayAsync();
+            }
+
+            if (e?.PropertyName == nameof(Options.ShowMeshEdges))
+            {
+                if (Options.ShowMeshEdges && Options.ShowMeshBorders)
+                {
+                    Options.ShowMeshBorders = false;
+                    return;
+                }
+
+                await SynchronizeMeshDisplayLinesAsync();
+            }
+
+            if (e?.PropertyName == nameof(Options.ShowMeshBorders))
+            {
+                if (Options.ShowMeshBorders && !CanShowMeshBorders)
+                {
+                    Options.ShowMeshBorders = false;
+                    return;
+                }
+
+                if (Options.ShowMeshBorders && Options.ShowMeshEdges)
+                {
+                    Options.ShowMeshEdges = false;
+                    return;
+                }
+
+                await SynchronizeMeshDisplayLinesAsync();
+            }
+
+            if (e?.PropertyName == nameof(Options.ShowAxes))
+            {
+                if (Options.ShowAxes)
+                {
+                    Options.CoordinateThickness = visibleCoordinateThickness;
+                    Options.LineWidthX = visibleGridLineWidthX;
+                    Options.LineWidthY = visibleGridLineWidthY;
+                }
+                else
+                {
+                    visibleCoordinateThickness = Options.CoordinateThickness;
+                    visibleGridLineWidthX = Options.LineWidthX;
+                    visibleGridLineWidthY = Options.LineWidthY;
+                    Options.CoordinateThickness = 0;
+                    Options.LineWidthX = 0;
+                    Options.LineWidthY = 0;
+                }
+            }
+
+            if (!IsTearingDown)
+            {
+                await InvokeAsync(StateHasChanged);
+                await SendOptionsToJavaScriptAsync();
+            }
         }
 
-        // Updates the viewer when data changes.
-        private async void UpdateViewer(bool sphereChanged)
+        // Called only while the interop gate is held.
+        private async Task UpdateViewerCoreAsync(IJSObjectReference? module, bool sphereChanged)
         {
-            if (Camera is null || _module is null)
-            {
+            if (Camera is null)
                 return;
-            }
 
             if ((sphereChanged && Options.AutoResetCamera == UpdateTypes.SphereChange) || Options.AutoResetCamera == UpdateTypes.OnDataChange)
             {
-                ResetCamera();
-
-                try
-                {
-                    await _module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(), Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
-                }
-                catch
-                {
-                    // Handle error silently
-                }
+                ResetCameraCore();
+                if (module is not null)
+                    await WriteViewMatrixCoreAsync(module);
             }
 
             if ((sphereChanged && Options.AutoUpdateGrid == UpdateTypes.SphereChange) || Options.AutoUpdateGrid == UpdateTypes.OnDataChange)
             {
-                Options.GridSize = Options.AutoGridBuffer * (SphereCenterLength + SphereRadius);
-                OnOptionsChanged(null, null);
+                _suppressOptionsChanged = true;
+                try
+                {
+                    Options.GridSize = Options.AutoGridBuffer * (SphereCenterLength + SphereRadius);
+                }
+                finally
+                {
+                    _suppressOptionsChanged = false;
+                }
+
+                if (module is not null)
+                    await module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions(Camera.PolarAngle));
             }
         }
 
@@ -1327,29 +1499,31 @@ namespace BugViewer
         /// <returns></returns>
         public async Task AddMeshAsync(MeshData mesh)
         {
-            var index = -1;
-            bool? nameInSent = sentMeshIds?.TryGetValue(mesh.Id, out index);
-            if (nameInSent.GetValueOrDefault(false))
+            await ExecuteSceneOperationAsync($"add mesh '{mesh.Id}'", module => AddMeshCoreAsync(mesh, module));
+        }
+
+        private async Task AddMeshCoreAsync(MeshData mesh, IJSObjectReference? module)
+        {
+            var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
+            if (index >= 0)
             {
-                var former = meshes[index];
-                if (mesh.GetHashCode() == former.GetHashCode())
+                if (mesh.GetHashCode() == meshes[index].GetHashCode())
                     return;
-                await RemoveMeshAsync(index);
-            }
-            meshes.Add(mesh);
-            var sphereChanged = UpdateSpheresAdd(mesh);
-            // If module not ready yet, queue the mesh. It will be sent from OnWebGpuReady.
-            if (_module is null || !_ready)
-            {
-                await SynchronizeMeshDisplayLinesAsync();
-                return;
+                await RemoveMeshAtCoreAsync(index, module);
             }
 
-            UpdateViewer(sphereChanged);
+            meshes.Add(mesh);
             DefineMeshLookups(mesh);
-            await _module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
-            sentMeshIds[mesh.Id] = meshes.Count - 1;
-            await SynchronizeMeshDisplayLinesAsync();
+            var sphereChanged = UpdateSpheresAdd(mesh);
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
+                ReindexSentMeshes();
+            }
+
+            await ApplyMeshFaceDisplayCoreAsync(module);
+            await SynchronizeMeshDisplayLinesCoreAsync(module);
         }
 
         /// <summary>
@@ -1361,42 +1535,46 @@ namespace BugViewer
         public async Task AddMeshesAsync(IEnumerable<MeshData> newMeshes)
         {
             var meshList = newMeshes as IList<MeshData> ?? newMeshes.ToList();
-            if (meshList.Count == 0) return;
-            var initMeshCount = meshes.Count;
+            if (meshList.Count == 0)
+                return;
+
+            await ExecuteSceneOperationAsync($"add {meshList.Count} meshes",
+                module => AddMeshesCoreAsync(meshList, module));
+        }
+
+        private async Task AddMeshesCoreAsync(IList<MeshData> meshList, IJSObjectReference? module)
+        {
+            var meshesToSend = new List<MeshData>(meshList.Count);
             var sphereChanged = false;
             foreach (var mesh in meshList)
             {
-                var index = -1;
-                var nameInSent = sentMeshIds?.TryGetValue(mesh.Id, out index);
-                if (nameInSent.GetValueOrDefault(false))
+                var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
+                if (index >= 0)
                 {
-                    var former = meshes[index];
-                    if (mesh.GetHashCode() == former.GetHashCode())
+                    if (mesh.GetHashCode() == meshes[index].GetHashCode())
                         continue;
-                    await RemoveMeshAsync(index);
+                    await RemoveMeshAtCoreAsync(index, module);
                 }
+
                 meshes.Add(mesh);
                 DefineMeshLookups(mesh);
-                if (UpdateSpheresAdd(mesh))
-                    sphereChanged = true;
+                sphereChanged |= UpdateSpheresAdd(mesh);
+                meshesToSend.Add(mesh);
             }
 
-            // If module not ready yet, meshes are queued and will be sent from OnWebGpuReady.
-            if (_module is null || !_ready)
-            {
-                await SynchronizeMeshDisplayLinesAsync();
+            if (meshesToSend.Count == 0)
                 return;
+
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("addMeshes",
+                    (object)meshesToSend.Select(mesh => mesh.CreateJavascriptData()).ToArray());
+                ReindexSentMeshes();
             }
 
-            UpdateViewer(sphereChanged);
-            // Precompute ray-cast data for all new meshes
-            for (var i = initMeshCount; i < meshes.Count; i++)
-                sentMeshIds[meshes[i].Id] = i;
-
-            // Single JS interop call with all mesh data
-            var jsDataArray = meshList.Select(m => m.CreateJavascriptData()).ToArray();
-            await _module.InvokeVoidAsync("addMeshes", (object)jsDataArray);
-            await SynchronizeMeshDisplayLinesAsync();
+            await ApplyMeshFaceDisplayCoreAsync(module);
+            await SynchronizeMeshDisplayLinesCoreAsync(module);
         }
 
         private void DefineMeshLookups(MeshData mesh)
@@ -1437,41 +1615,26 @@ namespace BugViewer
         /// <returns></returns>
         public async Task AddLinesAsync(LineData path)
         {
+            await ExecuteSceneOperationAsync($"add line '{path.Id}'", module => AddLineCoreAsync(path, module));
+        }
+
+        private async Task AddLineCoreAsync(LineData path, IJSObjectReference? module)
+        {
             var index = lines.FindIndex(line => line.Id == path.Id);
             if (index >= 0)
             {
-                var former = lines[index];
-                if (path.GetHashCode() == former.GetHashCode())
+                if (path.GetHashCode() == lines[index].GetHashCode())
                     return;
-                await RemoveLinesAsync(index);
+                await RemoveLineAtCoreAsync(index, module);
             }
 
             lines.Add(path);
             var sphereChanged = UpdateSpheresAdd(path);
-
-            // If module not ready yet, queue the line. It will be sent from OnWebGpuReady.
-            if (_module is null || !_ready)
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
             {
-                return;
-            }
-
-            UpdateViewer(sphereChanged);
-
-            // Ensure sentLineIds exists (defensive)
-            sentLineIds ??= new Dictionary<string, int>();
-
-            try
-            {
-                await _module.InvokeVoidAsync("addLines", path.CreateJavascriptData(PathThickness));
-                sentLineIds[path.Id] = lines.Count - 1;
-            }
-            catch (JSException jsEx)
-            {
-                Console.Error.WriteLine($"AddLinesAsync: JSException adding '{path.Id}': {jsEx.Message}");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"AddLinesAsync: Exception adding '{path.Id}': {ex.Message}");
+                await module.InvokeVoidAsync("addLines", path.CreateJavascriptData(PathThickness));
+                ReindexSentLines();
             }
         }
 
@@ -1485,6 +1648,12 @@ namespace BugViewer
             if (lineList.Count == 0)
                 return;
 
+            await ExecuteSceneOperationAsync($"add {lineList.Count} lines",
+                module => AddLinesCoreAsync(lineList, module));
+        }
+
+        private async Task AddLinesCoreAsync(IList<LineData> lineList, IJSObjectReference? module)
+        {
             var linesToSend = new List<LineData>(lineList.Count);
             var sphereChanged = false;
             foreach (var line in lineList)
@@ -1495,7 +1664,7 @@ namespace BugViewer
                     var existing = lines[existingIndex];
                     if (line.GetHashCode() == existing.GetHashCode())
                         continue;
-                    await RemoveLinesAsync(existing);
+                    await RemoveLineAtCoreAsync(existingIndex, module);
                 }
 
                 lines.Add(line);
@@ -1503,118 +1672,92 @@ namespace BugViewer
                 linesToSend.Add(line);
             }
 
-            if (linesToSend.Count == 0 || _module is null || !_ready)
+            if (linesToSend.Count == 0)
                 return;
 
-            UpdateViewer(sphereChanged);
-            sentLineIds ??= new Dictionary<string, int>();
-            ReindexSentLines();
-            // Every line in this batch has now contributed its vertices to BoundingSphere.
-            // Resolve automatic thickness once from those complete scene bounds.
-            var automaticThickness = PathThickness;
-            var module = _module;
-            if (module is null || _disposed)
-                return;
-
-            await _webGpuInteropGate.WaitAsync();
-            try
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
             {
-                if (_disposed || !_ready || !ReferenceEquals(module, _module))
-                    return;
-
+                var automaticThickness = PathThickness;
                 await module.InvokeVoidAsync("addLinesBatch",
                     (object)linesToSend.Select(line => line.CreateJavascriptData(automaticThickness)).ToArray());
-            }
-            catch (JSException jsEx)
-            {
-                Console.Error.WriteLine($"AddLinesAsync: JSException adding batch of {linesToSend.Count} lines: {jsEx.Message}");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"AddLinesAsync: Exception adding batch of {linesToSend.Count} lines: {ex.Message}");
-            }
-            finally
-            {
-                _webGpuInteropGate.Release();
+                ReindexSentLines();
             }
         }
 
         /// <summary>Suspends WebGPU drawing until <see cref="ResumeRenderingAsync"/> is called.</summary>
         public async Task PauseRenderingAsync()
         {
-            if (renderPauseDepth++ == 0 && _module is not null && _ready)
-                await _module.InvokeVoidAsync("pauseRendering");
+            await ExecuteSceneOperationAsync("pause rendering", PauseRenderingCoreAsync);
+        }
+
+        private async Task PauseRenderingCoreAsync(IJSObjectReference? module)
+        {
+            if (renderPauseDepth++ == 0 && module is not null)
+                await module.InvokeVoidAsync("pauseRendering");
         }
 
         /// <summary>Resumes WebGPU drawing after the matching pause.</summary>
         public async Task ResumeRenderingAsync()
         {
-            if (renderPauseDepth == 0 || --renderPauseDepth != 0 || _module is null || !_ready)
+            await ExecuteSceneOperationAsync("resume rendering", ResumeRenderingCoreAsync);
+        }
+
+        private async Task ResumeRenderingCoreAsync(IJSObjectReference? module)
+        {
+            if (renderPauseDepth == 0 || --renderPauseDepth != 0 || module is null)
                 return;
 
-            await _module.InvokeVoidAsync("resumeRendering");
+            await module.InvokeVoidAsync("resumeRendering");
         }
 
-        private async Task SetShowMeshFacesAsync(bool value)
+        private async Task ApplyMeshFaceDisplayAsync()
         {
-            showMeshFaces = value;
-
-            if (_module is not null && _ready)
-                await _module.InvokeVoidAsync("setMeshesVisible", (object)meshes.Select(mesh => mesh.Id).ToArray(), value);
+            await ExecuteSceneOperationAsync("mesh face display update", ApplyMeshFaceDisplayCoreAsync);
         }
 
-        private async Task SetShowMeshEdgesAsync(bool value)
+        private async Task ApplyMeshFaceDisplayCoreAsync(IJSObjectReference? module)
         {
-            showMeshEdges = value;
-            if (showMeshEdges)
-                showMeshBorders = false;
-            await SynchronizeMeshDisplayLinesAsync();
-        }
-
-        private async Task SetShowMeshBordersAsync(bool value)
-        {
-            showMeshBorders = value;
-            if (showMeshBorders)
-                showMeshEdges = false;
-            await SynchronizeMeshDisplayLinesAsync();
-        }
-
-        private Task SetShowAxesAsync(bool value)
-        {
-            if (showAxes == value)
-                return Task.CompletedTask;
-
-            showAxes = value;
-            if (value)
+            if (Options.ShowSurfacesAs == MeshFaceDisplay.Surfaces && !CanShowPrimitiveSurfaces)
             {
-                Options.CoordinateThickness = visibleCoordinateThickness;
-                Options.LineWidthX = visibleGridLineWidthX;
-                Options.LineWidthY = visibleGridLineWidthY;
+                _suppressOptionsChanged = true;
+                try
+                {
+                    Options.ShowSurfacesAs = MeshFaceDisplay.Triangles;
+                }
+                finally
+                {
+                    _suppressOptionsChanged = false;
+                }
             }
-            else
+
+            if (module is not null)
             {
-                visibleCoordinateThickness = Options.CoordinateThickness;
-                visibleGridLineWidthX = Options.LineWidthX;
-                visibleGridLineWidthY = Options.LineWidthY;
-                Options.CoordinateThickness = 0;
-                Options.LineWidthX = 0;
-                Options.LineWidthY = 0;
+                await module.InvokeVoidAsync("setMeshFaceDisplay",
+                    Options.ShowSurfacesAs != MeshFaceDisplay.None,
+                    Options.ShowSurfacesAs == MeshFaceDisplay.Surfaces);
             }
-            return Task.CompletedTask;
+
+            _ = InvokeAsync(StateHasChanged);
         }
 
         private async Task SynchronizeMeshDisplayLinesAsync()
         {
+            await ExecuteSceneOperationAsync("mesh edge display update", SynchronizeMeshDisplayLinesCoreAsync);
+        }
+
+        private async Task SynchronizeMeshDisplayLinesCoreAsync(IJSObjectReference? module)
+        {
             var desired = new Dictionary<string, LineData>();
             foreach (var mesh in meshes)
             {
-                if (showMeshEdges)
+                if (Options.ShowMeshEdges)
                 {
                     var lineData = CreateMeshDisplayLines(mesh, false);
                     if (lineData is not null)
                         desired.Add($"__mesh-edges-{mesh.Id}", lineData);
                 }
-                if (showMeshBorders)
+                if (Options.ShowMeshBorders && CanShowMeshBorders)
                 {
                     var lineData = CreateMeshDisplayLines(mesh, true);
                     if (lineData is not null)
@@ -1626,13 +1769,13 @@ namespace BugViewer
                 .Where(line => !desired.ContainsKey(line.Id)).ToList();
             var linesToAdd = desired.Values
                 .Where(line => !meshDisplayLines.ContainsKey(line.Id)).ToList();
-            await PauseRenderingAsync();
+            await PauseRenderingCoreAsync(module);
             try
             {
                 if (linesToRemove.Count > 0)
-                    await RemoveLinesAsync(linesToRemove);
+                    await RemoveLinesCoreAsync(linesToRemove, module);
                 if (linesToAdd.Count > 0)
-                    await AddLinesAsync(linesToAdd);
+                    await AddLinesCoreAsync(linesToAdd, module);
 
                 meshDisplayLines.Clear();
                 foreach (var line in desired)
@@ -1640,7 +1783,7 @@ namespace BugViewer
             }
             finally
             {
-                await ResumeRenderingAsync();
+                await ResumeRenderingCoreAsync(module);
             }
         }
 
@@ -1693,36 +1836,28 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ChangeMeshColorAsync(MeshData mesh, ColorRgba color)
         {
-            var index = -1;
-            if (sentMeshIds is null)
-                return;
-            var nameInSent = sentMeshIds.TryGetValue(mesh.Id, out index);
-            if (!nameInSent)
-            {   // logger.LogError("Mesh not found in viewer");
-                return;
-            }
-            var former = meshes[index];
-            if (former.ColorMode != MeshColoring.UniformColor)
-            {   // logger.LogError("Mesh not found in viewer");
-                return;
-            }
+            await ExecuteSceneOperationAsync($"change mesh color '{mesh.Id}'", async module =>
+            {
+                var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
+                if (index < 0 || meshes[index].ColorMode != MeshColoring.UniformColor)
+                    return;
 
-            // Update the C# model so if it's sent later (or re-sent), it has the new color
-            meshes[index].Colors = new[] { color };
-
-            // now call JS to change color of the mesh at index if ready
-            await _module.InvokeVoidAsync("changeMeshColor",
-                    new
+                meshes[index].Colors = [color];
+                if (module is not null)
+                {
+                    await module.InvokeVoidAsync("changeMeshColor", new
                     {
-                        index = index,
-                        color = new float[]
+                        index,
+                        color = new[]
                         {
-                        color.R / 255f,
-                        color.G / 255f,
-                        color.B / 255f,
-                        color.A / 255f
+                            color.R / 255f,
+                            color.G / 255f,
+                            color.B / 255f,
+                            color.A / 255f
                         }
                     });
+                }
+            });
         }
 
         /// <summary>
@@ -1730,26 +1865,31 @@ namespace BugViewer
         /// </summary>
         public async Task ChangeMeshColorsAsync(string meshId, IEnumerable<ColorRgba> colors)
         {
-            if (sentMeshIds is null || !sentMeshIds.TryGetValue(meshId, out var index))
-                return;
-
-            var mesh = meshes[index];
-            if (mesh.ColorMode != MeshColoring.PerTriangle)
-                throw new InvalidOperationException(
-                    $"Mesh '{meshId}' was not created with per-triangle coloring.");
-
             var colorList = colors.ToList();
-            if (colorList.Count != mesh.Indices.Count)
-                throw new ArgumentException("The color count must match the mesh triangle count.", nameof(colors));
+            await ExecuteSceneOperationAsync($"change mesh colors '{meshId}'", async module =>
+            {
+                var index = meshes.FindIndex(candidate => candidate.Id == meshId);
+                if (index < 0)
+                    return;
 
-            mesh.Colors = colorList;
-            var gpuColors = colorList.SelectMany(color =>
-                ColorRgba.ToJavaScript(color)
-                    .Concat(ColorRgba.ToJavaScript(color))
-                    .Concat(ColorRgba.ToJavaScript(color)))
-                .ToArray();
+                var mesh = meshes[index];
+                if (mesh.ColorMode != MeshColoring.PerTriangle)
+                    throw new InvalidOperationException(
+                        $"Mesh '{meshId}' was not created with per-triangle coloring.");
+                if (colorList.Count != mesh.Indices.Count)
+                    throw new ArgumentException("The color count must match the mesh triangle count.", nameof(colors));
 
-            await _module.InvokeVoidAsync("changeMeshColors", new { meshId, colors = gpuColors });
+                mesh.Colors = colorList;
+                if (module is not null)
+                {
+                    var gpuColors = colorList.SelectMany(color =>
+                        ColorRgba.ToJavaScript(color)
+                            .Concat(ColorRgba.ToJavaScript(color))
+                            .Concat(ColorRgba.ToJavaScript(color)))
+                        .ToArray();
+                    await module.InvokeVoidAsync("changeMeshColors", new { meshId, colors = gpuColors });
+                }
+            });
         }
 
         /// <summary>
@@ -1759,24 +1899,27 @@ namespace BugViewer
         /// <returns></returns>
         public async Task RemoveMeshAsync(MeshData mesh)
         {
-            var index = -1;
-            if (sentMeshIds is null)
+            await ExecuteSceneOperationAsync($"remove mesh '{mesh.Id}'", async module =>
             {
-                // Find index before removing so we can tell JS which mesh to remove
-                index = meshes.IndexOf(mesh);
+                var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
                 if (index < 0)
                     return;
-                await RemoveMeshAsync(index);
-            }
-            else
-            {
-                var nameInSent = sentMeshIds.TryGetValue(mesh.Id, out index);
-                if (nameInSent)
-                    await RemoveMeshAsync(index);
-            }
+
+                await RemoveMeshAtCoreAsync(index, module);
+                await ApplyMeshFaceDisplayCoreAsync(module);
+                await SynchronizeMeshDisplayLinesCoreAsync(module);
+            });
         }
+
         /// <summary>Removes a group of meshes without rebuilding the remaining WebGPU scene.</summary>
         public async Task RemoveMeshesAsync(IEnumerable<MeshData> meshesToRemove)
+        {
+            var meshList = meshesToRemove as IList<MeshData> ?? meshesToRemove.ToList();
+            await ExecuteSceneOperationAsync($"remove {meshList.Count} meshes",
+                module => RemoveMeshesCoreAsync(meshList, module));
+        }
+
+        private async Task RemoveMeshesCoreAsync(IEnumerable<MeshData> meshesToRemove, IJSObjectReference? module)
         {
             var ids = meshesToRemove.Select(mesh => mesh.Id).ToHashSet();
             if (ids.Count == 0)
@@ -1796,44 +1939,26 @@ namespace BugViewer
                 sphereChanged |= UpdateSpheresRemove(meshes[index]);
                 meshes.RemoveAt(index);
             }
-            ReindexSentMeshes();
-            UpdateViewer(sphereChanged);
-
-            if (_module is not null && _ready)
-                await _module.InvokeVoidAsync("removeMeshes", (object)ids.ToArray());
-            await SynchronizeMeshDisplayLinesAsync();
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("removeMeshes", (object)ids.ToArray());
+                ReindexSentMeshes();
+            }
+            await ApplyMeshFaceDisplayCoreAsync(module);
+            await SynchronizeMeshDisplayLinesCoreAsync(module);
         }
 
-        // Removes a mesh from the scene by its index.
-        private async Task RemoveMeshAsync(int index)
+        private async Task RemoveMeshAtCoreAsync(int index, IJSObjectReference? module)
         {
             var meshId = meshes[index].Id;
-            UpdateViewer(UpdateSpheresRemove(meshes[index]));
-            // Remove from the C# list and update viewer bounds
+            var sphereChanged = UpdateSpheresRemove(meshes[index]);
             meshes.RemoveAt(index);
-            sentMeshIds.Remove(meshId);
-            try
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
             {
-                await _module.InvokeVoidAsync("removeMesh", index);
-            }
-            catch
-            {
-                // If remove by index fails for any reason, fall back to rebuilding the JS scene
-                try
-                {
-                    await _module.InvokeVoidAsync("clearAllMeshes");
-                    sentMeshIds.Clear();
-                    for (int i = 0; i < meshes.Count; i++)
-                    {
-                        var m = meshes[i];
-                        sentMeshIds.Add(m.Id, i);
-                        await _module.InvokeVoidAsync("addMesh", m.CreateJavascriptData());
-                    }
-                }
-                catch
-                {
-                    // ignore errors
-                }
+                await module.InvokeVoidAsync("removeMeshes", (object)new[] { meshId });
+                ReindexSentMeshes();
             }
         }
 
@@ -1843,21 +1968,22 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllMeshesAsync()
         {
-            if (meshes is null || meshes.Count == 0)
-                return;
-
-            await RemoveLinesAsync(meshDisplayLines.Values.ToList());
-            meshDisplayLines.Clear();
-            meshes.Clear();
-            sentMeshIds.Clear();
-            UpdateViewer(true);
-
-            if (_module is null || !_ready)
+            await ExecuteSceneOperationAsync("clear all meshes", async module =>
             {
-                return;
-            }
+                if (meshes.Count == 0)
+                    return;
 
-            await _module.InvokeVoidAsync("clearAllMeshes");
+                await RemoveLinesCoreAsync(meshDisplayLines.Values.ToList(), module);
+                meshDisplayLines.Clear();
+                foreach (var mesh in meshes)
+                    UpdateSpheresRemove(mesh);
+                meshes.Clear();
+                sentMeshIds?.Clear();
+                await UpdateViewerCoreAsync(module, true);
+                if (module is not null)
+                    await module.InvokeVoidAsync("clearAllMeshes");
+                await ApplyMeshFaceDisplayCoreAsync(module);
+            });
         }
 
         /// <summary>
@@ -1867,12 +1993,23 @@ namespace BugViewer
         /// <returns></returns>
         public async Task RemoveLinesAsync(LineData line)
         {
-            var index = lines.FindIndex(candidate => candidate.Id == line.Id);
-            if (index >= 0)
-                await RemoveLinesAsync(index);
+            await ExecuteSceneOperationAsync($"remove line '{line.Id}'", async module =>
+            {
+                var index = lines.FindIndex(candidate => candidate.Id == line.Id);
+                if (index >= 0)
+                    await RemoveLineAtCoreAsync(index, module);
+            });
         }
+
         /// <summary>Removes a group of lines without clearing and rebuilding the remaining lines.</summary>
         public async Task RemoveLinesAsync(IEnumerable<LineData> linesToRemove)
+        {
+            var lineList = linesToRemove as IList<LineData> ?? linesToRemove.ToList();
+            await ExecuteSceneOperationAsync($"remove {lineList.Count} lines",
+                module => RemoveLinesCoreAsync(lineList, module));
+        }
+
+        private async Task RemoveLinesCoreAsync(IEnumerable<LineData> linesToRemove, IJSObjectReference? module)
         {
             var ids = linesToRemove.Select(line => line.Id).ToHashSet();
             if (ids.Count == 0)
@@ -1892,47 +2029,24 @@ namespace BugViewer
                 sphereChanged |= UpdateSpheresRemove(lines[index]);
                 lines.RemoveAt(index);
             }
-            ReindexSentLines();
-            UpdateViewer(sphereChanged);
-
-            if (_module is not null && _ready)
-                await _module.InvokeVoidAsync("removeLinesBatch", (object)ids.ToArray());
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("removeLinesBatch", (object)ids.ToArray());
+                ReindexSentLines();
+            }
         }
 
-        // Removes lines from the scene by their index.
-        private async Task RemoveLinesAsync(int index)
+        private async Task RemoveLineAtCoreAsync(int index, IJSObjectReference? module)
         {
             var lineId = lines[index].Id;
-            UpdateViewer(UpdateSpheresRemove(lines[index]));
-            // Remove from the C# list and update viewer bounds
+            var sphereChanged = UpdateSpheresRemove(lines[index]);
             lines.RemoveAt(index);
-            ReindexSentLines();
-
-            if (_module is null || !_ready)
-                return;
-
-            try
+            await UpdateViewerCoreAsync(module, sphereChanged);
+            if (module is not null)
             {
-                await _module.InvokeVoidAsync("removeLines", lineId);
-            }
-            catch
-            {
-                // If remove by index fails for any reason, fall back to rebuilding the JS scene
-                try
-                {
-                    await _module.InvokeVoidAsync("clearAllLines");
-                    sentLineIds.Clear();
-                    for (int i = 0; i < lines.Count; i++)
-                    {
-                        var m = lines[i];
-                        sentLineIds.Add(m.Id, i);
-                        await _module.InvokeVoidAsync("addLines", m.CreateJavascriptData(PathThickness));
-                    }
-                }
-                catch
-                {
-                    // ignore errors
-                }
+                await module.InvokeVoidAsync("removeLines", lineId);
+                ReindexSentLines();
             }
         }
 
@@ -1942,18 +2056,21 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllLinesAsync()
         {
-            if (lines is null || lines.Count == 0)
-                return;
+            await ExecuteSceneOperationAsync("clear all lines", async module =>
+            {
+                if (lines.Count == 0)
+                    return;
 
-            var need = lines.All(l => UpdateSpheresRemove(l));
-            lines.Clear();
-            sentLineIds?.Clear();
-            UpdateViewer(need);
-
-            if (_module is null || !_ready)
-                return;
-
-            await _module.InvokeVoidAsync("clearAllLines");
+                var sphereChanged = false;
+                foreach (var line in lines)
+                    sphereChanged |= UpdateSpheresRemove(line);
+                lines.Clear();
+                sentLineIds?.Clear();
+                meshDisplayLines.Clear();
+                await UpdateViewerCoreAsync(module, sphereChanged);
+                if (module is not null)
+                    await module.InvokeVoidAsync("clearAllLines");
+            });
         }
 
         private void ReindexSentLines()
@@ -1976,6 +2093,16 @@ namespace BugViewer
                 sentMeshIds[meshes[i].Id] = i;
         }
 
+        private void ReindexSentBillboards()
+        {
+            if (sentBBIds is null)
+                return;
+
+            sentBBIds.Clear();
+            for (var index = 0; index < billBoards.Count; index++)
+                sentBBIds[billBoards[index].Id] = index;
+        }
+
         /// <summary>
         /// Adds a text billboard to the scene at the specified position with the given text and colors. If a billboard with the same ID already exists, it will be replaced.
         /// </summary>
@@ -1989,13 +2116,6 @@ namespace BugViewer
         public async Task AddTextBillboardAsync(string id, string text, Vector3 position,
             ColorRgba backgroundColor, ColorRgba textColor, float scale, float relativeX, float relativeY)
         {
-            var index = -1;
-            var nameInSent = sentBBIds?.TryGetValue(id, out index);
-            if (nameInSent.GetValueOrDefault(false))
-            {
-                var former = billBoards[index];
-                await RemoveTextBillboardAsync(index);
-            }
             var billboardData = new TextBillboard
             {
                 BackgroundColor = backgroundColor,
@@ -2007,11 +2127,19 @@ namespace BugViewer
                 RelativeX = relativeX,
                 RelativeY = relativeY
             };
-            billBoards.Add(billboardData);
-            if (_module is null || !_ready)
-                return;
+            await ExecuteSceneOperationAsync($"add text billboard '{id}'", async module =>
+            {
+                var index = billBoards.FindIndex(candidate => candidate.Id == id);
+                if (index >= 0)
+                    await RemoveTextBillboardAtCoreAsync(index, module);
 
-            await _module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
+                billBoards.Add(billboardData);
+                if (module is not null)
+                {
+                    await module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
+                    ReindexSentBillboards();
+                }
+            });
         }
 
         /// <summary>
@@ -2021,52 +2149,22 @@ namespace BugViewer
         /// <returns></returns>
         public async Task RemoveTextBillboardAsync(TextBillboard billBoard)
         {
-            var index = -1;
-            if (sentBBIds is null)
+            await ExecuteSceneOperationAsync($"remove text billboard '{billBoard.Id}'", async module =>
             {
-                // Find index before removing so we can tell JS which mesh to remove
-                index = billBoards.IndexOf(billBoard);
-                if (index < 0)
-                    return;
-                await RemoveTextBillboardAsync(index);
-            }
-            else
-            {
-                var nameInSent = sentBBIds?.TryGetValue(billBoard.Id, out index);
-                if (nameInSent.GetValueOrDefault(false))
-                    await RemoveTextBillboardAsync(index);
-            }
+                var index = billBoards.FindIndex(candidate => candidate.Id == billBoard.Id);
+                if (index >= 0)
+                    await RemoveTextBillboardAtCoreAsync(index, module);
+            });
         }
-        // Removes a text billboard from the scene by its index.
-        private async Task RemoveTextBillboardAsync(int index)
-        {
-            var bbId = billBoards[index].Id;
-            billBoards.RemoveAt(index);
-            sentBBIds.Remove(bbId);
-            try
-            {
-                await _module.InvokeVoidAsync("removeTextBillboard", index);
-            }
-            catch
-            {
-                // If remove by index fails for any reason, fall back to rebuilding the JS scene
-                try
-                {
-                    await _module.InvokeVoidAsync("clearAllTextBillboards");
-                    sentBBIds.Clear();
-                    for (int i = 0; i < billBoards.Count; i++)
-                    {
-                        var m = billBoards[i];
-                        sentBBIds.Add(m.Id, i);
-                        await _module.InvokeVoidAsync("addTextBillboard", m.CreateJavascriptData());
-                    }
-                }
-                catch
-                {
-                    // ignore errors
-                }
-            }
 
+        private async Task RemoveTextBillboardAtCoreAsync(int index, IJSObjectReference? module)
+        {
+            billBoards.RemoveAt(index);
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("removeTextBillboard", index);
+                ReindexSentBillboards();
+            }
         }
 
         /// <summary>
@@ -2077,15 +2175,16 @@ namespace BugViewer
         /// <returns></returns>
         public async Task ClearAllTextBillboardsAsync()
         {
-            if (billBoards is null || billBoards.Count == 0)
-                return;
-            billBoards.Clear();
-            sentBBIds.Clear();
-            if (_module is null || !_ready)
+            await ExecuteSceneOperationAsync("clear all text billboards", async module =>
             {
-                return;
-            }
-            await _module.InvokeVoidAsync("clearAllTextBillboards");
+                if (billBoards.Count == 0)
+                    return;
+
+                billBoards.Clear();
+                sentBBIds?.Clear();
+                if (module is not null)
+                    await module.InvokeVoidAsync("clearAllTextBillboards");
+            });
         }
     }
 }

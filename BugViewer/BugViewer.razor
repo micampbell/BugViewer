@@ -19,6 +19,14 @@
             @onwheel:preventDefault="true"
             @oncontextmenu:preventDefault="true">
     </canvas>
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="webgpu-error-overlay" role="alert" aria-live="assertive">
+            <strong>WebGPU viewer unavailable</strong>
+            <span>@_error</span>
+            <span>Reload the page or reopen the viewer to try again.</span>
+        </div>
+    }
     <!-- A small anchor button to toggle the popover -->
     <FluentStack Style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; padding:4px; box-sizing:border-box;"
                  Orientation="@ToolsOrientation"
@@ -109,11 +117,18 @@
                         <FluentAccordion>
                             <FluentAccordionItem Heading="Display">
                                 <FluentStack Orientation="Orientation.Vertical">
-                                    <FluentCheckbox Value="@showAxes" ValueChanged="SetShowAxesAsync" Label="Show Axes (X)" />
-                                    <FluentCheckbox Value="@showMeshFaces" ValueChanged="SetShowMeshFacesAsync" Label="Show Faces (Z)" />
-                                    <FluentCheckbox Value="@showMeshEdges" ValueChanged="SetShowMeshEdgesAsync" Label="Show Edges (M)" />
-                                    <FluentCheckbox Value="@showMeshBorders" ValueChanged="SetShowMeshBordersAsync" Label="Show Borders (T)" />
-                                    <FluentNumberField TValue="float" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor" />
+                                    <FluentCheckbox @bind-Value="Options.ShowAxes" Label="Show Axes (X)" />
+                                    <span>Mesh Faces (T)</span>
+                                    <FluentRadioGroup TValue="MeshFaceDisplay" @bind-Value="Options.ShowSurfacesAs"
+                                                      Orientation="Orientation.Horizontal">
+                                        <FluentRadio Value="@MeshFaceDisplay.Triangles">Triangles</FluentRadio>
+                                        <FluentRadio Value="@MeshFaceDisplay.Surfaces" Disabled="@(!CanShowPrimitiveSurfaces)">Surfaces</FluentRadio>
+                                        <FluentRadio Value="@MeshFaceDisplay.None">None</FluentRadio>
+                                    </FluentRadioGroup>
+                                    <FluentCheckbox @bind-Value="Options.ShowMeshEdges" Label="Show Edges (M)" />
+                                    <FluentCheckbox @bind-Value="Options.ShowMeshBorders"
+                                                    Disabled="@(!CanShowMeshBorders)" Label="Show Borders (B)" />
+                                    <FluentNumberField TValue="double" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor" />
                                 </FluentStack>
                             </FluentAccordionItem>
                         </FluentAccordion>
@@ -230,10 +245,10 @@
                             <li><strong>Shift:</strong> Faster</li>
                             <li><strong>.</strong> Toggle Camera Panel</li>
                             <li><strong>,</strong> Toggle Options Panel</li>
-                            <li><strong>Z</strong> Toggle Showing Faces</li>
+                            <li><strong>T</strong> Cycle Mesh Faces: Triangles / Surfaces / None</li>
                             <li><strong>X</strong> Toggle Showing Grid and Axes</li>
                             <li><strong>M</strong> Toggle Showing Edges</li>
-                            <li><strong>T</strong> Toggle Showing Borders</li>
+                            <li><strong>B</strong> Toggle Showing Borders</li>
                         </ul>
                     </div>
                 </div>
@@ -244,6 +259,22 @@
 </div>
 
 <style>
+    .webgpu-error-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 1100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        box-sizing: border-box;
+        padding: 2rem;
+        text-align: center;
+        color: var(--error-foreground-rest, #b10e1c);
+        background: color-mix(in srgb, var(--neutral-layer-1, #ffffff) 94%, transparent);
+    }
+
     .toolbar-buttons {
         animation: fadeToTransparent 5s ease-in-out forwards;
     }
