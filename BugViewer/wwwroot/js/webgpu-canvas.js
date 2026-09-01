@@ -1009,7 +1009,7 @@ function renderFrame() {
             pass.setBindGroup(1, lightBindGroup);
         }
 
-        pass.setIndexBuffer(mesh.indexBuffer, 'uint16');
+        pass.setIndexBuffer(mesh.indexBuffer, mesh.indexFormat);
         pass.drawIndexed(mesh.indexCount);
     }
 
@@ -1079,7 +1079,7 @@ function renderFrame() {
                 if (!mesh.singleColor && mesh.colorBuffer) pass.setVertexBuffer(1, mesh.colorBuffer);
                 pass.setVertexBuffer(mesh.singleColor ? 1 : 2, mesh.primitiveSurfaceNormalBuffer);
                 if (!mesh.singleColor) pass.setBindGroup(1, lightBindGroup);
-                pass.setIndexBuffer(mesh.indexBuffer, 'uint16');
+                pass.setIndexBuffer(mesh.indexBuffer, mesh.indexFormat);
                 pass.drawIndexed(mesh.indexCount);
             }
         });
@@ -1386,7 +1386,13 @@ async function addMeshCore(meshData) {
     const { id, vertices, indices, colors, primitiveSurfaceNormals, singleColor } = meshData;
 
     const vertexBuffer = createBuffer(vertices, GPUBufferUsage.VERTEX);
-    const indexBuffer = createBuffer(indices, GPUBufferUsage.INDEX, Uint16Array);
+    let maximumIndex = 0;
+    for (const index of indices) {
+        maximumIndex = Math.max(maximumIndex, index);
+    }
+    const indexFormat = maximumIndex > 0xFFFF ? 'uint32' : 'uint16';
+    const indexBuffer = createBuffer(indices, GPUBufferUsage.INDEX,
+        indexFormat === 'uint32' ? Uint32Array : Uint16Array);
     const suppliedPrimitiveSurfaceNormals = primitiveSurfaceNormals?.length === vertices.length
         ? new Float32Array(primitiveSurfaceNormals)
         : new Float32Array(vertices.length);
@@ -1504,6 +1510,7 @@ async function addMeshCore(meshData) {
         primitiveSurfaceNormalBuffer,
         primitiveSurfaceNormals: suppliedPrimitiveSurfaceNormals,
         indexBuffer,
+        indexFormat,
         bindGroup,
         singleColor,
         isTransparent,
