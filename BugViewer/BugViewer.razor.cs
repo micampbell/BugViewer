@@ -499,10 +499,11 @@ namespace BugViewer
         private List<MeshData> meshes = new();
         private List<LineData> lines = new();
         private List<TextBillboard> billBoards = new();
-        // Dictionaries for tracking sent object IDs.
-        private Dictionary<string, int> sentMeshIds = [];
-        private Dictionary<string, int> sentLineIds = [];
-        private Dictionary<string, int> sentBBIds = [];
+        // Authoritative ID-to-index maps for the corresponding scene lists.
+        private readonly Dictionary<string, int> meshIndices = [];
+        private readonly Dictionary<string, int> lineIndices = [];
+        private readonly Dictionary<string, int> billboardIndices = [];
+        private const int MaxLineIntervalsPerInteropBatch = 65_536;
         private int renderPauseDepth;
         private double visibleCoordinateThickness;
         private double visibleGridLineWidthX;
@@ -1118,27 +1119,20 @@ namespace BugViewer
                 await WriteProjectionMatrixCoreAsync(module);
 
                 await module.InvokeVoidAsync("clearAllMeshes");
-                sentMeshIds = [];
                 if (meshes.Count > 0)
                     await module.InvokeVoidAsync("addMeshes", (object)meshes.Select(mesh => mesh.CreateJavascriptData()).ToArray());
-                ReindexSentMeshes();
+                ReindexMeshIndices();
                 await ApplyMeshFaceDisplayCoreAsync(module);
 
                 await module.InvokeVoidAsync("clearAllLines");
-                sentLineIds = [];
                 if (lines.Count > 0)
-                {
-                    var automaticThickness = PathThickness;
-                    await module.InvokeVoidAsync("addLinesBatch",
-                        (object)lines.Select(line => line.CreateJavascriptData(automaticThickness)).ToArray());
-                }
-                ReindexSentLines();
+                    await SendLinesCoreAsync(module, lines);
+                ReindexLineIndices();
 
                 await module.InvokeVoidAsync("clearAllTextBillboards");
-                sentBBIds = [];
                 for (var index = 0; index < billBoards.Count; index++)
                     await module.InvokeVoidAsync("addTextBillboard", billBoards[index].CreateJavascriptData());
-                ReindexSentBillboards();
+                ReindexBillboardIndices();
 
                 if (renderPauseDepth > 0)
                     await module.InvokeVoidAsync("pauseRendering");
@@ -1504,8 +1498,7 @@ namespace BugViewer
 
         private async Task AddMeshCoreAsync(MeshData mesh, IJSObjectReference? module)
         {
-            var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
-            if (index >= 0)
+            if (meshIndices.TryGetValue(mesh.Id, out var index))
             {
                 if (mesh.GetHashCode() == meshes[index].GetHashCode())
                     return;
@@ -1513,13 +1506,13 @@ namespace BugViewer
             }
 
             meshes.Add(mesh);
+            meshIndices[mesh.Id] = meshes.Count - 1;
             DefineMeshLookups(mesh);
             var sphereChanged = UpdateSpheresAdd(mesh);
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
             {
                 await module.InvokeVoidAsync("addMesh", mesh.CreateJavascriptData());
-                ReindexSentMeshes();
             }
 
             await ApplyMeshFaceDisplayCoreAsync(module);
@@ -1548,8 +1541,7 @@ namespace BugViewer
             var sphereChanged = false;
             foreach (var mesh in meshList)
             {
-                var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
-                if (index >= 0)
+                if (meshIndices.TryGetValue(mesh.Id, out var index))
                 {
                     if (mesh.GetHashCode() == meshes[index].GetHashCode())
                         continue;
@@ -1557,6 +1549,7 @@ namespace BugViewer
                 }
 
                 meshes.Add(mesh);
+                meshIndices[mesh.Id] = meshes.Count - 1;
                 DefineMeshLookups(mesh);
                 sphereChanged |= UpdateSpheresAdd(mesh);
                 meshesToSend.Add(mesh);
@@ -1570,7 +1563,6 @@ namespace BugViewer
             {
                 await module.InvokeVoidAsync("addMeshes",
                     (object)meshesToSend.Select(mesh => mesh.CreateJavascriptData()).ToArray());
-                ReindexSentMeshes();
             }
 
             await ApplyMeshFaceDisplayCoreAsync(module);
@@ -1620,8 +1612,7 @@ namespace BugViewer
 
         private async Task AddLineCoreAsync(LineData path, IJSObjectReference? module)
         {
-            var index = lines.FindIndex(line => line.Id == path.Id);
-            if (index >= 0)
+            if (lineIndices.TryGetValue(path.Id, out var index))
             {
                 if (path.GetHashCode() == lines[index].GetHashCode())
                     return;
@@ -1629,18 +1620,18 @@ namespace BugViewer
             }
 
             lines.Add(path);
+            lineIndices[path.Id] = lines.Count - 1;
             var sphereChanged = UpdateSpheresAdd(path);
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
             {
                 await module.InvokeVoidAsync("addLines", path.CreateJavascriptData(PathThickness));
-                ReindexSentLines();
             }
         }
 
         /// <summary>
-        /// Adds multiple lines with one JavaScript interop call. This is useful when a caller
-        /// constructs a scene from many independent paths.
+        /// Adds multiple lines using bounded JavaScript interop batches. This is useful when a caller
+        /// constructs a scene from many independent paths or large segment buffers.
         /// </summary>
         public async Task AddLinesAsync(IEnumerable<LineData> newLines)
         {
@@ -1658,8 +1649,7 @@ namespace BugViewer
             var sphereChanged = false;
             foreach (var line in lineList)
             {
-                var existingIndex = lines.FindIndex(candidate => candidate.Id == line.Id);
-                if (existingIndex >= 0)
+                if (lineIndices.TryGetValue(line.Id, out var existingIndex))
                 {
                     var existing = lines[existingIndex];
                     if (line.GetHashCode() == existing.GetHashCode())
@@ -1668,6 +1658,7 @@ namespace BugViewer
                 }
 
                 lines.Add(line);
+                lineIndices[line.Id] = lines.Count - 1;
                 sphereChanged |= UpdateSpheresAdd(line);
                 linesToSend.Add(line);
             }
@@ -1677,12 +1668,37 @@ namespace BugViewer
 
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
+                await SendLinesCoreAsync(module, linesToSend);
+        }
+
+        private async Task SendLinesCoreAsync(IJSObjectReference module, IEnumerable<LineData> source)
+        {
+            var automaticThickness = PathThickness;
+            var payload = new List<object>();
+            var intervalCount = 0;
+
+            foreach (var line in source)
             {
-                var automaticThickness = PathThickness;
-                await module.InvokeVoidAsync("addLinesBatch",
-                    (object)linesToSend.Select(line => line.CreateJavascriptData(automaticThickness)).ToArray());
-                ReindexSentLines();
+                if (IsTearingDown)
+                    return;
+
+                var lineIntervalCount = Math.Max(0, line.Vertices.Count - 1);
+                if (payload.Count > 0 && intervalCount + lineIntervalCount > MaxLineIntervalsPerInteropBatch)
+                {
+                    await module.InvokeVoidAsync("addLinesBatch", (object)payload.ToArray());
+                    payload.Clear();
+                    intervalCount = 0;
+                    await Task.Yield();
+                    if (IsTearingDown)
+                        return;
+                }
+
+                payload.Add(line.CreateJavascriptData(automaticThickness));
+                intervalCount += lineIntervalCount;
             }
+
+            if (payload.Count > 0 && !IsTearingDown)
+                await module.InvokeVoidAsync("addLinesBatch", (object)payload.ToArray());
         }
 
         /// <summary>Suspends WebGPU drawing until <see cref="ResumeRenderingAsync"/> is called.</summary>
@@ -1838,8 +1854,8 @@ namespace BugViewer
         {
             await ExecuteSceneOperationAsync($"change mesh color '{mesh.Id}'", async module =>
             {
-                var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
-                if (index < 0 || meshes[index].ColorMode != MeshColoring.UniformColor)
+                if (!meshIndices.TryGetValue(mesh.Id, out var index)
+                    || meshes[index].ColorMode != MeshColoring.UniformColor)
                     return;
 
                 meshes[index].Colors = [color];
@@ -1868,8 +1884,7 @@ namespace BugViewer
             var colorList = colors.ToList();
             await ExecuteSceneOperationAsync($"change mesh colors '{meshId}'", async module =>
             {
-                var index = meshes.FindIndex(candidate => candidate.Id == meshId);
-                if (index < 0)
+                if (!meshIndices.TryGetValue(meshId, out var index))
                     return;
 
                 var mesh = meshes[index];
@@ -1901,8 +1916,7 @@ namespace BugViewer
         {
             await ExecuteSceneOperationAsync($"remove mesh '{mesh.Id}'", async module =>
             {
-                var index = meshes.FindIndex(candidate => candidate.Id == mesh.Id);
-                if (index < 0)
+                if (!meshIndices.TryGetValue(mesh.Id, out var index))
                     return;
 
                 await RemoveMeshAtCoreAsync(index, module);
@@ -1939,12 +1953,10 @@ namespace BugViewer
                 sphereChanged |= UpdateSpheresRemove(meshes[index]);
                 meshes.RemoveAt(index);
             }
+            ReindexMeshIndices();
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
-            {
                 await module.InvokeVoidAsync("removeMeshes", (object)ids.ToArray());
-                ReindexSentMeshes();
-            }
             await ApplyMeshFaceDisplayCoreAsync(module);
             await SynchronizeMeshDisplayLinesCoreAsync(module);
         }
@@ -1954,12 +1966,10 @@ namespace BugViewer
             var meshId = meshes[index].Id;
             var sphereChanged = UpdateSpheresRemove(meshes[index]);
             meshes.RemoveAt(index);
+            ReindexMeshIndices();
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
-            {
                 await module.InvokeVoidAsync("removeMeshes", (object)new[] { meshId });
-                ReindexSentMeshes();
-            }
         }
 
         /// <summary>
@@ -1978,7 +1988,7 @@ namespace BugViewer
                 foreach (var mesh in meshes)
                     UpdateSpheresRemove(mesh);
                 meshes.Clear();
-                sentMeshIds?.Clear();
+                meshIndices.Clear();
                 await UpdateViewerCoreAsync(module, true);
                 if (module is not null)
                     await module.InvokeVoidAsync("clearAllMeshes");
@@ -1995,8 +2005,7 @@ namespace BugViewer
         {
             await ExecuteSceneOperationAsync($"remove line '{line.Id}'", async module =>
             {
-                var index = lines.FindIndex(candidate => candidate.Id == line.Id);
-                if (index >= 0)
+                if (lineIndices.TryGetValue(line.Id, out var index))
                     await RemoveLineAtCoreAsync(index, module);
             });
         }
@@ -2029,12 +2038,10 @@ namespace BugViewer
                 sphereChanged |= UpdateSpheresRemove(lines[index]);
                 lines.RemoveAt(index);
             }
+            ReindexLineIndices();
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
-            {
                 await module.InvokeVoidAsync("removeLinesBatch", (object)ids.ToArray());
-                ReindexSentLines();
-            }
         }
 
         private async Task RemoveLineAtCoreAsync(int index, IJSObjectReference? module)
@@ -2042,12 +2049,10 @@ namespace BugViewer
             var lineId = lines[index].Id;
             var sphereChanged = UpdateSpheresRemove(lines[index]);
             lines.RemoveAt(index);
+            ReindexLineIndices();
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
-            {
                 await module.InvokeVoidAsync("removeLines", lineId);
-                ReindexSentLines();
-            }
         }
 
         /// <summary>
@@ -2065,7 +2070,7 @@ namespace BugViewer
                 foreach (var line in lines)
                     sphereChanged |= UpdateSpheresRemove(line);
                 lines.Clear();
-                sentLineIds?.Clear();
+                lineIndices.Clear();
                 meshDisplayLines.Clear();
                 await UpdateViewerCoreAsync(module, sphereChanged);
                 if (module is not null)
@@ -2073,34 +2078,25 @@ namespace BugViewer
             });
         }
 
-        private void ReindexSentLines()
+        private void ReindexLineIndices()
         {
-            if (sentLineIds is null)
-                return;
-
-            sentLineIds.Clear();
+            lineIndices.Clear();
             for (var i = 0; i < lines.Count; i++)
-                sentLineIds[lines[i].Id] = i;
+                lineIndices[lines[i].Id] = i;
         }
 
-        private void ReindexSentMeshes()
+        private void ReindexMeshIndices()
         {
-            if (sentMeshIds is null)
-                return;
-
-            sentMeshIds.Clear();
+            meshIndices.Clear();
             for (var i = 0; i < meshes.Count; i++)
-                sentMeshIds[meshes[i].Id] = i;
+                meshIndices[meshes[i].Id] = i;
         }
 
-        private void ReindexSentBillboards()
+        private void ReindexBillboardIndices()
         {
-            if (sentBBIds is null)
-                return;
-
-            sentBBIds.Clear();
+            billboardIndices.Clear();
             for (var index = 0; index < billBoards.Count; index++)
-                sentBBIds[billBoards[index].Id] = index;
+                billboardIndices[billBoards[index].Id] = index;
         }
 
         /// <summary>
@@ -2129,16 +2125,13 @@ namespace BugViewer
             };
             await ExecuteSceneOperationAsync($"add text billboard '{id}'", async module =>
             {
-                var index = billBoards.FindIndex(candidate => candidate.Id == id);
-                if (index >= 0)
+                if (billboardIndices.TryGetValue(id, out var index))
                     await RemoveTextBillboardAtCoreAsync(index, module);
 
                 billBoards.Add(billboardData);
+                billboardIndices[id] = billBoards.Count - 1;
                 if (module is not null)
-                {
                     await module.InvokeVoidAsync("addTextBillboard", billboardData.CreateJavascriptData());
-                    ReindexSentBillboards();
-                }
             });
         }
 
@@ -2151,8 +2144,7 @@ namespace BugViewer
         {
             await ExecuteSceneOperationAsync($"remove text billboard '{billBoard.Id}'", async module =>
             {
-                var index = billBoards.FindIndex(candidate => candidate.Id == billBoard.Id);
-                if (index >= 0)
+                if (billboardIndices.TryGetValue(billBoard.Id, out var index))
                     await RemoveTextBillboardAtCoreAsync(index, module);
             });
         }
@@ -2160,11 +2152,9 @@ namespace BugViewer
         private async Task RemoveTextBillboardAtCoreAsync(int index, IJSObjectReference? module)
         {
             billBoards.RemoveAt(index);
+            ReindexBillboardIndices();
             if (module is not null)
-            {
                 await module.InvokeVoidAsync("removeTextBillboard", index);
-                ReindexSentBillboards();
-            }
         }
 
         /// <summary>
@@ -2181,7 +2171,7 @@ namespace BugViewer
                     return;
 
                 billBoards.Clear();
-                sentBBIds?.Clear();
+                billboardIndices.Clear();
                 if (module is not null)
                     await module.InvokeVoidAsync("clearAllTextBillboards");
             });

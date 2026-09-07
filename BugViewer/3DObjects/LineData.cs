@@ -51,7 +51,19 @@ public record LineData : AbstractObject3D
         var thicknessList = thicknesses as IList<float> ?? thicknesses.ToList();
         var colorList = Colors as IList<ColorRgba> ?? Colors.ToList();
         var fadeList = FadeFactors as IList<float> ?? FadeFactors.ToList();
-        var segments = new List<float>(Math.Max(0, Vertices.Count - 1) * 12);
+        var segmentCount = Math.Max(0, Vertices.Count - 1);
+        if (thicknessList.Count < segmentCount)
+            throw new InvalidOperationException(
+                $"Line '{Id}' has {segmentCount} segments but only {thicknessList.Count} thickness values.");
+        for (var vertexIndex = 0; vertexIndex < Vertices.Count; vertexIndex++)
+        {
+            var vertex = Vertices[vertexIndex];
+            if (!float.IsFinite(vertex.X) || !float.IsFinite(vertex.Y) || !float.IsFinite(vertex.Z))
+                throw new InvalidOperationException(
+                    $"Line '{Id}' vertex {vertexIndex} contains a non-finite coordinate.");
+        }
+
+        var segments = new List<float>(segmentCount * 12);
 
         var min = new Vector3(float.PositiveInfinity);
         var max = new Vector3(float.NegativeInfinity);
@@ -59,13 +71,18 @@ public record LineData : AbstractObject3D
         for (var i = 0; i < Vertices.Count - 1; i++)
         {
             var thickness = thicknessList[i];
+            if (!float.IsFinite(thickness))
+                throw new InvalidOperationException($"Line '{Id}' segment {i} has a non-finite thickness.");
             if (thickness <= 0f)
                 continue;
 
             var start = Vertices[i];
             var end = Vertices[i + 1];
             var color = colorList.Count > i ? colorList[i] : ColorRgba.White;
-            var fade = fadeList.Count > i ? Math.Clamp(fadeList[i], 0f, 1f) : 0f;
+            var fade = fadeList.Count > i ? fadeList[i] : 0f;
+            if (!float.IsFinite(fade))
+                throw new InvalidOperationException($"Line '{Id}' segment {i} has a non-finite fade factor.");
+            fade = Math.Clamp(fade, 0f, 1f);
 
             // Interleaved 48-byte instance: start, end, RGBA, thickness, fade.
             segments.Add(start.X);
