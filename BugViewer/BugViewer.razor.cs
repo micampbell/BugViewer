@@ -414,6 +414,13 @@ namespace BugViewer
         [Parameter]
         public EventCallback<string?> OnHoverSelectionKeyChanged { get; set; }
 
+        /// <summary>Invoked after a user-visible camera change.</summary>
+        [Parameter]
+        public EventCallback<CameraState> OnCameraChanged { get; set; }
+
+        private Task? _cameraNotificationTask;
+        private int _cameraNotificationVersion;
+
         /// <summary>
         /// The camera object that manages the view matrix and 
         /// projection matrix based on user interactions.
@@ -438,6 +445,7 @@ namespace BugViewer
         private readonly SemaphoreSlim _webGpuInteropGate = new(1, 1);
         private readonly object _disposeSync = new();
         private Task? _disposeTask;
+        private bool _applyingCameraState;
         private volatile ViewerLifecycleState _lifecycleState = ViewerLifecycleState.Uninitialized;
         private bool _suppressOptionsChanged;
         private string? _error;
@@ -553,19 +561,15 @@ namespace BugViewer
         List<Vector3> vBarycentricMultipliers = new();
 
         // MSAA sample count options.
-        Option<int>? selectedIntOption;
-        private List<Option<int>> _sampleCountItems = new()
+        internal sealed record SampleCountOption(int Value, string Text);
+
+        private readonly List<SampleCountOption> _sampleCountItems = new()
     {
-        new() { Value = 1, Text = "1x (No MSAA)" },
+        new(1, "1x (No MSAA)"),
         // new() { Value = 2, Text = "2x" },  //generally not supported
-        new() { Value = 4, Text = "4x MSAA" },
-        new() { Value = 8, Text = "8x MSAA" }
+        new(4, "4x MSAA"),
+        new(8, "8x MSAA")
     };
-        // Handles sample count option changes.
-        private void SampleCountOptionChanged(string args)
-        {
-            Options.SampleCount = int.Parse(args);
-        }
 
         /// <summary>
         /// Initializes the component, setting up the camera and starting the keyboard movement timer.
@@ -948,8 +952,61 @@ namespace BugViewer
             }
         }
 
-        private Task WriteViewMatrixAsync(string operation) =>
-            ExecuteReadyInteropAsync(operation, module => WriteViewMatrixCoreAsync(module));
+        private async Task WriteViewMatrixAsync(string operation)
+        {
+            await ExecuteReadyInteropAsync(operation, module => WriteViewMatrixCoreAsync(module));
+            if (!_applyingCameraState && Camera is not null && OnCameraChanged.HasDelegate)
+                QueueCameraNotification();
+        }
+
+        private void QueueCameraNotification()
+        {
+            Interlocked.Increment(ref _cameraNotificationVersion);
+            if (_cameraNotificationTask is null || _cameraNotificationTask.IsCompleted)
+                _cameraNotificationTask = NotifyCameraChangesAsync();
+        }
+
+        private async Task NotifyCameraChangesAsync()
+        {
+            while (!IsTearingDown)
+            {
+                var version = Volatile.Read(ref _cameraNotificationVersion);
+                await Task.Delay(32);
+                if (!_applyingCameraState && Camera is not null && OnCameraChanged.HasDelegate)
+                    await InvokeAsync(() => OnCameraChanged.InvokeAsync(GetCameraState()));
+                if (version == Volatile.Read(ref _cameraNotificationVersion))
+                    return;
+            }
+        }
+
+        /// <summary>Captures the current camera orientation and projection.</summary>
+        public CameraState GetCameraState() => Camera?.Capture(Options.OrthoSize, Options.IsProjectionCamera)
+            ?? default;
+
+        /// <summary>Applies a camera snapshot without emitting a reciprocal change event.</summary>
+        public async Task ApplyCameraStateAsync(CameraState state)
+        {
+            if (Camera is null)
+                return;
+            _applyingCameraState = true;
+            _suppressOptionsChanged = true;
+            try
+            {
+                Camera.Apply(state);
+                Options.OrthoSize = state.OrthographicSize;
+                Options.IsProjectionCamera = state.IsPerspective;
+                await ExecuteReadyInteropAsync("linked camera update", async module =>
+                {
+                    await WriteProjectionMatrixCoreAsync(module);
+                    await WriteViewMatrixCoreAsync(module);
+                });
+            }
+            finally
+            {
+                _suppressOptionsChanged = false;
+                _applyingCameraState = false;
+            }
+        }
 
         private async Task WriteViewMatrixCoreAsync(IJSObjectReference module)
         {

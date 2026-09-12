@@ -35,7 +35,7 @@
                  Class="@($"toolbar-buttons {(_isMouseButtonDown ? "mouse-down" : "")} {(IsAnyPopoverOpen ? "popover-open" : "")}")">
         <div style="pointer-events:auto;">
             <FluentButton Id="options"
-                          Appearance="Appearance.Stealth"
+                          Appearance="ButtonAppearance.Default"
                           Title="Open Options"
                           OnClick="@(() => ShowOptionsPanel())">
                 <FluentIcon Value="@(new Icons.Settings())" />
@@ -43,7 +43,7 @@
         </div>
         <div style="pointer-events:auto;">
             <FluentButton Id="camera-controls"
-                          Appearance="Appearance.Stealth"
+                          Appearance="ButtonAppearance.Default"
                           Title="Open Camera Controls"
                           OnClick="@(() => ShowCameraPanel())">
                 <FluentIcon Value="@(new Icons.CameraSparkles())" />
@@ -51,7 +51,7 @@
         </div>
         <div style="pointer-events:auto;">
             <FluentButton Id="help"
-                          Appearance="Appearance.Stealth"
+                          Appearance="ButtonAppearance.Default"
                           Title="Open Help"
                           OnClick="@(() => ShowHelpPanel())">
                 <FluentIcon Value="@(new Icons.Question())" />
@@ -65,13 +65,13 @@
             <div class="bugviewer-popover-content">
                 <div part="body">
                     <FluentStack Orientation="Orientation.Vertical">
-                        <FluentButton OnClick="HandleCameraReset" Appearance="Appearance.Stealth" Title="Reset Camera" Class="toolbar-btn reset-btn"><FluentIcon Value="@(new Icons.CameraSwitch())" /></FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))" Appearance="Appearance.Stealth" Title="View -X" Class="toolbar-btn cardinal-btn">-X</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))" Appearance="Appearance.Stealth" Title="View +X" Class="toolbar-btn cardinal-btn">+X</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))" Appearance="Appearance.Stealth" Title="View -Y" Class="toolbar-btn cardinal-btn">-Y</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))" Appearance="Appearance.Stealth" Title="View +Y" Class="toolbar-btn cardinal-btn">+Y</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))" Appearance="Appearance.Stealth" Title="View -Z" Class="toolbar-btn cardinal-btn">-Z</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))" Appearance="Appearance.Stealth" Title="View +Z" Class="toolbar-btn cardinal-btn">+Z</FluentButton>
+                        <FluentButton OnClick="HandleCameraReset" Appearance="ButtonAppearance.Default" Title="Reset Camera" Class="toolbar-btn reset-btn"><FluentIcon Value="@(new Icons.CameraSwitch())" /></FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))" Appearance="ButtonAppearance.Default" Title="View -X" Class="toolbar-btn cardinal-btn">-X</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))" Appearance="ButtonAppearance.Default" Title="View +X" Class="toolbar-btn cardinal-btn">+X</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))" Appearance="ButtonAppearance.Default" Title="View -Y" Class="toolbar-btn cardinal-btn">-Y</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))" Appearance="ButtonAppearance.Default" Title="View +Y" Class="toolbar-btn cardinal-btn">+Y</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))" Appearance="ButtonAppearance.Default" Title="View -Z" Class="toolbar-btn cardinal-btn">-Z</FluentButton>
+                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))" Appearance="ButtonAppearance.Default" Title="View +Z" Class="toolbar-btn cardinal-btn">+Z</FluentButton>
                     </FluentStack>
                 </div>
             </div>
@@ -107,11 +107,11 @@
                                 <FluentSlider Label="Headlamp Intensity" @bind-Value="Options.HeadlampIntensity" Min="0" Max="1" Step="0.01" />
                                 <FluentSlider Label="Headlamp Focus" @bind-Value="Options.HeadlampFocus" Min="1" Max="32" Step="0.25" />
                                 <FluentSlider Label="SpecularPower" @bind-Value="Options.SpecularPower" Min="1" Max="100" Step="0.25" />
-                                <FluentSelect Items=@_sampleCountItems Label="MSAA Sample Count"
-                                              TOption="Option<int>"
-                                              OptionText="@(i => i.Text)"
-                                              OptionValue="@(i => i.Value.ToString())"
-                                              @bind-SelectedOption="@selectedIntOption" ValueChanged="SampleCountOptionChanged" />
+                                <FluentSelect Items="@_sampleCountItems" Label="MSAA Sample Count"
+                                              TOption="SampleCountOption" TValue="int"
+                                              OptionText="@(item => item?.Text ?? string.Empty)"
+                                              OptionValue="@(item => item?.Value ?? 1)"
+                                              @bind-Value="Options.SampleCount" />
                             </FluentAccordionItem>
                         </FluentAccordion>
                         <FluentAccordion>
@@ -128,7 +128,7 @@
                                     <FluentCheckbox @bind-Value="Options.ShowMeshEdges" Label="Show Edges (M)" />
                                     <FluentCheckbox @bind-Value="Options.ShowMeshBorders"
                                                     Disabled="@(!CanShowMeshBorders)" Label="Show Borders (B)" />
-                                    <FluentNumberField TValue="double" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor" />
+                                    <FluentNumberInput TValue="double" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor" />
                                 </FluentStack>
                             </FluentAccordionItem>
                         </FluentAccordion>

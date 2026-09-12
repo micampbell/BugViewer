@@ -91,6 +91,17 @@ public class OrbitCamera
         }
     }
     private Vector3 target = Vector3.Zero;
+
+    internal CameraState Capture(double orthographicSize, bool isPerspective) =>
+        new(Target, AzimuthAngle, PolarAngle, Distance, orthographicSize, isPerspective);
+
+    internal void Apply(CameraState state)
+    {
+        Target = state.Target;
+        AzimuthAngle = state.AzimuthAngle;
+        PolarAngle = state.PolarAngle;
+        Distance = state.Distance;
+    }
     #endregion
 
     #region Camera Controls

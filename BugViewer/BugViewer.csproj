@@ -9,7 +9,7 @@
 
     <!-- NuGet package metadata (fill in as desired) -->
     <PackageId>BugViewer</PackageId>
-    <Version>0.6.7</Version>
+    <Version>0.6.8</Version>
     <Authors>MICampbell</Authors>
     <Description>
 		BugViewer is a Blazor component that renders a 3D file with the new WebGPU. It includes controls to view a single part (as opposed to being a game engine). The goal is to provide a clear method to view 3D parts with minimal Javascript.
@@ -26,10 +26,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components" Version="10.0.9" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
-    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.2" />
-    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.0-rc.5-26219.1" />
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0-rc.5-26219.1" />
   </ItemGroup>
 
   <ItemGroup>
