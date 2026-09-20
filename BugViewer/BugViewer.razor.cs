@@ -1667,6 +1667,21 @@ namespace BugViewer
             await ExecuteSceneOperationAsync($"add line '{path.Id}'", module => AddLineCoreAsync(path, module));
         }
 
+        private void RebuildMeshLookups()
+        {
+            triangleToMesh.Clear();
+            triangleToInMeshIndex.Clear();
+            facePlaneDistances.Clear();
+            faceNormals.Clear();
+            bCoords.Clear();
+            uBarycentricMultipliers.Clear();
+            vBarycentricMultipliers.Clear();
+            foreach (var mesh in meshes) DefineMeshLookups(mesh);
+            SelectedMeshName = null;
+            SelectedTriangleInMeshIndex = -1;
+            SelectedPoint = Vector3.NaN;
+        }
+
         private async Task AddLineCoreAsync(LineData path, IJSObjectReference? module)
         {
             if (lineIndices.TryGetValue(path.Id, out var index))
@@ -2011,6 +2026,7 @@ namespace BugViewer
                 meshes.RemoveAt(index);
             }
             ReindexMeshIndices();
+            RebuildMeshLookups();
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
                 await module.InvokeVoidAsync("removeMeshes", (object)ids.ToArray());
@@ -2024,6 +2040,7 @@ namespace BugViewer
             var sphereChanged = UpdateSpheresRemove(meshes[index]);
             meshes.RemoveAt(index);
             ReindexMeshIndices();
+            RebuildMeshLookups();
             await UpdateViewerCoreAsync(module, sphereChanged);
             if (module is not null)
                 await module.InvokeVoidAsync("removeMeshes", (object)new[] { meshId });
@@ -2046,6 +2063,7 @@ namespace BugViewer
                     UpdateSpheresRemove(mesh);
                 meshes.Clear();
                 meshIndices.Clear();
+                RebuildMeshLookups();
                 await UpdateViewerCoreAsync(module, true);
                 if (module is not null)
                     await module.InvokeVoidAsync("clearAllMeshes");

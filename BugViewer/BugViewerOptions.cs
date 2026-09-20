@@ -113,6 +113,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         ShowSurfacesAs = newOptions.ShowSurfacesAs;
         SampleCount = newOptions.SampleCount;
         IsProjectionCamera = newOptions.IsProjectionCamera;
+        DoubleClickIsSelect = newOptions.DoubleClickIsSelect;
         Fov = newOptions.Fov;
         OrthoSize = newOptions.OrthoSize;
         ZNear = newOptions.ZNear;
