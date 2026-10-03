@@ -68,8 +68,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         PathThicknessFactor = 0.003f,
         SampleCount = 4,
         ShowAxes = true,
-        ShowMeshBorders = true,
-        ShowMeshEdges = false,
+        ShowEdgesAt = ShowEdgesAtOption.ShowMeshBorders,
         ShowSurfacesAs = MeshFaceDisplay.Surfaces,
         SpecularPower = 17,
         ZFar = 1075,
@@ -108,8 +107,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         LineWidthY = newOptions.LineWidthY;
         PathThicknessFactor = newOptions.PathThicknessFactor;
         ShowAxes = newOptions.ShowAxes;
-        ShowMeshBorders = newOptions.ShowMeshBorders;
-        ShowMeshEdges = newOptions.ShowMeshEdges;
+        ShowEdgesAt = newOptions.ShowEdgesAt;
         ShowSurfacesAs = newOptions.ShowSurfacesAs;
         SampleCount = newOptions.SampleCount;
         IsProjectionCamera = newOptions.IsProjectionCamera;
@@ -684,18 +682,39 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Specifies whether mesh edges are displayed. When true, edges of the mesh will be visible.
+    /// Specifies where mesh edges are displayed.
     /// </summary>
-    private bool _showMeshEdges = false;
-    public bool ShowMeshEdges
+    private ShowEdgesAtOption _showEdgesAt = ShowEdgesAtOption.ShowMeshBorders;
+    public ShowEdgesAtOption ShowEdgesAt
     {
-        get => _showMeshEdges;
+        get => _showEdgesAt;
         set
         {
-            if (_showMeshEdges != value)
+            if (_showEdgesAt != value)
             {
-                _showMeshEdges = value;
+                _showEdgesAt = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(ShowMeshEdges));
+                OnPropertyChanged(nameof(ShowMeshBorders));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Specifies whether mesh edges are displayed. When true, edges of the mesh will be visible.
+    /// </summary>
+    public bool ShowMeshEdges
+    {
+        get => _showEdgesAt == ShowEdgesAtOption.ShowMeshEdges;
+        set
+        {
+            if (value)
+            {
+                ShowEdgesAt = ShowEdgesAtOption.ShowMeshEdges;
+            }
+            else if (_showEdgesAt == ShowEdgesAtOption.ShowMeshEdges)
+            {
+                ShowEdgesAt = ShowEdgesAtOption.None;
             }
         }
     }
@@ -703,16 +722,18 @@ public class BugViewerOptions : INotifyPropertyChanged
     /// <summary>
     /// Specifies whether mesh borders are displayed. When true, borders of the mesh will be visible.
     /// </summary>
-    private bool _showMeshBorders = true;
     public bool ShowMeshBorders
     {
-        get => _showMeshBorders;
+        get => _showEdgesAt == ShowEdgesAtOption.ShowMeshBorders;
         set
         {
-            if (_showMeshBorders != value)
+            if (value)
             {
-                _showMeshBorders = value;
-                OnPropertyChanged();
+                ShowEdgesAt = ShowEdgesAtOption.ShowMeshBorders;
+            }
+            else if (_showEdgesAt == ShowEdgesAtOption.ShowMeshBorders)
+            {
+                ShowEdgesAt = ShowEdgesAtOption.None;
             }
         }
     }

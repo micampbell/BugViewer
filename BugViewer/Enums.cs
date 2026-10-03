@@ -45,6 +45,16 @@ namespace BugViewer
     }
 
     /// <summary>
+    /// Specifies where mesh edges are displayed.
+    /// </summary>
+    public enum ShowEdgesAtOption
+    {
+        None,
+        ShowMeshEdges,
+        ShowMeshBorders
+    }
+
+    /// <summary>
     /// Defines when an automatic update should be triggered.
     /// </summary>
     public enum UpdateTypes

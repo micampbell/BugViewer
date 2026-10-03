@@ -125,9 +125,13 @@
                                         <FluentRadio Value="@MeshFaceDisplay.Surfaces" Disabled="@(!CanShowPrimitiveSurfaces)">Surfaces</FluentRadio>
                                         <FluentRadio Value="@MeshFaceDisplay.None">None</FluentRadio>
                                     </FluentRadioGroup>
-                                    <FluentCheckbox @bind-Value="Options.ShowMeshEdges" Label="Show Edges (M)" />
-                                    <FluentCheckbox @bind-Value="Options.ShowMeshBorders"
-                                                    Disabled="@(!CanShowMeshBorders)" Label="Show Borders (B)" />
+                                    <span>Mesh Edges (B)</span>
+                                    <FluentRadioGroup TValue="ShowEdgesAtOption" @bind-Value="Options.ShowEdgesAt"
+                                                      Orientation="Orientation.Horizontal">
+                                        <FluentRadio Value="@ShowEdgesAtOption.ShowMeshEdges">Show Mesh Edges</FluentRadio>
+                                        <FluentRadio Value="@ShowEdgesAtOption.ShowMeshBorders" Disabled="@(!CanShowMeshBorders)">Show Mesh Borders</FluentRadio>
+                                        <FluentRadio Value="@ShowEdgesAtOption.None">None</FluentRadio>
+                                    </FluentRadioGroup>
                                     <FluentNumberInput TValue="double" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor" />
                                 </FluentStack>
                             </FluentAccordionItem>
@@ -247,8 +251,7 @@
                             <li><strong>,</strong> Toggle Options Panel</li>
                             <li><strong>T</strong> Cycle Mesh Faces: Triangles / Surfaces / None</li>
                             <li><strong>X</strong> Toggle Showing Grid and Axes</li>
-                            <li><strong>M</strong> Toggle Showing Edges</li>
-                            <li><strong>B</strong> Toggle Showing Borders</li>
+                            <li><strong>B</strong> Cycle Mesh Edges: Edges / Borders / None</li>
                         </ul>
                     </div>
                 </div>

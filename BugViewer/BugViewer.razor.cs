@@ -631,15 +631,17 @@ namespace BugViewer
                 Options.ShowAxes = !Options.ShowAxes;
                 return;
             }
-            if (e.Key == "m")
-            {
-                Options.ShowMeshEdges = !Options.ShowMeshEdges;
-                return;
-            }
             if (e.Key == "b")
             {
-                if (CanShowMeshBorders)
-                    Options.ShowMeshBorders = !Options.ShowMeshBorders;
+                Options.ShowEdgesAt = Options.ShowEdgesAt switch
+                {
+                    ShowEdgesAtOption.None => ShowEdgesAtOption.ShowMeshEdges,
+                    ShowEdgesAtOption.ShowMeshEdges => CanShowMeshBorders
+                        ? ShowEdgesAtOption.ShowMeshBorders
+                        : ShowEdgesAtOption.None,
+                    ShowEdgesAtOption.ShowMeshBorders => ShowEdgesAtOption.None,
+                    _ => ShowEdgesAtOption.None
+                };
                 return;
             }
             if (IsAnyPopoverOpen) return;
@@ -1414,28 +1416,11 @@ namespace BugViewer
                 await ApplyMeshFaceDisplayAsync();
             }
 
-            if (e?.PropertyName == nameof(Options.ShowMeshEdges))
+            if (e?.PropertyName == nameof(Options.ShowEdgesAt))
             {
-                if (Options.ShowMeshEdges && Options.ShowMeshBorders)
+                if (Options.ShowEdgesAt == ShowEdgesAtOption.ShowMeshBorders && !CanShowMeshBorders)
                 {
-                    Options.ShowMeshBorders = false;
-                    return;
-                }
-
-                await SynchronizeMeshDisplayLinesAsync();
-            }
-
-            if (e?.PropertyName == nameof(Options.ShowMeshBorders))
-            {
-                if (Options.ShowMeshBorders && !CanShowMeshBorders)
-                {
-                    Options.ShowMeshBorders = false;
-                    return;
-                }
-
-                if (Options.ShowMeshBorders && Options.ShowMeshEdges)
-                {
-                    Options.ShowMeshEdges = false;
+                    Options.ShowEdgesAt = ShowEdgesAtOption.None;
                     return;
                 }
 
