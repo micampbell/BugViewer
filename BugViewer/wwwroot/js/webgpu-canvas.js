@@ -1270,6 +1270,7 @@ export function updateDisplayOptions(options) {
 async function updateDisplayOptionsCore(options) {
     let gridChanged = false;
     let needsGridPipelineRecreation = false;
+    viewCubeController.updateOptions(options.viewCubeSizeRatio, options.viewCubeOpacity);
     if (zIsUp !== options.zIsUp) {
         zIsUp = options.zIsUp;
         gridChanged = true;

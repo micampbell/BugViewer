@@ -3,6 +3,7 @@ class ViewCubeController {
     #rotorElement;
     #canvasElement;
     #faces = [];
+    #sizeRatio = 0.125;
 
     initialize(overlayElement, rotorElement, canvasElement, viewMatrix) {
         this.#overlayElement = overlayElement;
@@ -19,10 +20,20 @@ class ViewCubeController {
         if (!this.#overlayElement || !this.#canvasElement) return;
 
         const rect = this.#canvasElement.getBoundingClientRect();
-        const size = Math.max(rect.width, rect.height) / 8;
+        const size = Math.max(rect.width, rect.height) * this.#sizeRatio;
         if (!Number.isFinite(size) || size <= 0) return;
 
         this.#overlayElement.style.setProperty('--view-cube-size', `${size}px`);
+    }
+
+    updateOptions(sizeRatio, opacity) {
+        if (Number.isFinite(sizeRatio) && sizeRatio > 0) {
+            this.#sizeRatio = sizeRatio;
+        }
+        if (this.#overlayElement && Number.isFinite(opacity)) {
+            this.#overlayElement.style.opacity = Math.max(0, Math.min(1, opacity)).toString();
+        }
+        this.updateSize();
     }
 
     updateOrientation(viewMatrix) {

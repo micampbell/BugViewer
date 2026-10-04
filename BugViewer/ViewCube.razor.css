@@ -8,6 +8,7 @@
     z-index: 900;
     width: var(--view-cube-size);
     height: var(--view-cube-size);
+    opacity: 0.8;
     pointer-events: none;
     user-select: none;
 }
@@ -42,7 +43,6 @@
     border-radius: 2px;
     font: 700 max(10px, calc(var(--view-cube-edge) * 0.25)) / 1 var(--body-font, "Segoe UI", sans-serif);
     cursor: pointer;
-    opacity: 0.96;
     outline: none;
     visibility: hidden;
     pointer-events: auto;
@@ -109,7 +109,7 @@
     border: 1px solid var(--neutral-stroke-rest, #d1d1d1);
     border-radius: 4px;
     color: var(--neutral-foreground-rest, #242424);
-    background: color-mix(in srgb, var(--neutral-layer-floating, #ffffff) 88%, transparent);
+    background: var(--neutral-layer-floating, #ffffff);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     cursor: pointer;
     pointer-events: auto;

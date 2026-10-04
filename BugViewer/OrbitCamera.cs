@@ -281,32 +281,31 @@ public class OrbitCamera
     /// <param name="direction">The cardinal direction to view from.</param>
     public void SetCardinalView(CardinalDirection direction)
     {
-        switch (direction)
+        if (_options.ZIsUp)
         {
-            case CardinalDirection.PositiveX:
-                AzimuthAngle = Math.PI / 2;
-                PolarAngle = 0;
-                break;
-            case CardinalDirection.NegativeX:
-                AzimuthAngle = -Math.PI / 2;
-                PolarAngle = 0;
-                break;
-            case CardinalDirection.PositiveY:
-                AzimuthAngle = 0;
-                PolarAngle = _options.ZIsUp ? 0 : Math.PI / 2;
-                break;
-            case CardinalDirection.NegativeY:
-                AzimuthAngle = _options.ZIsUp ? Math.PI : 0;
-                PolarAngle = _options.ZIsUp ? 0 : -Math.PI / 2;
-                break;
-            case CardinalDirection.PositiveZ:
-                AzimuthAngle = 0;
-                PolarAngle = _options.ZIsUp ? Math.PI / 2 : 0;
-                break;
-            case CardinalDirection.NegativeZ:
-                AzimuthAngle = _options.ZIsUp ? 0 : Math.PI;
-                PolarAngle = _options.ZIsUp ? -Math.PI / 2 : 0;
-                break;
+            (AzimuthAngle, PolarAngle) = direction switch
+            {
+                CardinalDirection.PositiveX => (0, 0),
+                CardinalDirection.NegativeX => (Math.PI, 0),
+                CardinalDirection.PositiveY => (-Math.PI / 2, 0),
+                CardinalDirection.NegativeY => (Math.PI / 2, 0),
+                CardinalDirection.PositiveZ => (0, Math.PI / 2),
+                CardinalDirection.NegativeZ => (0, -Math.PI / 2),
+                _ => (AzimuthAngle, PolarAngle)
+            };
+        }
+        else
+        {
+            (AzimuthAngle, PolarAngle) = direction switch
+            {
+                CardinalDirection.PositiveX => (-Math.PI / 2, 0),
+                CardinalDirection.NegativeX => (Math.PI / 2, 0),
+                CardinalDirection.PositiveY => (0, Math.PI / 2),
+                CardinalDirection.NegativeY => (0, -Math.PI / 2),
+                CardinalDirection.PositiveZ => (0, 0),
+                CardinalDirection.NegativeZ => (Math.PI, 0),
+                _ => (AzimuthAngle, PolarAngle)
+            };
         }
     }
     #endregion

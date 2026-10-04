@@ -40,7 +40,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         ConstrainAzimuth = false,
         ConstrainDistance = true,
         ConstrainPolar = true,
-        CoordinateThickness = 1,
+        CoordinateThickness = 0.3,
         DirectionalLightIntensity = 0.45,
         DoubleClickIsSelect = true,
         Fov = 20,
@@ -65,10 +65,12 @@ public class BugViewerOptions : INotifyPropertyChanged
         OrthoSize = 5.0,
         PanSensitivity = 0.003,
         PanSpeedMultiplier = 3.0,
-        PathThicknessFactor = 0.003f,
+        PathThicknessFactor = 10f,
         SampleCount = 4,
         ShowAxes = true,
         ShowViewCube = true,
+        ViewCubeOpacity = 0.8,
+        ViewCubeSizeRatio = 0.075,
         ShowEdgesAt = ShowEdgesAtOption.ShowMeshBorders,
         ShowSurfacesAs = MeshFaceDisplay.Surfaces,
         SpecularPower = 17,
@@ -109,6 +111,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         PathThicknessFactor = newOptions.PathThicknessFactor;
         ShowAxes = newOptions.ShowAxes;
         ShowViewCube = newOptions.ShowViewCube;
+        ViewCubeOpacity = newOptions.ViewCubeOpacity;
+        ViewCubeSizeRatio = newOptions.ViewCubeSizeRatio;
         ShowEdgesAt = newOptions.ShowEdgesAt;
         ShowSurfacesAs = newOptions.ShowSurfacesAs;
         SampleCount = newOptions.SampleCount;
@@ -649,7 +653,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
 
-    private double _pathThicknessFactor = 0.005f;
+    private double _pathThicknessFactor = 10f;
     /// <summary>The multiplying factor that defines the thickness of paths as a fraction of the
     /// encompassing sphere.
     /// </summary>
@@ -770,6 +774,42 @@ public class BugViewerOptions : INotifyPropertyChanged
             if (_showViewCube != value)
             {
                 _showViewCube = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private double _viewCubeSizeRatio = 0.005;
+
+    /// <summary>
+    /// Size of the view cube area as a fraction of the viewer's longer dimension.
+    /// </summary>
+    public double ViewCubeSizeRatio
+    {
+        get => _viewCubeSizeRatio;
+        set
+        {
+            if (ChangeOccurred(_viewCubeSizeRatio, value))
+            {
+                _viewCubeSizeRatio = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private double _viewCubeOpacity = 0.7;
+
+    /// <summary>
+    /// Opacity of the view cube and camera-reset button, from 0.0 to 1.0.
+    /// </summary>
+    public double ViewCubeOpacity
+    {
+        get => _viewCubeOpacity;
+        set
+        {
+            if (ChangeOccurred(_viewCubeOpacity, value))
+            {
+                _viewCubeOpacity = value;
                 OnPropertyChanged();
             }
         }
@@ -977,7 +1017,7 @@ public class BugViewerOptions : INotifyPropertyChanged
     }
 
 
-    private double _coordThick = 1;
+    private double _coordThick = 0.3;
     /// <summary>Whether to show coordinate axes (X=red, Y=green, Z=blue).</summary>
     public double CoordinateThickness
     {
@@ -1015,6 +1055,8 @@ public class BugViewerOptions : INotifyPropertyChanged
         lineWidthY = (float)LineWidthY,
         pathThicknessFactor = PathThicknessFactor,
         sampleCount = SampleCount,
+        viewCubeSizeRatio = ViewCubeSizeRatio,
+        viewCubeOpacity = ViewCubeOpacity,
         gridSize = (float)GridSize,
         gridSpacing = (float)GridSpacing,
         zIsUp = ZIsUp,

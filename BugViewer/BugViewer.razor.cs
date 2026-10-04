@@ -224,6 +224,14 @@ namespace BugViewer
         [Parameter]
         public bool? ShowViewCube { get; set; }
 
+        /// <summary>View cube size as a fraction of the viewer's longer dimension.</summary>
+        [Parameter]
+        public double? ViewCubeSizeRatio { get; set; }
+
+        /// <summary>View cube and camera-reset button opacity, from 0.0 to 1.0.</summary>
+        [Parameter]
+        public double? ViewCubeOpacity { get; set; }
+
 
 
         /// <summary>Sample count parameter.</summary>
@@ -349,6 +357,8 @@ namespace BugViewer
             if (BaseTransparency.HasValue) Options.BaseTransparency = BaseTransparency.Value;
             if (DoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = DoubleClickIsSelect.Value;
             if (ShowViewCube.HasValue) Options.ShowViewCube = ShowViewCube.Value;
+            if (ViewCubeSizeRatio.HasValue) Options.ViewCubeSizeRatio = ViewCubeSizeRatio.Value;
+            if (ViewCubeOpacity.HasValue) Options.ViewCubeOpacity = ViewCubeOpacity.Value;
             ApplyAxesParameterProxies();
             if (PathThicknessFactor.HasValue) Options.PathThicknessFactor = PathThicknessFactor.Value;
             if (SampleCount.HasValue) Options.SampleCount = SampleCount.Value;
@@ -477,7 +487,7 @@ namespace BugViewer
         /// <summary>
         /// Gets the thickness of paths in the scene, calculated as a factor of the bounding sphere radius.
         /// </summary>
-        public float PathThickness => Math.Max(1e-6f, (float)Options.PathThicknessFactor * SphereRadius);
+        public float PathThickness => Math.Max(1e-6f, (float)Options.PathThicknessFactor * 0.0001f * SphereRadius);
 
         /// <summary>
         /// Gets the radius of the bounding sphere that encompasses all objects in the scene.
