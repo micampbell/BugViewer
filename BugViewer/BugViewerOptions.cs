@@ -68,6 +68,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         PathThicknessFactor = 0.003f,
         SampleCount = 4,
         ShowAxes = true,
+        ShowViewCube = true,
         ShowEdgesAt = ShowEdgesAtOption.ShowMeshBorders,
         ShowSurfacesAs = MeshFaceDisplay.Surfaces,
         SpecularPower = 17,
@@ -107,6 +108,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         LineWidthY = newOptions.LineWidthY;
         PathThicknessFactor = newOptions.PathThicknessFactor;
         ShowAxes = newOptions.ShowAxes;
+        ShowViewCube = newOptions.ShowViewCube;
         ShowEdgesAt = newOptions.ShowEdgesAt;
         ShowSurfacesAs = newOptions.ShowSurfacesAs;
         SampleCount = newOptions.SampleCount;
@@ -750,6 +752,24 @@ public class BugViewerOptions : INotifyPropertyChanged
             if (_showAxes != value)
             {
                 _showAxes = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private bool _showViewCube = true;
+
+    /// <summary>
+    /// Specifies whether the view cube is displayed in the lower-right corner.
+    /// </summary>
+    public bool ShowViewCube
+    {
+        get => _showViewCube;
+        set
+        {
+            if (_showViewCube != value)
+            {
+                _showViewCube = value;
                 OnPropertyChanged();
             }
         }

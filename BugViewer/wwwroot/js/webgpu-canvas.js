@@ -1,3 +1,5 @@
+import { createViewCubeController } from '../ViewCube.razor.js';
+
 // Minimal WebGPU canvas module for Blazor WebAssembly
 // All business logic is in C# - this file only handles WebGPU API calls
 
@@ -394,6 +396,7 @@ let dotNetRef = null;
 let resizeObserver = null;
 let renderFrameId = 0;
 let isDisposing = false;
+const viewCubeController = createViewCubeController();
 
 // Frame timing
 const frameMs = new Array(20);
@@ -509,12 +512,15 @@ let usePrimitiveSurfaceNormals = false;
 // Initialization
 // ============================================================================
 
-export function initGPU_Canvas(dotnet, canvasEl, options, initialViewMatrix, initialCameraPosition) {
-    return enqueueGpuOperation(() => initGPUCanvasCore(dotnet, canvasEl, options,
+export function initGPU_Canvas(dotnet, canvasEl, viewCubeOverlayEl, viewCubeRotorEl,
+    options, initialViewMatrix, initialCameraPosition) {
+    return enqueueGpuOperation(() => initGPUCanvasCore(dotnet, canvasEl,
+        viewCubeOverlayEl, viewCubeRotorEl, options,
         initialViewMatrix, initialCameraPosition));
 }
 
-async function initGPUCanvasCore(dotnet, canvasEl, options, initialViewMatrix, initialCameraPosition) {
+async function initGPUCanvasCore(dotnet, canvasEl, viewCubeOverlayEl, viewCubeRotorEl,
+    options, initialViewMatrix, initialCameraPosition) {
     isDisposing = false;
     dotNetRef = dotnet;
     canvas = canvasEl;
@@ -525,6 +531,7 @@ async function initGPUCanvasCore(dotnet, canvasEl, options, initialViewMatrix, i
     // Set initial view matrix from parameter
     viewMatrix.set(initialViewMatrix);
     cameraPosition.set(initialCameraPosition);
+    viewCubeController.initialize(viewCubeOverlayEl, viewCubeRotorEl, canvasEl, initialViewMatrix);
 
     // Apply options
     await updateDisplayOptionsCore(options);
@@ -1174,6 +1181,7 @@ function setupResizeObserver() {
             }
 
             if (width === 0 || height === 0) return;
+            viewCubeController.updateSize();
             enqueueGpuOperation(() => {
                 if (isDisposing || !canvas) return;
                 canvas.width = width;
@@ -1240,6 +1248,7 @@ export function writeViewMatrix(matrixArray, polarAngle, cameraPositionArray) {
 function writeViewMatrixCore(matrixArray, polarAngle, cameraPositionArray) {
     viewMatrix.set(matrixArray);
     cameraPosition.set(cameraPositionArray);
+    viewCubeController.updateOrientation(matrixArray);
     if (typeof polarAngle === 'number') {
         cameraPolarAngle = polarAngle;
         updateBackgroundGradientUniforms();
@@ -1941,6 +1950,7 @@ export function disposeWebGPU_Canvas() {
 }
 
 function disposeWebGPUCanvasCore() {
+        viewCubeController.dispose();
         resizeObserver?.disconnect();
         resizeObserver = null;
         if (renderFrameId) {

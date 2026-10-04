@@ -13,7 +13,5 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 // Register Fluent UI components services
 builder.Services.AddFluentUIComponents();
 
-// Register theme service
-builder.Services.AddSingleton<ThemeService>();
 
 await builder.Build().RunAsync();
