@@ -739,11 +739,27 @@ namespace BugViewer
                 return;
             }
 
+            BeginCameraPointerInteraction(e, currentTime);
+        }
+
+        private async Task OnViewCubePointerDown(PointerEventArgs e)
+        {
+            if (_containerRef.HasValue)
+                await _containerRef.Value.FocusAsync(true);
+
+            BeginCameraPointerInteraction(e);
+        }
+
+        private void BeginCameraPointerInteraction(PointerEventArgs e, DateTime? clickTime = null)
+        {
             if (e.Button == 0)
             {
-                _lastClickTime = currentTime;
-                _lastClickX = e.ClientX;
-                _lastClickY = e.ClientY;
+                if (clickTime.HasValue)
+                {
+                    _lastClickTime = clickTime.Value;
+                    _lastClickX = e.ClientX;
+                    _lastClickY = e.ClientY;
+                }
                 _isDragging = true;
                 _isPanning = false;
                 _lastPointerX = e.ClientX;

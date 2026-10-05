@@ -50,7 +50,16 @@
 }
 
 .view-cube-face span {
-    transform: translateZ(0.1px) scaleY(-1);
+    transform: translateZ(0.1px) rotate(var(--view-cube-label-rotation, 0deg)) scaleY(-1);
+}
+
+.view-cube-face-positive-x span,
+.view-cube-face-negative-x span {
+    --view-cube-label-rotation: 90deg;
+}
+
+.view-cube-face-positive-y span {
+    --view-cube-label-rotation: 180deg;
 }
 
 .view-cube-face:hover,

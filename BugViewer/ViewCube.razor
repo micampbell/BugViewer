@@ -4,8 +4,11 @@
 <div @ref="_overlayElement"
      class="view-cube-overlay"
      hidden="@(!Visible)"
+     @onpointerdown="HandlePointerDownAsync"
      @onpointerdown:stopPropagation
+     @onpointermove="HandlePointerMoveAsync"
      @onpointermove:stopPropagation
+     @onpointerup="HandlePointerUpAsync"
      @onpointerup:stopPropagation
      @onmousedown:stopPropagation
      @onmouseup:stopPropagation
@@ -17,6 +20,7 @@
             class="view-cube-reset"
             title="Reset Camera"
             aria-label="Reset Camera"
+            @onpointerdown:stopPropagation
             @onclick="OnReset"
             @onclick:stopPropagation>
         <FluentIcon Value="@(new Icons.Sparkle())" />
@@ -43,12 +47,69 @@
     [Parameter]
     public EventCallback OnReset { get; set; }
 
+    [Parameter]
+    public EventCallback<PointerEventArgs> OnCameraPointerDown { get; set; }
+
+    [Parameter]
+    public EventCallback<PointerEventArgs> OnCameraPointerMove { get; set; }
+
+    [Parameter]
+    public EventCallback<PointerEventArgs> OnCameraPointerUp { get; set; }
+
     private ElementReference _overlayElement;
     private ElementReference _rotorElement;
+    private long? _activePointerId;
+    private double _pointerDownX;
+    private double _pointerDownY;
+    private bool _suppressNextDirectionSelection;
+
+    private const double DragClickThresholdSquared = 16;
 
     internal ElementReference OverlayElement => _overlayElement;
     internal ElementReference RotorElement => _rotorElement;
 
-    private Task SelectDirectionAsync(CardinalDirection direction) =>
-        OnDirectionSelected.InvokeAsync(direction);
+    private async Task HandlePointerDownAsync(PointerEventArgs eventArgs)
+    {
+        if (eventArgs.Button is not (0 or 2))
+            return;
+
+        _activePointerId = eventArgs.PointerId;
+        _pointerDownX = eventArgs.ClientX;
+        _pointerDownY = eventArgs.ClientY;
+        _suppressNextDirectionSelection = false;
+        await OnCameraPointerDown.InvokeAsync(eventArgs);
+    }
+
+    private async Task HandlePointerMoveAsync(PointerEventArgs eventArgs)
+    {
+        if (_activePointerId != eventArgs.PointerId)
+            return;
+
+        var deltaX = eventArgs.ClientX - _pointerDownX;
+        var deltaY = eventArgs.ClientY - _pointerDownY;
+        if (deltaX * deltaX + deltaY * deltaY >= DragClickThresholdSquared)
+            _suppressNextDirectionSelection = true;
+
+        await OnCameraPointerMove.InvokeAsync(eventArgs);
+    }
+
+    private async Task HandlePointerUpAsync(PointerEventArgs eventArgs)
+    {
+        if (_activePointerId != eventArgs.PointerId)
+            return;
+
+        _activePointerId = null;
+        await OnCameraPointerUp.InvokeAsync(eventArgs);
+    }
+
+    private async Task SelectDirectionAsync(CardinalDirection direction)
+    {
+        if (_suppressNextDirectionSelection)
+        {
+            _suppressNextDirectionSelection = false;
+            return;
+        }
+
+        await OnDirectionSelected.InvokeAsync(direction);
+    }
 }
