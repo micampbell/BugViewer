@@ -15,11 +15,10 @@ namespace BugViewer
     {   // Partial class for the BugViewer component. The rest is in the razor file
 
         // Popover visibility flags.
-        private bool _cameraPopover = false;
         private bool _optionsPopover = false;
         private bool _helpPopover = false;
         // Check if any popover is open.
-        private bool IsAnyPopoverOpen => _cameraPopover || _optionsPopover || _helpPopover;
+        private bool IsAnyPopoverOpen => _optionsPopover || _helpPopover;
         // Mouse button state.
         private bool _isMouseButtonDown;
 
@@ -58,6 +57,7 @@ namespace BugViewer
         // Element references for container and canvas.
         private ElementReference? _containerRef;
         private ElementReference? _canvasRef;
+        private ViewCube? _viewCube;
 
         /// <summary>
         /// Component parameter for display options. Setting this will 
@@ -220,6 +220,18 @@ namespace BugViewer
         [Parameter]
         public bool ShowAxes { get; set; } = true;
 
+        /// <summary>Specifies whether the view cube is displayed.</summary>
+        [Parameter]
+        public bool? ShowViewCube { get; set; }
+
+        /// <summary>View cube size as a fraction of the viewer's longer dimension.</summary>
+        [Parameter]
+        public double? ViewCubeSizeRatio { get; set; }
+
+        /// <summary>View cube and camera-reset button opacity, from 0.0 to 1.0.</summary>
+        [Parameter]
+        public double? ViewCubeOpacity { get; set; }
+
 
 
         /// <summary>Sample count parameter.</summary>
@@ -344,6 +356,9 @@ namespace BugViewer
             if (BaseColor.HasValue) Options.BaseColor = BaseColor.Value;
             if (BaseTransparency.HasValue) Options.BaseTransparency = BaseTransparency.Value;
             if (DoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = DoubleClickIsSelect.Value;
+            if (ShowViewCube.HasValue) Options.ShowViewCube = ShowViewCube.Value;
+            if (ViewCubeSizeRatio.HasValue) Options.ViewCubeSizeRatio = ViewCubeSizeRatio.Value;
+            if (ViewCubeOpacity.HasValue) Options.ViewCubeOpacity = ViewCubeOpacity.Value;
             ApplyAxesParameterProxies();
             if (PathThicknessFactor.HasValue) Options.PathThicknessFactor = PathThicknessFactor.Value;
             if (SampleCount.HasValue) Options.SampleCount = SampleCount.Value;
@@ -472,7 +487,7 @@ namespace BugViewer
         /// <summary>
         /// Gets the thickness of paths in the scene, calculated as a factor of the bounding sphere radius.
         /// </summary>
-        public float PathThickness => Math.Max(1e-6f, (float)Options.PathThicknessFactor * SphereRadius);
+        public float PathThickness => Math.Max(1e-6f, (float)Options.PathThicknessFactor * 0.0001f * SphereRadius);
 
         /// <summary>
         /// Gets the radius of the bounding sphere that encompasses all objects in the scene.
@@ -588,7 +603,6 @@ namespace BugViewer
         {
             if (e.Key == "Escape")
             {
-                _cameraPopover = false;
                 _optionsPopover = false;
                 _helpPopover = false;
                 await ClearPressedKeysAsync();
@@ -598,13 +612,6 @@ namespace BugViewer
             if (e.Key == ",")
             {
                 ShowOptionsPanel();
-                await ClearPressedKeysAsync();
-                return;
-            }
-
-            if (e.Key == ".")
-            {
-                ShowCameraPanel();
                 await ClearPressedKeysAsync();
                 return;
             }
@@ -661,7 +668,6 @@ namespace BugViewer
         {
             _optionsPopover = !_optionsPopover;
             _helpPopover = false;
-            _cameraPopover = false;
         }
 
         // Toggles the help panel.
@@ -669,15 +675,6 @@ namespace BugViewer
         {
             _optionsPopover = false;
             _helpPopover = !_helpPopover;
-            _cameraPopover = false;
-        }
-
-        // Toggles the camera panel.
-        private void ShowCameraPanel()
-        {
-            _optionsPopover = false;
-            _helpPopover = false;
-            _cameraPopover = !_cameraPopover;
         }
 
         // Handles key up events.
@@ -742,11 +739,27 @@ namespace BugViewer
                 return;
             }
 
+            BeginCameraPointerInteraction(e, currentTime);
+        }
+
+        private async Task OnViewCubePointerDown(PointerEventArgs e)
+        {
+            if (_containerRef.HasValue)
+                await _containerRef.Value.FocusAsync(true);
+
+            BeginCameraPointerInteraction(e);
+        }
+
+        private void BeginCameraPointerInteraction(PointerEventArgs e, DateTime? clickTime = null)
+        {
             if (e.Button == 0)
             {
-                _lastClickTime = currentTime;
-                _lastClickX = e.ClientX;
-                _lastClickY = e.ClientY;
+                if (clickTime.HasValue)
+                {
+                    _lastClickTime = clickTime.Value;
+                    _lastClickX = e.ClientX;
+                    _lastClickY = e.ClientY;
+                }
                 _isDragging = true;
                 _isPanning = false;
                 _lastPointerX = e.ClientX;
@@ -1106,7 +1119,11 @@ namespace BugViewer
                 _lifecycleState = ViewerLifecycleState.Initializing;
                 _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
                 _dotNetRef = DotNetObjectReference.Create(this);
+                if (_viewCube is null)
+                    throw new InvalidOperationException("The view cube did not render before WebGPU initialization.");
+
                 await _module.InvokeVoidAsync("initGPU_Canvas", _dotNetRef, _canvasRef,
+                    _viewCube.OverlayElement, _viewCube.RotorElement,
                     Options.ToJavascriptOptions(Camera.PolarAngle), Camera.ConvertMatrixToJavaScript(),
                     Camera.ConvertPositionToJavaScript());
             }

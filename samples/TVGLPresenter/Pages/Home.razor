@@ -5,7 +5,6 @@
 @using TVGL
 @using TVGLPresenter.Components
 @using TVGLPresenter.Services
-@inject ThemeService ThemeService
 
 <PageTitle>Home</PageTitle>
 
@@ -35,7 +34,6 @@
 
             if (viewer?.Options != null)
             {
-                viewer.Options.AutoResetOnThemeChange = true;
                 viewer.Options.PropertyChanged += OnBugViewerOptionsChanged;
             }
         }

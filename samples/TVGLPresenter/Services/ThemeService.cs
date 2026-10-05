@@ -21,5 +21,4 @@ public class ThemeService
         }
     }
 
-    public DesignThemeModes CurrentMode => _isDarkMode ? DesignThemeModes.Dark : DesignThemeModes.Light;
 }

@@ -1,0 +1,132 @@
+.view-cube-overlay {
+    --view-cube-size: 100px;
+    --view-cube-edge: calc(var(--view-cube-size) * 0.56);
+    --view-cube-half-edge: calc(var(--view-cube-edge) * 0.5);
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 900;
+    width: var(--view-cube-size);
+    height: var(--view-cube-size);
+    opacity: 0.8;
+    pointer-events: none;
+    user-select: none;
+}
+
+.view-cube-stage {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    overflow: visible;
+    perspective: calc(var(--view-cube-size) * 4);
+    pointer-events: none;
+}
+
+.view-cube-rotor {
+    position: relative;
+    width: var(--view-cube-edge);
+    height: var(--view-cube-edge);
+    transform-style: preserve-3d;
+    transform-origin: center;
+    will-change: transform;
+}
+
+.view-cube-face {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, 0.58);
+    border-radius: 2px;
+    font: 700 max(10px, calc(var(--view-cube-edge) * 0.25)) / 1 var(--body-font, "Segoe UI", sans-serif);
+    cursor: pointer;
+    outline: none;
+    visibility: hidden;
+    pointer-events: auto;
+    transform-style: preserve-3d;
+}
+
+.view-cube-face span {
+    transform: translateZ(0.1px) rotate(var(--view-cube-label-rotation, 0deg)) scaleY(-1);
+}
+
+.view-cube-face-positive-x span,
+.view-cube-face-negative-x span {
+    --view-cube-label-rotation: 90deg;
+}
+
+.view-cube-face-positive-y span {
+    --view-cube-label-rotation: 180deg;
+}
+
+.view-cube-face:hover,
+.view-cube-face:focus-visible {
+    border-color: #ffffff;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
+    filter: brightness(1.08);
+}
+
+.view-cube-face-positive-x {
+    color: #ffffff;
+    background: #9b1c1c;
+    transform: rotateY(90deg) translateZ(var(--view-cube-half-edge));
+}
+
+.view-cube-face-negative-x {
+    color: #000000;
+    background: #f1b7b7;
+    transform: rotateY(-90deg) translateZ(var(--view-cube-half-edge));
+}
+
+.view-cube-face-positive-y {
+    color: #ffffff;
+    background: #147a3d;
+    transform: rotateX(-90deg) translateZ(var(--view-cube-half-edge));
+}
+
+.view-cube-face-negative-y {
+    color: #000000;
+    background: #b8e0c4;
+    transform: rotateX(90deg) translateZ(var(--view-cube-half-edge));
+}
+
+.view-cube-face-positive-z {
+    color: #ffffff;
+    background: #1557a6;
+    transform: translateZ(var(--view-cube-half-edge));
+}
+
+.view-cube-face-negative-z {
+    color: #000000;
+    background: #b9d3f5;
+    transform: rotateY(180deg) translateZ(var(--view-cube-half-edge));
+}
+
+.view-cube-reset {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--neutral-stroke-rest, #d1d1d1);
+    border-radius: 4px;
+    color: var(--neutral-foreground-rest, #242424);
+    background: var(--neutral-layer-floating, #ffffff);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.view-cube-reset:hover,
+.view-cube-reset:focus-visible {
+    background: var(--neutral-layer-floating, #ffffff);
+    outline: 2px solid var(--focus-stroke-outer, #000000);
+    outline-offset: 1px;
+}

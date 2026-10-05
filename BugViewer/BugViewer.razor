@@ -27,6 +27,13 @@
             <span>Reload the page or reopen the viewer to try again.</span>
         </div>
     }
+    <ViewCube @ref="_viewCube"
+              Visible="Options.ShowViewCube"
+              OnDirectionSelected="HandleCameraCardinalView"
+              OnReset="HandleCameraReset"
+              OnCameraPointerDown="OnViewCubePointerDown"
+              OnCameraPointerMove="OnPointerMove"
+              OnCameraPointerUp="OnPointerUp" />
     <!-- A small anchor button to toggle the popover -->
     <FluentStack Style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; padding:4px; box-sizing:border-box;"
                  Orientation="@ToolsOrientation"
@@ -36,22 +43,16 @@
         <div style="pointer-events:auto;">
             <FluentButton Id="options"
                           Appearance="ButtonAppearance.Default"
+                          IconOnly="true"
                           Title="Open Options"
                           OnClick="@(() => ShowOptionsPanel())">
                 <FluentIcon Value="@(new Icons.Settings())" />
             </FluentButton>
         </div>
         <div style="pointer-events:auto;">
-            <FluentButton Id="camera-controls"
-                          Appearance="ButtonAppearance.Default"
-                          Title="Open Camera Controls"
-                          OnClick="@(() => ShowCameraPanel())">
-                <FluentIcon Value="@(new Icons.CameraSparkles())" />
-            </FluentButton>
-        </div>
-        <div style="pointer-events:auto;">
             <FluentButton Id="help"
                           Appearance="ButtonAppearance.Default"
+                          IconOnly="true"
                           Title="Open Help"
                           OnClick="@(() => ShowHelpPanel())">
                 <FluentIcon Value="@(new Icons.Question())" />
@@ -59,24 +60,6 @@
         </div>
     </FluentStack>
 
-    @if (_cameraPopover)
-    {
-        <div class="bugviewer-popover bugviewer-camera-popover" @onpointerdown:stopPropagation @onpointermove:stopPropagation @onpointerup:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation @onwheel:stopPropagation @onkeydown:stopPropagation>
-            <div class="bugviewer-popover-content">
-                <div part="body">
-                    <FluentStack Orientation="Orientation.Vertical">
-                        <FluentButton OnClick="HandleCameraReset" Appearance="ButtonAppearance.Default" Title="Reset Camera" Class="toolbar-btn reset-btn"><FluentIcon Value="@(new Icons.CameraSwitch())" /></FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeX))" Appearance="ButtonAppearance.Default" Title="View -X" Class="toolbar-btn cardinal-btn">-X</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveX))" Appearance="ButtonAppearance.Default" Title="View +X" Class="toolbar-btn cardinal-btn">+X</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeY))" Appearance="ButtonAppearance.Default" Title="View -Y" Class="toolbar-btn cardinal-btn">-Y</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveY))" Appearance="ButtonAppearance.Default" Title="View +Y" Class="toolbar-btn cardinal-btn">+Y</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.NegativeZ))" Appearance="ButtonAppearance.Default" Title="View -Z" Class="toolbar-btn cardinal-btn">-Z</FluentButton>
-                        <FluentButton OnClick="@(() => HandleCameraCardinalView(CardinalDirection.PositiveZ))" Appearance="ButtonAppearance.Default" Title="View +Z" Class="toolbar-btn cardinal-btn">+Z</FluentButton>
-                    </FluentStack>
-                </div>
-            </div>
-        </div>
-    }
     @if (_optionsPopover)
     {
         <div class="bugviewer-popover bugviewer-options-popover" @onpointerdown:stopPropagation @onpointermove:stopPropagation @onpointerup:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation @onwheel:stopPropagation @onkeydown:stopPropagation>
@@ -84,7 +67,7 @@
                 <div part="body" style="max-height:70vh; overflow-y:auto;">
                     <FluentStack Orientation="Orientation.Vertical">
                         <FluentAccordion>
-                            <FluentAccordionItem Heading="Lighting">
+                            <FluentAccordionItem Header="Lighting">
                                 <FluentLabel Typo="Typography.Subject">Background Gradient</FluentLabel>
                                 <FluentStack Orientation="Orientation.Vertical" Style="width:100%;">
                                     <label>Background Color at -90°</label>
@@ -115,9 +98,10 @@
                             </FluentAccordionItem>
                         </FluentAccordion>
                         <FluentAccordion>
-                            <FluentAccordionItem Heading="Display">
+                            <FluentAccordionItem Header="Display">
                                 <FluentStack Orientation="Orientation.Vertical">
                                     <FluentCheckbox @bind-Value="Options.ShowAxes" Label="Show Axes (X)" />
+                                    <FluentCheckbox @bind-Value="Options.ShowViewCube" Label="Show View Cube" />
                                     <span>Mesh Faces (T)</span>
                                     <FluentRadioGroup TValue="MeshFaceDisplay" @bind-Value="Options.ShowSurfacesAs"
                                                       Orientation="Orientation.Horizontal">
@@ -125,11 +109,11 @@
                                         <FluentRadio Value="@MeshFaceDisplay.Surfaces" Disabled="@(!CanShowPrimitiveSurfaces)">Surfaces</FluentRadio>
                                         <FluentRadio Value="@MeshFaceDisplay.None">None</FluentRadio>
                                     </FluentRadioGroup>
-                                    <span>Mesh Edges (B)</span>
+                                    <span>Show Border of (B)</span>
                                     <FluentRadioGroup TValue="ShowEdgesAtOption" @bind-Value="Options.ShowEdgesAt"
                                                       Orientation="Orientation.Horizontal">
-                                        <FluentRadio Value="@ShowEdgesAtOption.ShowMeshEdges">Show Mesh Edges</FluentRadio>
-                                        <FluentRadio Value="@ShowEdgesAtOption.ShowMeshBorders" Disabled="@(!CanShowMeshBorders)">Show Mesh Borders</FluentRadio>
+                                        <FluentRadio Value="@ShowEdgesAtOption.ShowMeshEdges">Triangles</FluentRadio>
+                                        <FluentRadio Value="@ShowEdgesAtOption.ShowMeshBorders" Disabled="@(!CanShowMeshBorders)">Surfaces</FluentRadio>
                                         <FluentRadio Value="@ShowEdgesAtOption.None">None</FluentRadio>
                                     </FluentRadioGroup>
                                     <FluentNumberInput TValue="double" Label="Path Thickness Factor" @bind-Value="Options.PathThicknessFactor" />
@@ -137,7 +121,7 @@
                             </FluentAccordionItem>
                         </FluentAccordion>
                         <FluentAccordion>
-                            <FluentAccordionItem Heading="📐 Grid">
+                            <FluentAccordionItem Header="📐 Grid">
                                 <FluentStack Orientation="Orientation.Vertical">
                                     <FluentSlider Label="Coordinate Thickness" @bind-Value="Options.CoordinateThickness" Min="0" Max="10" Step="0.1" />
                                     <FluentSlider Label="Grid Size" @bind-Value="Options.GridSize" Min="50" Max="1000" Step="1" />
@@ -154,7 +138,7 @@
                             </FluentAccordionItem>
                         </FluentAccordion>
                         <FluentAccordion>
-                            <FluentAccordionItem Heading="📷 Camera">
+                            <FluentAccordionItem Header="📷 Camera">
                                 <FluentStack Orientation="Orientation.Vertical">
                                     <FluentRadioGroup @bind-Value="Options.ZIsUp">
                                         <FluentRadio Value="false">Y is Up</FluentRadio>
@@ -234,6 +218,8 @@
                             <li><strong>Left Drag:</strong> Rotate</li>
                             <li><strong>Right Drag:</strong> Pan</li>
                             <li><strong>Wheel:</strong> Zoom</li>
+                            <li><strong>View Cube:</strong> Select a cardinal view</li>
+                            <li><strong>Sparkle:</strong> Reset the camera</li>
                         </ul>
                     </div>
                     <div class="control-group">
@@ -247,7 +233,6 @@
                                 <li><strong>@string.Join("/", HoverSelectionKeys.Select(key => key.ToUpperInvariant())):</strong> Inspect under pointer</li>
                             }
                             <li><strong>Shift:</strong> Faster</li>
-                            <li><strong>.</strong> Toggle Camera Panel</li>
                             <li><strong>,</strong> Toggle Options Panel</li>
                             <li><strong>T</strong> Cycle Mesh Faces: Triangles / Surfaces / None</li>
                             <li><strong>X</strong> Toggle Showing Grid and Axes</li>
@@ -314,18 +299,9 @@
         width: min(360px, calc(100% - 48px));
     }
 
-    .bugviewer-camera-popover {
-        left: 80px;
-        width: 66px;
-    }
-
-        .bugviewer-camera-popover .bugviewer-popover-content {
-            padding: 4px;
-        }
-
     .bugviewer-help-popover {
-        left: 116px;
-        width: min(300px, calc(100% - 120px));
+        left: 80px;
+        width: min(300px, calc(100% - 84px));
     }
 
     .toolbar-buttons:hover:not(.mouse-down),
