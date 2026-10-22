@@ -25,8 +25,8 @@ internal readonly struct Sphere
     }
     internal static bool AContainsB(Sphere a, Sphere b)
     {
-        var centerDistSqd = (a.Center - b.Center).LengthSquared();
-        return centerDistSqd + b.RadiusSquared <= a.RadiusSquared;
+        var centerDist = (a.Center - b.Center).Length();
+        return centerDist + b.GetRadius() <= a.GetRadius();
     }
     internal static bool OnSurface(Sphere a, Vector3 point)
     {
