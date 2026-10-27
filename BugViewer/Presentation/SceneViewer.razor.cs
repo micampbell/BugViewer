@@ -29,7 +29,8 @@ public partial class SceneViewer
     private bool focusStepButton;
     private int renderedStep;
     private int autoplayDelayMilliseconds = 333;
-    private int autoplayStepIncrement = 1;
+    private int stepStride = 1;
+    private int EffectiveStepStride => Math.Clamp(stepStride, 1, Math.Max(1, StepCount - 1));
     private CancellationTokenSource? autoplayCancellation;
     private Task? autoplayTask;
     private bool IsAutoplaying => autoplayCancellation is not null;
@@ -168,13 +169,13 @@ public partial class SceneViewer
 
     private async Task PreviousStepAsync()
     {
-        step = Math.Max(0, step - 1);
+        step = Math.Max(0, step - EffectiveStepStride);
         await RenderSceneAsync();
     }
 
     private async Task NextStepAsync()
     {
-        step = Math.Min(StepCount - 1, step + 1);
+        step = (int)Math.Min(Math.Max(0, StepCount - 1), (long)step + EffectiveStepStride);
         await RenderSceneAsync();
     }
 
@@ -198,8 +199,7 @@ public partial class SceneViewer
             while (!cancellationToken.IsCancellationRequested && StepCount > 1)
             {
                 await Task.Delay(autoplayDelayMilliseconds, cancellationToken);
-                var increment = Math.Clamp(autoplayStepIncrement, 1, Math.Max(1, StepCount - 1));
-                step = (step + increment) % StepCount;
+                step = (int)(((long)step + EffectiveStepStride) % StepCount);
                 await RenderSceneAsync();
                 if (!cancellationToken.IsCancellationRequested)
                     await InvokeAsync(StateHasChanged);

@@ -79,7 +79,16 @@ collections as immutable so cached step resolution stays valid.
 
 The low-level `BugViewer` component still accepts renderer-native meshes and lines.
 `SceneViewer` adds 3D playback and `PlotViewer` adds 2D playback; `SceneRequestViewer`
-selects between them and provides the component persistence API. Plotly ships with the
+selects between them and provides the component persistence API, Open/Save buttons, and
+**Ctrl+O / Ctrl+S** shortcuts (**Cmd+O / Cmd+S** on macOS). Opening a request with steps
+automatically shows playback controls; opening a single scene removes them. Saving keeps
+the complete timeline and current view. The keyboard commands target the focused or last
+clicked request viewer (or the only one on the page), and leave editors outside it alone.
+Set `EnableFileShortcuts="false"` to let the host own those keys. Use `MaxSceneFileSize` to
+adjust the 256 MB input limit and `FileName` to name downloads of programmatically supplied
+requests. These file controls belong to `SceneRequestViewer`; applications using only the
+low-level `BugViewer` renderer should use this presentation component for scene files.
+Plotly ships with the
 library and loads only when displaying a 2D request.
 
 TVGL's `WebGPUPresenter` now produces this shared contract. Its derived `PresenterRequest`
@@ -89,13 +98,13 @@ requests retain geometry and playback, but do not recreate live TVGL objects or 
 
 Browser applications use streams from `InputFile` and browser downloads instead of local file paths.
 The [LoadAndShowScene sample](samples/LoadAndShowScene/Pages/Home.razor) demonstrates both,
-including downloadable stepped 3D and 2D examples, loading/error states, and a 256 MB input limit:
+including downloadable single 3D, stepped 3D, and 2D examples:
 
 ```powershell
 dotnet run --project samples/LoadAndShowScene
 ```
 
-Open the displayed localhost URL in a WebGPU-capable browser. Choose **Load Scene** to browse
+Open the displayed localhost URL in a WebGPU-capable browser. Choose **Open Scene** to browse
 for a `.bugscene.json` file, then **Save Scene** to download it with the current settings and view.
 Scenes with no saved camera are automatically framed. Loading replaces the current request.
 

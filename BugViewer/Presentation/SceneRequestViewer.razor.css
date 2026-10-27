@@ -1,0 +1,7 @@
+.scene-request-viewer:focus-visible { outline: 2px solid #1769aa; outline-offset: 3px; }
+.scene-file-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.scene-file-controls button { padding: .4rem .75rem; cursor: pointer; }
+.scene-file-controls button:disabled { cursor: default; }
+.scene-file-hint { font-size: .85rem; color: #555; }
+.scene-file-status { margin: .6rem 0; }
+.scene-file-error { color: #b32121; }

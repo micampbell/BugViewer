@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.JSInterop;
 
 namespace BugViewer;
 
@@ -7,16 +9,30 @@ public partial class SceneRequestViewer
 {
     /// <summary>Optional request supplied by the parent. Loading through the methods replaces the active request.</summary>
     [Parameter] public SceneRequest? Scene { get; set; }
+    /// <summary>Enables Ctrl/Cmd+O and Ctrl/Cmd+S for the active viewer. Enabled by default.</summary>
+    [Parameter] public bool EnableFileShortcuts { get; set; } = true;
+    /// <summary>Maximum browser input file size in bytes. Defaults to 256 MB.</summary>
+    [Parameter] public long MaxSceneFileSize { get; set; } = 256L * 1024 * 1024;
+    /// <summary>Download filename for a supplied request. Opened files retain their own filename.</summary>
+    [Parameter] public string FileName { get; set; } = "scene.bugscene.json";
     private SceneRequest? lastParameter;
     private SceneRequest current = new();
     private IReadOnlyList<SceneRequest> requests = [];
     private SceneViewer? sceneViewer;
     private PlotViewer? plotViewer;
     private int generation;
+    private ElementReference container, openButton, saveButton;
+    private InputFile? fileInput;
+    private SceneFileInterop? files;
+    private readonly CancellationTokenSource lifetime = new();
+    private bool isBusy, disposed;
+    private string? openedFileName, fileError;
+    private string status = "Open a scene file to begin.";
 
     /// <inheritdoc />
     protected override void OnParametersSet()
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxSceneFileSize);
         if (Scene is not null && !ReferenceEquals(Scene, lastParameter))
         {
             Scene.Validate();
@@ -32,11 +48,74 @@ public partial class SceneRequestViewer
         sceneViewer = null;
         plotViewer = null;
         generation++;
+        openedFileName = null;
+        fileError = null;
+        status = string.IsNullOrWhiteSpace(scene.Title) ? "Scene loaded." : $"Loaded {scene.Title}.";
     }
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && fileInput?.Element is { } input)
+        {
+            files = new SceneFileInterop(JS);
+            await files.InitializeAsync(container, input, openButton, saveButton);
+        }
+    }
+
+    private async Task OpenSceneFileAsync(InputFileChangeEventArgs args)
+    {
+        if (isBusy || disposed) return;
+        isBusy = true;
+        fileError = null;
+        status = $"Opening {args.File.Name}…";
+        try
+        {
+            await using var stream = args.File.OpenReadStream(MaxSceneFileSize, lifetime.Token);
+            var scene = await SceneRequest.LoadAsync(stream, lifetime.Token);
+            if (disposed) return;
+            await LoadSceneAsync(scene);
+            openedFileName = args.File.Name;
+            status = $"Opened {openedFileName}.";
+        }
+        catch (OperationCanceledException) when (disposed) { }
+        catch (Exception exception) when (IsFileException(exception))
+        {
+            fileError = $"Could not open the scene: {exception.Message}";
+            status = requests.Count == 0 ? "Open a scene file to begin." : "The current scene is unchanged.";
+        }
+        finally { isBusy = false; }
+    }
+
+    private async Task DownloadSceneAsync()
+    {
+        if (isBusy || disposed || files is null || requests.Count == 0) return;
+        isBusy = true;
+        fileError = null;
+        try
+        {
+            await using var stream = new MemoryStream();
+            await SaveSceneAsync(stream, lifetime.Token);
+            stream.Position = 0;
+            var name = openedFileName ?? FileName;
+            await files.DownloadAsync(name, stream);
+            status = $"Downloaded {name}.";
+        }
+        catch (OperationCanceledException) when (disposed) { }
+        catch (Exception exception) when (IsFileException(exception))
+        {
+            fileError = $"Could not save the scene: {exception.Message}";
+        }
+        finally { isBusy = false; }
+    }
+
+    private static bool IsFileException(Exception exception) => exception is System.Text.Json.JsonException
+        or InvalidDataException or IOException or InvalidOperationException or NotSupportedException or JSException;
 
     /// <summary>Replaces the presentation, preserving all steps and source transforms.</summary>
     public async Task LoadSceneAsync(SceneRequest scene)
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(scene);
         scene.Validate();
         await InvokeAsync(() => { SetScene(scene); StateHasChanged(); });
@@ -62,4 +141,14 @@ public partial class SceneRequestViewer
     /// <summary>Saves the complete request to a local file.</summary>
     public async Task SaveSceneAsync(string path, CancellationToken cancellationToken = default) =>
         await (await GetSceneAsync()).SaveAsync(path, cancellationToken);
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        if (disposed) return;
+        disposed = true;
+        await lifetime.CancelAsync();
+        if (files is not null) await files.DisposeAsync();
+        lifetime.Dispose();
+    }
 }

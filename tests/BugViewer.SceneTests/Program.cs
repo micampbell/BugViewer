@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using BugViewer;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.Extensions.DependencyInjection;
@@ -158,6 +159,49 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     try { await loader.LoadSceneAsync(new SceneRequest { Version = 99 }); throw new Exception("Invalid load accepted."); }
     catch (InvalidDataException) { }
     Assert((await loader.GetSceneAsync()).RequestId == restored.RequestId, "Invalid load replaced the current request.");
+
+    // Exercise the same file handler used by Open Scene and Ctrl/Cmd+O, including mode changes.
+    var openFile = typeof(SceneRequestViewer).GetMethod("OpenSceneFileAsync", flags)!;
+    async Task Open(SceneRequest scene, string name)
+    {
+        var file = new MemoryBrowserFile(name, Encoding.UTF8.GetBytes(Json(scene)));
+        await (Task)openFile.Invoke(loader, [new InputFileChangeEventArgs([file])])!;
+    }
+    var single = new SceneRequest { Title = "Single frame", Meshes = [Triangle("single")] };
+    object? priorKey = null;
+    foreach (var candidate in new[] { single, completeSteps, restored, plots, single })
+    {
+        await Open(candidate, "switch.bugscene.json");
+        var frames = loader.Markup();
+        var view = frames.Single(frame => frame.FrameType == RenderTreeFrameType.Component
+            && (frame.ComponentType == typeof(SceneViewer) || frame.ComponentType == typeof(PlotViewer)));
+        Assert(view.ComponentType == (candidate.Kind == PresentationKind.TwoDimensional ? typeof(PlotViewer) : typeof(SceneViewer)),
+            "Opening a file did not select the correct rendering surface.");
+        Assert(!Equals(view.ComponentKey, priorKey), "Loading retained the old renderer and playback state.");
+        priorKey = view.ComponentKey;
+        Assert(Json(await loader.GetSceneAsync()) == Json(candidate), "Opening changed or flattened the request.");
+        if (candidate.Kind == PresentationKind.ThreeDimensional)
+        {
+            await display.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string,object?>
+                { [nameof(SceneViewer.Scenes)] = new[] { candidate } }));
+            var controlsVisible = display.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+                && frame.AttributeName == "class" && Equals(frame.AttributeValue, "step-controls"));
+            Assert(controlsVisible == (candidate.Steps.Count > 1 || candidate.StepGroups.Any(group => group.Count > 1)),
+                "Playback controls did not appear or disappear when switching scene types.");
+        }
+        await using var saved = new MemoryStream();
+        await loader.SaveSceneAsync(saved);
+        saved.Position = 0;
+        Assert(Json(SceneRequest.Load(saved)) == Json(candidate), "Saving after switching lost source steps.");
+    }
+    foreach (var file in new[] { new MemoryBrowserFile("bad.json", Encoding.UTF8.GetBytes("not json")),
+        new MemoryBrowserFile("oversized.json", [], long.MaxValue) })
+    {
+        await (Task)openFile.Invoke(loader, [new InputFileChangeEventArgs([file])])!;
+        Assert((await loader.GetSceneAsync()).RequestId == single.RequestId, "Failed file open replaced the current scene.");
+        Assert(typeof(SceneRequestViewer).GetField("fileError", flags)!.GetValue(loader) is string { Length: > 0 },
+            "Failed file open did not report an error.");
+    }
 });
 
 if (args is ["--write-examples", var directory])
@@ -184,18 +228,36 @@ if (args is ["--write-examples", var directory])
         }]
     };
     example.Save(Path.Combine(directory,"example.bugscene.json"));
+    (example with { Title = "Pyramid", Subtitle = "A single scene without playback controls.",
+        StepGroups = [], Meshes = [example.StepGroups[0].Meshes[0]!] }).Save(Path.Combine(directory,"single.bugscene.json"));
     plots.Save(Path.Combine(directory,"plots.bugscene.json"));
 }
 Console.WriteLine("PASS: portable request persistence, 3D/2D steps, precision, transform barriers, normals, validation, cancellation, full-request capture, and viewer replacement.");
 
 sealed class TestSceneViewer : SceneViewer
 {
+    public RenderTreeFrame[] Markup() { using var builder = new RenderTreeBuilder(); base.BuildRenderTree(builder); return builder.GetFrames().Array.Take(builder.GetFrames().Count).ToArray(); }
     protected override void BuildRenderTree(RenderTreeBuilder builder) { }
     protected override Task OnAfterRenderAsync(bool firstRender) => Task.CompletedTask;
 }
 sealed class TestRequestViewer : SceneRequestViewer
 {
+    public RenderTreeFrame[] Markup() { using var builder = new RenderTreeBuilder(); base.BuildRenderTree(builder); return builder.GetFrames().Array.Take(builder.GetFrames().Count).ToArray(); }
     protected override void BuildRenderTree(RenderTreeBuilder builder) { }
+}
+
+sealed class MemoryBrowserFile(string name, byte[] bytes, long? size = null) : IBrowserFile
+{
+    public string Name => name;
+    public DateTimeOffset LastModified => DateTimeOffset.UnixEpoch;
+    public long Size => size ?? bytes.LongLength;
+    public string ContentType => "application/json";
+    public Stream OpenReadStream(long maxAllowedSize = 512000, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Size > maxAllowedSize) throw new IOException("File exceeds the input limit.");
+        return new MemoryStream(bytes, writable: false);
+    }
 }
 sealed class TestViewer : global::BugViewer.BugViewer
 {

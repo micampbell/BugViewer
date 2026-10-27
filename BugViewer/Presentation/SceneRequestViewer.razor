@@ -1,10 +1,31 @@
 @namespace BugViewer
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
-@if (current.Kind == PresentationKind.TwoDimensional)
-{
-    <PlotViewer @key="generation" @ref="plotViewer" Scenes="requests" />
-}
-else
-{
-    <SceneViewer @key="generation" @ref="sceneViewer" Scenes="requests" />
-}
+<section @ref="container" class="scene-request-viewer" tabindex="0" aria-label="Scene viewer"
+         data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
+    <div class="scene-file-controls">
+        <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@isBusy" />
+        <button @ref="openButton" type="button" disabled="@isBusy"
+                aria-keyshortcuts="Control+O Meta+O" title="Open scene (Ctrl+O / ⌘O)">Open Scene</button>
+        <button @ref="saveButton" type="button" @onclick="DownloadSceneAsync" disabled="@(isBusy || requests.Count == 0)"
+                aria-keyshortcuts="Control+S Meta+S" title="Save scene (Ctrl+S / ⌘S)">Save Scene</button>
+        @if (EnableFileShortcuts)
+        {
+            <span class="scene-file-hint">Ctrl/⌘+O to open · Ctrl/⌘+S to save</span>
+        }
+    </div>
+    <p class="scene-file-status" role="status">@status</p>
+    @if (fileError is not null)
+    {
+        <p class="scene-file-error" role="alert">@fileError</p>
+    }
+    @if (current.Kind == PresentationKind.TwoDimensional)
+    {
+        <PlotViewer @key="generation" @ref="plotViewer" Scenes="requests" />
+    }
+    else
+    {
+        <SceneViewer @key="generation" @ref="sceneViewer" Scenes="requests" />
+    }
+</section>
