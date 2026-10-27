@@ -201,6 +201,11 @@
                                 </FluentStack>
                             </FluentAccordionItem>
                         </FluentAccordion>
+                        @if (CameraActions is not null)
+                        {
+                            <FluentDivider />
+                            @CameraActions
+                        }
                     </FluentStack>
                 </div>
             </div>

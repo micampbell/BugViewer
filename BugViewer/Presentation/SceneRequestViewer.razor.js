@@ -2,8 +2,8 @@ const viewers = new Set();
 let activeViewer;
 
 function handleKeyDown(event) {
-    if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey
-        || !(event.ctrlKey || event.metaKey)) return;
+    if (event.defaultPrevented || event.isComposing || event.shiftKey || event.metaKey
+        || !event.ctrlKey || !event.altKey || event.getModifierState?.('AltGraph')) return;
     const key = event.key.toLowerCase();
     if (key !== 'o' && key !== 's') return;
 
@@ -35,18 +35,24 @@ class SceneFileControls {
         const options = { signal: this.#events.signal };
         container.addEventListener('pointerdown', () => { activeViewer = this; }, options);
         container.addEventListener('focusin', () => { activeViewer = this; }, options);
-        openButton.addEventListener('click', () => {
-            if (openButton.disabled || input.disabled) return;
+        // Delegate so Camera popover buttons created later use the same browser gesture.
+        container.addEventListener('click', event => {
+            const button = event.target?.closest?.('[data-scene-file-command="open"]');
+            if (!button || !container.contains(button) || button.disabled
+                || button.getAttribute('aria-disabled') === 'true' || input.disabled) return;
             // Keep the picker in the browser's user gesture, including in Blazor Server.
             // Reset before opening so choosing the same file again raises a change event.
             input.value = '';
             input.click();
-        }, options);
+        }, { ...options, capture: true });
     }
 
     contains(element) { return this.#container.contains(element); }
     get enabled() { return this.#container.dataset.sceneShortcuts === 'true'; }
-    command(key) { (key === 'o' ? this.#openButton : this.#saveButton).click(); }
+    command(key) {
+        if (this.#container.querySelector('dialog[open]')) return;
+        (key === 'o' ? this.#openButton : this.#saveButton).click();
+    }
 
     dispose() {
         this.#events.abort();
@@ -59,6 +65,14 @@ class SceneFileControls {
 export function initialize(container, input, openButton, saveButton) {
     return new SceneFileControls(container, input, openButton, saveButton);
 }
+
+export function showSaveAs(dialog, input) {
+    if (!dialog.open) dialog.showModal();
+    input.focus();
+    input.select();
+}
+
+export function closeSaveAs(dialog) { dialog.close(); }
 
 export async function downloadScene(name, stream) {
     const buffer = await stream.arrayBuffer();

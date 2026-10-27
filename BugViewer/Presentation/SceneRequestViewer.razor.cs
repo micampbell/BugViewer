@@ -9,11 +9,11 @@ public partial class SceneRequestViewer
 {
     /// <summary>Optional request supplied by the parent. Loading through the methods replaces the active request.</summary>
     [Parameter] public SceneRequest? Scene { get; set; }
-    /// <summary>Enables Ctrl/Cmd+O and Ctrl/Cmd+S for the active viewer. Enabled by default.</summary>
+    /// <summary>Enables Ctrl+Alt+O and Ctrl+Alt+S for the active viewer. Enabled by default.</summary>
     [Parameter] public bool EnableFileShortcuts { get; set; } = true;
     /// <summary>Maximum browser input file size in bytes. Defaults to 256 MB.</summary>
     [Parameter] public long MaxSceneFileSize { get; set; } = 256L * 1024 * 1024;
-    /// <summary>Download filename for a supplied request. Opened files retain their own filename.</summary>
+    /// <summary>Suggested Save As filename for a supplied request. Opened files retain their own filename.</summary>
     [Parameter] public string FileName { get; set; } = "scene.bugscene.json";
     private SceneRequest? lastParameter;
     private SceneRequest current = new();
@@ -28,6 +28,11 @@ public partial class SceneRequestViewer
     private bool isBusy, disposed;
     private string? openedFileName, fileError;
     private string status = "Open a scene file to begin.";
+    private ElementReference saveAsDialog, saveAsInput;
+    private readonly string saveAsTitleId = $"scene-save-title-{Guid.NewGuid():N}";
+    private string saveAsName = "";
+    private string? saveAsError;
+    private bool showSaveAsAfterRender;
 
     /// <inheritdoc />
     protected override void OnParametersSet()
@@ -61,6 +66,11 @@ public partial class SceneRequestViewer
             files = new SceneFileInterop(JS);
             await files.InitializeAsync(container, input, openButton, saveButton);
         }
+        if (showSaveAsAfterRender && files is not null)
+        {
+            showSaveAsAfterRender = false;
+            await files.ShowSaveAsAsync(saveAsDialog, saveAsInput);
+        }
     }
 
     private async Task OpenSceneFileAsync(InputFileChangeEventArgs args)
@@ -87,7 +97,40 @@ public partial class SceneRequestViewer
         finally { isBusy = false; }
     }
 
-    private async Task DownloadSceneAsync()
+    private Task BeginSaveAsAsync()
+    {
+        if (isBusy || disposed || files is null || requests.Count == 0) return Task.CompletedTask;
+        saveAsName = openedFileName ?? FileName;
+        saveAsError = null;
+        showSaveAsAfterRender = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private Task CancelSaveAsAsync() => files is null ? Task.CompletedTask : files.CloseSaveAsAsync(saveAsDialog);
+
+    private async Task ConfirmSaveAsAsync()
+    {
+        if (isBusy || disposed || files is null) return;
+        var name = saveAsName.Trim();
+        if (name.Length == 0)
+        {
+            saveAsError = "Enter a file name.";
+            return;
+        }
+        if (name.IndexOfAny(['<', '>', ':', '"', '/', '\\', '|', '?', '*']) >= 0
+            || name.Any(char.IsControl) || name.EndsWith('.'))
+        {
+            saveAsError = "Enter a file name without folders or special filename characters.";
+            return;
+        }
+        if (!name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+            && !name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase))
+            name += ".bugscene.json";
+        await files.CloseSaveAsAsync(saveAsDialog);
+        await DownloadSceneAsync(name);
+    }
+
+    private async Task DownloadSceneAsync(string name)
     {
         if (isBusy || disposed || files is null || requests.Count == 0) return;
         isBusy = true;
@@ -97,8 +140,8 @@ public partial class SceneRequestViewer
             await using var stream = new MemoryStream();
             await SaveSceneAsync(stream, lifetime.Token);
             stream.Position = 0;
-            var name = openedFileName ?? FileName;
             await files.DownloadAsync(name, stream);
+            openedFileName = name;
             status = $"Downloaded {name}.";
         }
         catch (OperationCanceledException) when (disposed) { }

@@ -79,13 +79,18 @@ collections as immutable so cached step resolution stays valid.
 
 The low-level `BugViewer` component still accepts renderer-native meshes and lines.
 `SceneViewer` adds 3D playback and `PlotViewer` adds 2D playback; `SceneRequestViewer`
-selects between them and provides the component persistence API, Open/Save buttons, and
-**Ctrl+O / Ctrl+S** shortcuts (**Cmd+O / Cmd+S** on macOS). Opening a request with steps
+selects between them and provides the component persistence API, Open/Save As buttons, and
+**Ctrl+Alt+O / Ctrl+Alt+S** shortcuts. Plain Ctrl+O / Ctrl+S remain available to the browser;
+AltGr input is ignored. The 3D viewer also has Open and Save As icons in **Settings**, below
+the Camera accordion, visible even when the accordion is collapsed.
+Save As prompts for a filename before downloading; Cancel or Escape leaves the scene unchanged.
+Names without a `.json` or `.bugscene` extension receive `.bugscene.json` automatically.
+Opening a request with steps
 automatically shows playback controls; opening a single scene removes them. Saving keeps
 the complete timeline and current view. The keyboard commands target the focused or last
 clicked request viewer (or the only one on the page), and leave editors outside it alone.
 Set `EnableFileShortcuts="false"` to let the host own those keys. Use `MaxSceneFileSize` to
-adjust the 256 MB input limit and `FileName` to name downloads of programmatically supplied
+adjust the 256 MB input limit and `FileName` to suggest names for programmatically supplied
 requests. These file controls belong to `SceneRequestViewer`; applications using only the
 low-level `BugViewer` renderer should use this presentation component for scene files.
 Plotly ships with the
@@ -105,7 +110,7 @@ dotnet run --project samples/LoadAndShowScene
 ```
 
 Open the displayed localhost URL in a WebGPU-capable browser. Choose **Open Scene** to browse
-for a `.bugscene.json` file, then **Save Scene** to download it with the current settings and view.
+for a `.bugscene.json` file, then **Save As** to name and download it with the current settings and view.
 Scenes with no saved camera are automatically framed. Loading replaces the current request.
 
 Run the persistence and viewer-integration checks with:

@@ -19,6 +19,8 @@ public partial class SceneViewer
     [Parameter] public EventCallback OnReady { get; set; }
     /// <summary>Reports selection using portable mesh and triangle identifiers.</summary>
     [Parameter] public EventCallback<SceneTriangleSelection> OnTriangleSelected { get; set; }
+    /// <summary>Optional actions displayed below the Camera accordion in the underlying viewer's settings.</summary>
+    [Parameter] public RenderFragment? CameraActions { get; set; }
 
     private int step;
     private bool isEditingStep;

@@ -5,3 +5,11 @@
 .scene-file-hint { font-size: .85rem; color: #555; }
 .scene-file-status { margin: .6rem 0; }
 .scene-file-error { color: #b32121; }
+.scene-save-dialog { border: 1px solid #999; border-radius: .5rem; padding: 1.25rem; width: min(28rem, 90vw); }
+.scene-save-dialog::backdrop { background: rgb(0 0 0 / 35%); }
+.scene-save-dialog h2 { margin: 0 0 1rem; font-size: 1.2rem; }
+.scene-save-dialog label { display: flex; flex-direction: column; gap: .4rem; }
+.scene-save-dialog input { padding: .45rem; }
+.scene-save-dialog p { font-size: .9rem; }
+.scene-save-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+.scene-save-actions button { padding: .4rem .8rem; }

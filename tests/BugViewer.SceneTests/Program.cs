@@ -160,7 +160,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     catch (InvalidDataException) { }
     Assert((await loader.GetSceneAsync()).RequestId == restored.RequestId, "Invalid load replaced the current request.");
 
-    // Exercise the same file handler used by Open Scene and Ctrl/Cmd+O, including mode changes.
+    // Exercise the same file handler used by Open Scene and Ctrl+Alt+O, including mode changes.
     var openFile = typeof(SceneRequestViewer).GetMethod("OpenSceneFileAsync", flags)!;
     async Task Open(SceneRequest scene, string name)
     {
@@ -202,6 +202,32 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         Assert(typeof(SceneRequestViewer).GetField("fileError", flags)!.GetValue(loader) is string { Length: > 0 },
             "Failed file open did not report an error.");
     }
+
+    var fileRuntime = new SceneFileRuntime();
+    var interopType = typeof(SceneRequestViewer).Assembly.GetType("BugViewer.SceneFileInterop")!;
+    var fileInterop = Activator.CreateInstance(interopType, fileRuntime)!;
+    await (Task)interopType.GetMethod("InitializeAsync")!.Invoke(fileInterop,
+        [default(ElementReference), default(ElementReference), default(ElementReference), default(ElementReference)])!;
+    typeof(SceneRequestViewer).GetField("files", flags)!.SetValue(loader, fileInterop);
+    Task FileCommand(string name) => (Task)typeof(SceneRequestViewer).GetMethod(name, flags)!.Invoke(loader, null)!;
+    await Open(restored, "original.bugscene.json");
+    await FileCommand("BeginSaveAsAsync");
+    Assert((string)typeof(SceneRequestViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene.json",
+        "Save As did not suggest the opened filename.");
+    await FileCommand("CancelSaveAsAsync");
+    Assert(fileRuntime.Downloads.Count == 0, "Canceling Save As downloaded a file.");
+    foreach (var badName in new[] { " ", "../part", "part?", "part." })
+    {
+        typeof(SceneRequestViewer).GetField("saveAsName", flags)!.SetValue(loader, badName);
+        await FileCommand("ConfirmSaveAsAsync");
+        Assert(fileRuntime.Downloads.Count == 0, "An invalid filename was downloaded.");
+    }
+    typeof(SceneRequestViewer).GetField("saveAsName", flags)!.SetValue(loader, "renamed scene");
+    await FileCommand("ConfirmSaveAsAsync");
+    var download = fileRuntime.Downloads.Single();
+    Assert(download.Name == "renamed scene.bugscene.json", "Save As ignored the chosen name or scene extension.");
+    using var downloaded = new MemoryStream(download.Data);
+    Assert(Json(SceneRequest.Load(downloaded)) == Json(restored), "Save As lost the complete stepped request.");
 });
 
 if (args is ["--write-examples", var directory])
@@ -282,5 +308,24 @@ sealed class RecordingModule : IJSObjectReference
         return ValueTask.FromResult(default(TValue)!);
     }
     public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => InvokeAsync<TValue>(identifier, args);
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+sealed class SceneFileRuntime : IJSRuntime, IJSObjectReference
+{
+    public List<(string Name, byte[] Data)> Downloads { get; } = [];
+    public async ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+    {
+        if (identifier is "import" or "initialize") return (TValue)(object)this;
+        if (identifier == "downloadScene")
+        {
+            using var copy = new MemoryStream();
+            await ((DotNetStreamReference)args![1]!).Stream.CopyToAsync(copy);
+            Downloads.Add(((string)args[0]!, copy.ToArray()));
+        }
+        return default!;
+    }
+    public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
+        => InvokeAsync<TValue>(identifier, args);
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

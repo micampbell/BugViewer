@@ -54,6 +54,10 @@ namespace BugViewer
         [Parameter]
         public string Height { get; set; } = "100vh";
 
+        /// <summary>Optional presentation actions displayed below the Camera accordion in the settings popover.</summary>
+        [Parameter]
+        public RenderFragment? CameraActions { get; set; }
+
         // Element references for container and canvas.
         private ElementReference? _containerRef;
         private ElementReference? _canvasRef;
@@ -601,6 +605,8 @@ namespace BugViewer
         // Handles key down events.
         private async Task OnKeyDown(KeyboardEventArgs e)
         {
+            // Modified shortcuts belong to the browser or presentation host, not camera movement.
+            if (e.CtrlKey || e.AltKey || e.MetaKey) return;
             if (e.Key == "Escape")
             {
                 _optionsPopover = false;

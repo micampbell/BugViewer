@@ -9,6 +9,8 @@ internal sealed class SceneFileInterop(IJSRuntime js) : IAsyncDisposable
     private const string InitializeMethod = "initialize";
     private const string DownloadMethod = "downloadScene";
     private const string DisposeMethod = "dispose";
+    private const string ShowSaveAsMethod = "showSaveAs";
+    private const string CloseSaveAsMethod = "closeSaveAs";
     private IJSObjectReference? module, shortcuts;
     private Task? initialization;
 
@@ -28,6 +30,18 @@ internal sealed class SceneFileInterop(IJSRuntime js) : IAsyncDisposable
         if (initialization is not null) await initialization;
         using var reference = new DotNetStreamReference(stream, leaveOpen: true);
         await module!.InvokeVoidAsync(DownloadMethod, name, reference);
+    }
+
+    public async Task ShowSaveAsAsync(ElementReference dialog, ElementReference input)
+    {
+        if (initialization is not null) await initialization;
+        await module!.InvokeVoidAsync(ShowSaveAsMethod, dialog, input);
+    }
+
+    public async Task CloseSaveAsAsync(ElementReference dialog)
+    {
+        if (initialization is not null) await initialization;
+        await module!.InvokeVoidAsync(CloseSaveAsMethod, dialog);
     }
 
     public async ValueTask DisposeAsync()

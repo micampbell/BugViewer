@@ -70,6 +70,7 @@
     }
     <div class="scene-viewer-canvas">
         <BugViewer @ref="viewer" Height="100%" Width="100%" OnReady="OnViewerReadyAsync"
+                   CameraActions="CameraActions"
                    Options="initialOptions" HoverSelectionKeys="HoverSelectionKeys" OnHoverSelectionKeyChanged="OnHoverSelectionKeyChanged"
                    OnTriangleSelected="TriangleSelectedAsync"
                    AutoResetCamera="@(CurrentRequest.Options is null ? Current.AutoResetCamera : (UpdateTypes?)null)" />

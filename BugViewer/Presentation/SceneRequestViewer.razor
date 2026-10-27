@@ -1,18 +1,20 @@
 @namespace BugViewer
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@using Microsoft.FluentUI.AspNetCore.Components
+@using FileIcons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24
 
 <section @ref="container" class="scene-request-viewer" tabindex="0" aria-label="Scene viewer"
          data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
     <div class="scene-file-controls">
         <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@isBusy" />
-        <button @ref="openButton" type="button" disabled="@isBusy"
-                aria-keyshortcuts="Control+O Meta+O" title="Open scene (Ctrl+O / ⌘O)">Open Scene</button>
-        <button @ref="saveButton" type="button" @onclick="DownloadSceneAsync" disabled="@(isBusy || requests.Count == 0)"
-                aria-keyshortcuts="Control+S Meta+S" title="Save scene (Ctrl+S / ⌘S)">Save Scene</button>
+        <button @ref="openButton" type="button" disabled="@isBusy" data-scene-file-command="open"
+                aria-keyshortcuts="@(EnableFileShortcuts ? "Control+Alt+O" : null)" title="Open scene (Ctrl+Alt+O)">Open Scene</button>
+        <button @ref="saveButton" type="button" @onclick="BeginSaveAsAsync" disabled="@(isBusy || requests.Count == 0)"
+                aria-keyshortcuts="@(EnableFileShortcuts ? "Control+Alt+S" : null)" title="Save scene as (Ctrl+Alt+S)">Save As…</button>
         @if (EnableFileShortcuts)
         {
-            <span class="scene-file-hint">Ctrl/⌘+O to open · Ctrl/⌘+S to save</span>
+            <span class="scene-file-hint">Ctrl+Alt+O to open · Ctrl+Alt+S to save as</span>
         }
     </div>
     <p class="scene-file-status" role="status">@status</p>
@@ -26,6 +28,36 @@
     }
     else
     {
-        <SceneViewer @key="generation" @ref="sceneViewer" Scenes="requests" />
+        <SceneViewer @key="generation" @ref="sceneViewer" Scenes="requests">
+            <CameraActions>
+                <FluentStack Orientation="Orientation.Horizontal" aria-label="Scene file actions">
+                    <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open"
+                                  Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
+                        <FluentIcon Value="@(new FileIcons.FolderOpen())" />
+                    </FluentButton>
+                    <FluentButton IconOnly="true" Disabled="@(isBusy || requests.Count == 0)" OnClick="BeginSaveAsAsync"
+                                  Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
+                        <FluentIcon Value="@(new FileIcons.Save())" />
+                    </FluentButton>
+                </FluentStack>
+            </CameraActions>
+        </SceneViewer>
     }
+    <dialog @ref="saveAsDialog" class="scene-save-dialog" aria-labelledby="@saveAsTitleId">
+        <form @onsubmit="ConfirmSaveAsAsync" @onsubmit:preventDefault>
+            <h2 id="@saveAsTitleId">Save scene as</h2>
+            <label>File name
+                <input @ref="saveAsInput" type="text" @bind="saveAsName" @bind:event="oninput" maxlength="240" />
+            </label>
+            <p>The file includes all steps and the current view.</p>
+            @if (saveAsError is not null)
+            {
+                <p class="scene-file-error" role="alert">@saveAsError</p>
+            }
+            <div class="scene-save-actions">
+                <button type="button" @onclick="CancelSaveAsAsync">Cancel</button>
+                <button type="submit">Save</button>
+            </div>
+        </form>
+    </dialog>
 </section>
