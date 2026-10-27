@@ -10,4 +10,8 @@
 .step-controls { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
 .step-controls input[type="range"] { flex: 1; }
 .step-controls input[type="number"] { width: 5rem; }
+.step-counter { display: inline-flex; align-items: center; gap: .25rem; white-space: nowrap; }
+.step-current { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: text; }
+.step-current:hover, .step-current:focus-visible { text-decoration: underline; }
+.step-number-input { box-sizing: content-box; padding: 0 .15rem; font: inherit; text-align: right; }
 .step-speed-control { display: flex; gap: .35rem; align-items: center; white-space: nowrap; }

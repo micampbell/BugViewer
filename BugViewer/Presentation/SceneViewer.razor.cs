@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using NumericsVector3 = System.Numerics.Vector3;
 
 namespace BugViewer;
@@ -20,6 +21,12 @@ public partial class SceneViewer
     [Parameter] public EventCallback<SceneTriangleSelection> OnTriangleSelected { get; set; }
 
     private int step;
+    private bool isEditingStep;
+    private string targetStep = "";
+    private ElementReference stepInput;
+    private ElementReference stepButton;
+    private bool focusStepInput;
+    private bool focusStepButton;
     private int renderedStep;
     private int autoplayDelayMilliseconds = 333;
     private int autoplayStepIncrement = 1;
@@ -69,12 +76,30 @@ public partial class SceneViewer
     {
         if (!ReferenceEquals(lastRequest, CurrentRequest))
         {
+            isEditingStep = false;
+            focusStepInput = false;
+            focusStepButton = false;
             lastRequest = CurrentRequest;
             step = Math.Clamp(CurrentRequest.InitialStep, 0, Math.Max(0, StepCount - 1));
             if (!ready) initialOptions = CurrentRequest.Options?.Clone() ?? BugViewerOptions.Default.Clone();
         }
         if (step >= StepCount) step = Math.Max(0, StepCount - 1);
         if (ready && !appliedScenes.SequenceEqual(Scenes)) await RenderSceneAsync();
+    }
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusStepInput && isEditingStep)
+        {
+            focusStepInput = false;
+            await stepInput.FocusAsync(preventScroll: true);
+        }
+        else if (focusStepButton && !isEditingStep && StepCount > 1)
+        {
+            focusStepButton = false;
+            await stepButton.FocusAsync(preventScroll: true);
+        }
     }
 
     private async Task OnViewerReadyAsync()
@@ -105,6 +130,40 @@ public partial class SceneViewer
         step = Math.Clamp(index, 0, Math.Max(0, StepCount - 1));
         if (ready) await RenderSceneAsync();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task BeginStepEditAsync()
+    {
+        await StopAutoplayAsync();
+        targetStep = (step + 1).ToString();
+        isEditingStep = true;
+        focusStepInput = true;
+    }
+
+    private async Task ApplyTargetStepAsync()
+    {
+        if (!isEditingStep)
+            return;
+
+        isEditingStep = false;
+        focusStepInput = false;
+        if (int.TryParse(targetStep, out var requestedStep))
+            await SetStepAsync(Math.Clamp(requestedStep, 1, Math.Max(1, StepCount)) - 1);
+    }
+
+    private async Task StepInputKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            focusStepButton = true;
+            await ApplyTargetStepAsync();
+        }
+        else if (args.Key == "Escape")
+        {
+            isEditingStep = false;
+            focusStepInput = false;
+            focusStepButton = true;
+        }
     }
 
     private async Task PreviousStepAsync()

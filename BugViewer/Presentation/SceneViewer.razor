@@ -33,7 +33,22 @@
             <button @onclick="PreviousStepAsync">Prev</button>
             <input type="range" min="0" max="@(StepCount - 1)" @bind="step"
                    @bind:event="oninput" @bind:after="RenderSceneAsync" />
-            <span>@(step + 1) / @StepCount</span>
+            <span class="step-counter">
+                @if (isEditingStep)
+                {
+                    <input @ref="stepInput" class="step-number-input" type="text" inputmode="numeric"
+                           aria-label="Target step" title="Enter a step number; Enter applies, Escape cancels"
+                           style="width: @(Math.Max(3, StepCount.ToString().Length) + 1)ch"
+                           @bind="targetStep" @bind:event="oninput"
+                           @onkeydown="StepInputKeyDownAsync" @onblur="ApplyTargetStepAsync" />
+                }
+                else
+                {
+                    <button @ref="stepButton" type="button" class="step-current" aria-label="Edit current step"
+                            title="Click to jump to a step" @onclick="BeginStepEditAsync">@(step + 1)</button>
+                }
+                <span>/ @StepCount</span>
+            </span>
             <button @onclick="NextStepAsync">Next</button>
             <button @onclick="ToggleAutoplayAsync">@(IsAutoplaying ? "Pause" : "Play")</button>
             <label class="step-speed-control">
