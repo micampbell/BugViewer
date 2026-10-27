@@ -1,0 +1,26 @@
+﻿@page "/"
+@using BugViewer
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<PageTitle>Load and show a scene</PageTitle>
+
+<main class="scene-page">
+    <h1>Load and show a scene</h1>
+    <p>Open a BugViewer presentation to restore its geometry, plots, steps, settings, and view.</p>
+    <div class="scene-toolbar">
+        <label class="scene-open">
+            Load Scene
+            <InputFile @key="fileInputVersion" OnChange="LoadScene" accept=".json,.bugscene" disabled="@isBusy" />
+        </label>
+        <FluentButton OnClick="SaveScene" Disabled="@(isBusy || !hasScene)">Save Scene</FluentButton>
+        <a href="scenes/example.bugscene.json" download="example.bugscene.json">Download a stepped 3D example</a>
+        <a href="scenes/plots.bugscene.json" download="plots.bugscene.json">Download a 2D example</a>
+    </div>
+    <p role="status">@status</p>
+    @if (error is not null)
+    {
+        <p class="scene-error" role="alert">@error</p>
+    }
+    <SceneRequestViewer @ref="viewer" />
+</main>

@@ -90,7 +90,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         return clone;
     }
     
-    private void Set(BugViewerOptions newOptions)
+    internal void Set(BugViewerOptions newOptions)
     {
         AutoResetCamera = newOptions.AutoResetCamera;
         AutoUpdateGrid = newOptions.AutoUpdateGrid;

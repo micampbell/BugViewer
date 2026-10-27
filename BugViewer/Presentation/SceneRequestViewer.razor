@@ -1,0 +1,10 @@
+@namespace BugViewer
+
+@if (current.Kind == PresentationKind.TwoDimensional)
+{
+    <PlotViewer @key="generation" @ref="plotViewer" Scenes="requests" />
+}
+else
+{
+    <SceneViewer @key="generation" @ref="sceneViewer" Scenes="requests" />
+}

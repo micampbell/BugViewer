@@ -28,3 +28,83 @@ Just add the `BugViewer` Component to your Razor page.:
 ```
 
 The [./samples](./samples) folder contains some examples of how to setup the canvas.
+
+### Saving and loading scenes
+
+`BugViewer.SceneRequest` is the portable presentation contract. It stores 3D geometry,
+colors, labels, complete steps or lazy step groups, transforms, and 2D plots in versioned
+UTF-8 JSON. Optional viewer settings, camera, and `InitialStep` restore the saved view.
+Saving a stepped request retains the whole timeline, including history limits and null
+transform barriers, rather than just the displayed frame.
+
+Use `SceneRequestViewer` to display either kind of request:
+
+```razor
+@using BugViewer
+<SceneRequestViewer @ref="viewer" Scene="request" />
+
+@code {
+    private SceneRequestViewer? viewer;
+    private SceneRequest request = new();
+}
+```
+
+```csharp
+// Save or replace the contents of a SceneRequestViewer.
+await viewer.SaveSceneAsync("part.bugscene.json");
+await viewer.LoadSceneAsync("part.bugscene.json");
+
+// Persist a request directly, without creating a viewer.
+request.Save("part.bugscene.json");
+var restored = SceneRequest.Load("part.bugscene.json");
+await viewer.LoadSceneAsync(restored);
+
+// Keep the source request with the current step, camera, and display settings.
+var current = await viewer.GetSceneAsync();
+```
+
+`SceneRequest.Load`, `Save`, `LoadAsync`, and `SaveAsync` accept either a file path
+or a `Stream`. Component `LoadSceneAsync` and `SaveSceneAsync` also accept streams. Stream
+overloads leave the caller's stream open and operate at its current position; asynchronous
+I/O overloads accept a cancellation token. File saves replace the destination only after
+serialization succeeds. Invalid scene files are rejected before changing the viewer. The
+serializer uses generated metadata and works in trimmed WebAssembly builds.
+
+`SceneMesh`, `ScenePath`, `ScenePointSet`, `PlotRequest`, and `PlotTrace` hold the portable
+data. `SceneStepGroup` stores source meshes and/or a `SceneStepPathSource` plus an optional
+indexed transform list. `ScenePoint` and `SceneTransform` retain double precision until
+the visible frame is converted for rendering. Use `Steps` for complete frames and
+`StepGroups` for shared source data; a request cannot use both. Treat published source
+collections as immutable so cached step resolution stays valid.
+
+The low-level `BugViewer` component still accepts renderer-native meshes and lines.
+`SceneViewer` adds 3D playback and `PlotViewer` adds 2D playback; `SceneRequestViewer`
+selects between them and provides the component persistence API. Plotly ships with the
+library and loads only when displaying a 2D request.
+
+TVGL's `WebGPUPresenter` now produces this shared contract. Its derived `PresenterRequest`
+keeps blocking/hold settings and callbacks in the presenter, and source-face references
+stay in a presenter-side table. Those runtime details are excluded from the file. Reloaded
+requests retain geometry and playback, but do not recreate live TVGL objects or callbacks.
+
+Browser applications use streams from `InputFile` and browser downloads instead of local file paths.
+The [LoadAndShowScene sample](samples/LoadAndShowScene/Pages/Home.razor) demonstrates both,
+including downloadable stepped 3D and 2D examples, loading/error states, and a 256 MB input limit:
+
+```powershell
+dotnet run --project samples/LoadAndShowScene
+```
+
+Open the displayed localhost URL in a WebGPU-capable browser. Choose **Load Scene** to browse
+for a `.bugscene.json` file, then **Save Scene** to download it with the current settings and view.
+Scenes with no saved camera are automatically framed. Loading replaces the current request.
+
+Run the persistence and viewer-integration checks with:
+
+```powershell
+dotnet run --project tests/BugViewer.SceneTests
+```
+
+## Performance comparison
+
+See [the reproducible scene-loading benchmark and validation guide](docs/performance.md).

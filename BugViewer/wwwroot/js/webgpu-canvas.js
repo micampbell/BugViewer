@@ -565,11 +565,15 @@ async function initWebGPU() {
     if (!adapter)
         throw new Error('No compatible WebGPU adapter was found.');
 
+    benchmarkEnvironment = { userAgent: navigator.userAgent, devicePixelRatio: globalThis.devicePixelRatio,
+        adapter: adapter.info ? { vendor: adapter.info.vendor, architecture: adapter.info.architecture,
+            device: adapter.info.device, description: adapter.info.description } : null };
     const requiredFeatures = [];
     if (adapter.features.has('texture-compression-bc')) requiredFeatures.push('texture-compression-bc');
     if (adapter.features.has('texture-compression-etc2')) requiredFeatures.push('texture-compression-etc2');
 
     device = await adapter.requestDevice({ requiredFeatures });
+    clearMeshPipelineCache();
     const initializedDevice = device;
     initializedDevice.lost.then(info => {
         if (isDisposing || device !== initializedDevice) return;
@@ -582,6 +586,8 @@ async function initWebGPU() {
             clearInterval(frameIntervalId);
             frameIntervalId = 0;
         }
+        clearMeshPipelineCache();
+        rejectFrameWaiters(new Error('WebGPU device lost.'));
         device = null;
         const reason = info?.message || info?.reason || 'The WebGPU device was lost.';
         notifyDotNet('OnWebGpuError', `WebGPU device lost: ${reason}`);
@@ -1134,6 +1140,7 @@ function renderFrame() {
 
     pass.end();
     device.queue.submit([encoder.finish()]);
+    resolveFrameWaiters();
 }
 
 function getRenderPassDescriptor() {
@@ -1387,92 +1394,47 @@ async function updateDisplayOptionsCore(options) {
 // Scene Management (Mesh, Lines, Billboards)
 // ============================================================================
 
-export function addMesh(meshData) {
-    return enqueueGpuOperation(() => addMeshCore(meshData));
+// These caches belong to the current device and its frame/light layouts.
+const meshShaderModules = new Map();
+const meshLayouts = new Map();
+const meshPipelines = new Map();
+let meshPipelineCreations = 0;
+let meshPipelineCacheEnabled = true;
+
+function clearMeshPipelineCache() {
+    meshShaderModules.clear();
+    meshLayouts.clear();
+    meshPipelines.clear();
 }
 
-async function addMeshCore(meshData) {
-    requireDevice(`adding mesh '${meshData.id}'`);
-    const { id, vertices, indices, colors, primitiveSurfaceNormals, singleColor } = meshData;
+function getMeshPipeline(singleColor, isTransparent) {
+    const gpuDevice = requireDevice('creating a mesh pipeline');
+    // All other descriptor fields are invariant. Index format is a draw-time
+    // setting, and normals are a vertex attribute in both display modes.
+    const key = JSON.stringify([singleColor, isTransparent, colorFormat, depthFormat, sampleCount]);
+    if (meshPipelineCacheEnabled && meshPipelines.has(key)) return meshPipelines.get(key);
 
-    const vertexBuffer = createBuffer(vertices, GPUBufferUsage.VERTEX);
-    let maximumIndex = 0;
-    for (const index of indices) {
-        maximumIndex = Math.max(maximumIndex, index);
-    }
-    const indexFormat = maximumIndex > 0xFFFF ? 'uint32' : 'uint16';
-    const indexBuffer = createBuffer(indices, GPUBufferUsage.INDEX,
-        indexFormat === 'uint32' ? Uint32Array : Uint16Array);
-    const suppliedPrimitiveSurfaceNormals = primitiveSurfaceNormals?.length === vertices.length
-        ? new Float32Array(primitiveSurfaceNormals)
-        : new Float32Array(vertices.length);
-    const activePrimitiveSurfaceNormals = usePrimitiveSurfaceNormals
-        ? suppliedPrimitiveSurfaceNormals
-        : new Float32Array(vertices.length);
-    const primitiveSurfaceNormalBuffer = createBuffer(activePrimitiveSurfaceNormals,
-        GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-
-    // Calculate bounding box and center for sorting
-    let min = [Infinity, Infinity, Infinity];
-    let max = [-Infinity, -Infinity, -Infinity];
-    for (let i = 0; i < vertices.length; i += 3) {
-        min[0] = Math.min(min[0], vertices[i]);
-        min[1] = Math.min(min[1], vertices[i + 1]);
-        min[2] = Math.min(min[2], vertices[i + 2]);
-        max[0] = Math.max(max[0], vertices[i]);
-        max[1] = Math.max(max[1], vertices[i + 1]);
-        max[2] = Math.max(max[2], vertices[i + 2]);
-    }
-    const center = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
-
-    let colorBuffer = null;
-    let bindGroup = null;
-    let meshBindGroupLayout = null;
-    let isTransparent = false;
-    let shaderCode = null;
-    let pipelineLayout = null;
-
-    if (singleColor) {
-        shaderCode = MESH_SHADER;
-        isTransparent = colors.length >= 4 && colors[3] < 1.0;
-
-        colorBuffer = createBuffer(colors, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
-
-        meshBindGroupLayout = device.createBindGroupLayout({
-            label: `Mesh ${id} BGL`,
+    let layout = meshPipelineCacheEnabled && meshLayouts.get(singleColor);
+    if (!layout) {
+        const bindGroupLayout = singleColor ? gpuDevice.createBindGroupLayout({
+            label: 'Uniform-color mesh BGL',
             entries: [
-                { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }, // Light uniforms
-                { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: {} }  // Mesh color
+                { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} },
+                { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: {} }
             ]
-        });
-
-        bindGroup = device.createBindGroup({
-            label: `Mesh ${id} BG`,
-            layout: meshBindGroupLayout,
-            entries: [
-                { binding: 0, resource: { buffer: lightUniformBuffer } },
-                { binding: 1, resource: { buffer: colorBuffer } }
-            ]
-        });
-        pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout, meshBindGroupLayout] });
-    } else {
-        shaderCode = MESH_SHADER_VERTEX_COLOR;
-        colorBuffer = createBuffer(colors, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-        // Check if any vertex has transparency to correctly flag the mesh
-        isTransparent = false;
-        for (let i = 3; i < colors.length; i += 4) {
-            if (colors[i] < 1.0) {
-                isTransparent = true;
-                break;
-            }
-        }
-        // For vertex-colored meshes, the bind group layout is just the light BGL
-        meshBindGroupLayout = lightBindGroupLayout;
-        pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout, lightBindGroupLayout] });
+        }) : lightBindGroupLayout;
+        layout = { bindGroupLayout, pipelineLayout: gpuDevice.createPipelineLayout({
+            bindGroupLayouts: [frameBindGroupLayout, bindGroupLayout]
+        }) };
+        if (meshPipelineCacheEnabled) meshLayouts.set(singleColor, layout);
     }
-
-    const shaderModule = device.createShaderModule({ code: shaderCode });
-
+    const { bindGroupLayout, pipelineLayout } = layout;
+    let shaderModule = meshPipelineCacheEnabled && meshShaderModules.get(singleColor);
+    if (!shaderModule) {
+        shaderModule = gpuDevice.createShaderModule({ code: singleColor ? MESH_SHADER : MESH_SHADER_VERTEX_COLOR });
+        if (meshPipelineCacheEnabled) meshShaderModules.set(singleColor, shaderModule);
+    }
+    meshPipelineCreations++;
     const vertexBufferLayout = [
         { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }
     ];
@@ -1488,8 +1450,8 @@ async function addMeshCore(meshData) {
         attributes: [{ shaderLocation: singleColor ? 1 : 2, offset: 0, format: 'float32x3' }]
     });
 
-    const pipeline = await device.createRenderPipelineAsync({
-        label: `Mesh ${id} Pipeline`,
+    const pipeline = gpuDevice.createRenderPipelineAsync({
+        label: `Mesh ${key} Pipeline`,
         layout: pipelineLayout,
         vertex: { module: shaderModule, entryPoint: 'vertexMain', buffers: vertexBufferLayout },
         fragment: {
@@ -1512,22 +1474,103 @@ async function addMeshCore(meshData) {
         primitive: { topology: 'triangle-list', cullMode: 'back' }
     });
 
-    meshes.push({
-        id,
-        center, // Store center for sorting
-        vertexBuffer,
-        colorBuffer,
-        primitiveSurfaceNormalBuffer,
-        primitiveSurfaceNormals: suppliedPrimitiveSurfaceNormals,
-        indexBuffer,
-        indexFormat,
-        bindGroup,
-        singleColor,
-        isTransparent,
-        visible: meshFacesVisible,
-        indexCount: indices.length,
-        pipeline
-    });
+    const result = pipeline.then(value => ({ pipeline: value, bindGroupLayout }));
+    if (meshPipelineCacheEnabled) {
+        meshPipelines.set(key, result);
+        result.catch(() => {
+            if (meshPipelines.get(key) === result) meshPipelines.delete(key);
+        });
+    }
+    return result;
+}
+
+export function addMesh(meshData) {
+    return enqueueGpuOperation(() => addMeshCore(meshData));
+}
+
+async function addMeshCore(meshData) {
+    const meshDevice = requireDevice(`adding mesh '${meshData.id}'`);
+    const { id, vertices, indices, colors, primitiveSurfaceNormals, singleColor } = meshData;
+
+    const allocatedBuffers = [];
+    const createMeshBuffer = (...args) => {
+        const buffer = createBuffer(...args);
+        allocatedBuffers.push(buffer);
+        return buffer;
+    };
+    let committed = false;
+    try {
+        const vertexBuffer = createMeshBuffer(vertices, GPUBufferUsage.VERTEX);
+        let maximumIndex = 0;
+        for (const index of indices) {
+            maximumIndex = Math.max(maximumIndex, index);
+        }
+        const indexFormat = maximumIndex > 0xFFFF ? 'uint32' : 'uint16';
+        const indexBuffer = createMeshBuffer(indices, GPUBufferUsage.INDEX,
+            indexFormat === 'uint32' ? Uint32Array : Uint16Array);
+        const suppliedPrimitiveSurfaceNormals = primitiveSurfaceNormals?.length === vertices.length
+            ? new Float32Array(primitiveSurfaceNormals)
+            : new Float32Array(vertices.length);
+        const activePrimitiveSurfaceNormals = usePrimitiveSurfaceNormals
+            ? suppliedPrimitiveSurfaceNormals
+            : new Float32Array(vertices.length);
+        const primitiveSurfaceNormalBuffer = createMeshBuffer(activePrimitiveSurfaceNormals,
+            GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
+
+        // Calculate bounding box and center for sorting
+        let min = [Infinity, Infinity, Infinity];
+        let max = [-Infinity, -Infinity, -Infinity];
+        for (let i = 0; i < vertices.length; i += 3) {
+            min[0] = Math.min(min[0], vertices[i]);
+            min[1] = Math.min(min[1], vertices[i + 1]);
+            min[2] = Math.min(min[2], vertices[i + 2]);
+            max[0] = Math.max(max[0], vertices[i]);
+            max[1] = Math.max(max[1], vertices[i + 1]);
+            max[2] = Math.max(max[2], vertices[i + 2]);
+        }
+        const center = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+
+        let isTransparent = singleColor && colors.length >= 4 && colors[3] < 1.0;
+        if (!singleColor) {
+            for (let i = 3; i < colors.length; i += 4) {
+                if (colors[i] < 1.0) { isTransparent = true; break; }
+            }
+        }
+        const colorBuffer = createMeshBuffer(colors,
+            (singleColor ? GPUBufferUsage.UNIFORM : GPUBufferUsage.VERTEX) | GPUBufferUsage.COPY_DST);
+        const { pipeline, bindGroupLayout } = await getMeshPipeline(singleColor, isTransparent);
+        if (device !== meshDevice || isDisposing) throw new Error('WebGPU mesh upload was interrupted.');
+        const bindGroup = singleColor ? meshDevice.createBindGroup({
+            label: `Mesh ${id} BG`,
+            layout: bindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: lightUniformBuffer } },
+                { binding: 1, resource: { buffer: colorBuffer } }
+            ]
+        }) : null;
+
+        meshes.push({
+            id,
+            center, // Store center for sorting
+            vertexBuffer,
+            colorBuffer,
+            primitiveSurfaceNormalBuffer,
+            primitiveSurfaceNormals: suppliedPrimitiveSurfaceNormals,
+            indexBuffer,
+            indexFormat,
+            bindGroup,
+            singleColor,
+            isTransparent,
+            visible: meshFacesVisible,
+            indexCount: indices.length,
+            pipeline
+        });
+        committed = true;
+    } finally {
+        if (!committed) {
+            for (const buffer of allocatedBuffers) buffer.destroy();
+        }
+    }
 }
 
 export function addMeshes(meshArray) {
@@ -1535,9 +1578,10 @@ export function addMeshes(meshArray) {
 }
 
 async function addMeshesCore(meshArray) {
-    for (const mesh of meshArray) {
-        await addMeshCore(mesh);
-    }
+    const start = performance.now();
+    try {
+        for (const mesh of meshArray) await addMeshCore(mesh);
+    } finally { benchmarkUploadMs += performance.now() - start; }
 }
 
 export function removeMeshes(meshIds) {
@@ -1670,9 +1714,10 @@ export function addLinesBatch(lineDataArray) {
 }
 
 async function addLinesBatchCore(lineDataArray) {
-    for (const lineData of lineDataArray) {
-        await addLinesCore(lineData);
-    }
+    const start = performance.now();
+    try {
+        for (const lineData of lineDataArray) await addLinesCore(lineData);
+    } finally { benchmarkUploadMs += performance.now() - start; }
 }
 
 export function removeLines(lineId) {
@@ -1925,10 +1970,15 @@ function createBuffer(data, usage, ArrayType = Float32Array, operation = 'creati
     });
 
     // Copy raw bytes into the mapped range. Use Uint8Array so this works for any typed array.
-    const mappedRange = buffer.getMappedRange();
-    new Uint8Array(mappedRange).set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength));
-    buffer.unmap();
-    return buffer;
+    try {
+        const mappedRange = buffer.getMappedRange();
+        new Uint8Array(mappedRange).set(new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength));
+        buffer.unmap();
+        return buffer;
+    } catch (error) {
+        buffer.destroy();
+        throw error;
+    }
 }
 
 export function getBoundingClientRect(element) {
@@ -1941,16 +1991,156 @@ export function getBoundingClientRect(element) {
     };
 }
 
+// Internal diagnostics used only by the sample benchmark. Normal rendering never
+// waits for GPU completion; these fences are explicitly requested by the benchmark.
+let benchmarkEnvironment = {};
+let benchmarkStart = 0;
+let benchmarkUploadMs = 0;
+let benchmarkResources = new Map();
+let benchmarkLongTasks = [];
+let benchmarkVisibilityStable = true;
+function benchmarkVisibilityChanged() {
+    if (document.visibilityState === 'hidden') benchmarkVisibilityStable = false;
+}
+let benchmarkObserver = null;
+export function downloadBenchmarkReport(json) {
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'bugviewer-loading-benchmark.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export function getBenchmarkEnvironment() {
+    return { ...benchmarkEnvironment, width: canvas?.width, height: canvas?.height,
+        sampleCount, colorFormat, depthFormat };
+}
+let benchmarkPipelineStart = 0;
+let frameWaiters = [];
+
+function rejectFrameWaiters(error) {
+    benchmarkObserver?.disconnect();
+    document.removeEventListener?.('visibilitychange', benchmarkVisibilityChanged);
+    benchmarkResources.clear();
+    for (const waiter of frameWaiters) { clearTimeout(waiter.timeout); waiter.reject(error); }
+    frameWaiters = [];
+}
+
+export function configureBenchmark(cacheEnabled) {
+    return enqueueGpuOperation(() => {
+        meshPipelineCacheEnabled = cacheEnabled;
+        clearMeshPipelineCache();
+    });
+}
+
+export function beginSceneMeasurement() {
+    return enqueueGpuOperation(() => {
+        if (document.visibilityState === 'hidden')
+            throw new Error('Keep the benchmark tab visible, then rerun the comparison.');
+        benchmarkVisibilityStable = true;
+        document.addEventListener?.('visibilitychange', benchmarkVisibilityChanged);
+        renderingPaused = true;
+        benchmarkStart = performance.now();
+        benchmarkUploadMs = 0;
+        benchmarkResources = new Map([...meshes, ...lines].map(item => [item.id, item]));
+        benchmarkLongTasks = [];
+        benchmarkObserver?.disconnect();
+        if (globalThis.PerformanceObserver?.supportedEntryTypes?.includes('longtask')) {
+            benchmarkObserver = new PerformanceObserver(list => {
+                benchmarkLongTasks.push(...list.getEntries().map(entry => entry.duration));
+            });
+            benchmarkObserver.observe({ type: 'longtask' });
+        }
+        benchmarkPipelineStart = meshPipelineCreations;
+    });
+}
+
+export function finishSceneMeasurement() {
+    return enqueueGpuOperation(() => new Promise((resolve, reject) => {
+        requireDevice('measuring a submitted scene');
+        const waiter = { resolve, reject, timeout: 0 };
+        waiter.timeout = setTimeout(() => {
+            frameWaiters = frameWaiters.filter(item => item !== waiter);
+            reject(new Error('Timed out waiting for the scene frame. Keep the browser visible and rerun.'));
+        }, 30000);
+        frameWaiters.push(waiter);
+        renderingPaused = false;
+    }));
+}
+
+function resolveFrameWaiters() {
+    const waiters = frameWaiters.filter(waiter => !waiter.submitted);
+    if (!waiters.length) return;
+    for (const waiter of waiters) waiter.submitted = true;
+    const cpuSubmissionMs = performance.now() - benchmarkStart;
+    const pipelineCreations = meshPipelineCreations - benchmarkPipelineStart;
+    const retainedResources = [...meshes, ...lines].filter(item => benchmarkResources.get(item.id) === item).length;
+    // Called immediately after queue.submit, before the next animation callback.
+    device.queue.onSubmittedWorkDone().then(() => {
+        const result = { cpuSubmissionMs, gpuCompletionMs: performance.now() - benchmarkStart,
+            pipelineCreations, meshCount: meshes.length, lineCount: lines.length, retainedResources,
+            visibilityStable: benchmarkVisibilityStable, jsUploadMs: benchmarkUploadMs, jsHeapBytes: performance.memory?.usedJSHeapSize ?? null,
+            longTaskCount: benchmarkLongTasks.length,
+            longestTaskMs: Math.max(0, ...benchmarkLongTasks) };
+        benchmarkObserver?.disconnect();
+        document.removeEventListener?.('visibilitychange', benchmarkVisibilityChanged);
+        benchmarkResources.clear();
+        frameWaiters = frameWaiters.filter(waiter => !waiters.includes(waiter));
+        for (const waiter of waiters) { clearTimeout(waiter.timeout); waiter.resolve(result); }
+    }, error => {
+        frameWaiters = frameWaiters.filter(waiter => !waiters.includes(waiter));
+        for (const waiter of waiters) { clearTimeout(waiter.timeout); waiter.reject(error); }
+    });
+}
+
+function decodeBinaryScene(metadata, bytes) {
+    if (!(bytes instanceof Uint8Array)) throw new Error('Binary scene requires a byte array.');
+    // .NET produces little-endian bytes. Typed-array views are valid only on a
+    // little-endian host; fail explicitly rather than display corrupted geometry.
+    if (new Uint8Array(new Uint32Array([1]).buffer)[0] !== 1)
+        throw new Error('Binary scene requires a little-endian browser.');
+    if (bytes.byteOffset % 4) bytes = bytes.slice();
+    const view = (Type, offset, count) => {
+        if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(count) || offset < 0 || count < 0 ||
+            offset % Type.BYTES_PER_ELEMENT || count > (bytes.byteLength - offset) / Type.BYTES_PER_ELEMENT)
+            throw new Error('Invalid binary scene section.');
+        return new Type(bytes.buffer, bytes.byteOffset + offset, count);
+    };
+    return {
+        meshes: metadata.meshes.map(mesh => ({
+            id: mesh.id, singleColor: mesh.singleColor,
+            vertices: view(Float32Array, mesh.vertexOffset, mesh.vertexCount),
+            colors: view(Float32Array, mesh.colorOffset, mesh.colorCount),
+            primitiveSurfaceNormals: view(Float32Array, mesh.normalOffset, mesh.normalCount),
+            indices: view(mesh.index32 ? Uint32Array : Uint16Array, mesh.indexOffset, mesh.indexCount)
+        })),
+        lines: metadata.lines.map(line => ({ id: line.id, center: line.center,
+            segments: view(Float32Array, line.offset, line.count) }))
+    };
+}
+
+export function addSceneBinary(metadata, bytes) {
+    return enqueueGpuOperation(async () => {
+        // Decode every section before creating GPU resources.
+        const scene = decodeBinaryScene(metadata, bytes);
+        await addMeshesCore(scene.meshes);
+        await addLinesBatchCore(scene.lines);
+    });
+}
+
 // ============================================================================
 // Cleanup
 // ============================================================================
 
 export function disposeWebGPU_Canvas() {
     isDisposing = true;
+    rejectFrameWaiters(new Error('WebGPU viewer disposed.'));
     return enqueueGpuOperation(disposeWebGPUCanvasCore);
 }
 
 function disposeWebGPUCanvasCore() {
+        clearMeshPipelineCache();
+        rejectFrameWaiters(new Error('WebGPU viewer disposed.'));
         viewCubeController.dispose();
         resizeObserver?.disconnect();
         resizeObserver = null;

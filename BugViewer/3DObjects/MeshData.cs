@@ -21,47 +21,72 @@ public record MeshData : AbstractObject3D
     /// <summary>Gets whether this mesh contains faces owned by one or more primitive surfaces.</summary>
     public bool HasPrimitiveSurfaces { get; init; }
 
-    internal override object CreateJavascriptData()
+    internal override object CreateJavascriptData() => Pack();
+
+    internal MeshUpload Pack()
     {
-        var vertexList = Vertices as IList<Vector3> ?? Vertices.ToList();
+        var vertexList = Vertices;
         if (PrimitiveSurfaceNormals.Count != 0 && PrimitiveSurfaceNormals.Count != vertexList.Count)
         {
             throw new InvalidOperationException(
                 $"Primitive surface normal count {PrimitiveSurfaceNormals.Count} does not match vertex count {vertexList.Count}.");
         }
 
-        if (ColorMode == MeshColoring.PerTriangle)
+        var colors = Colors as IList<ColorRgba> ?? Colors.ToArray();
+        var expanded = ColorMode == MeshColoring.PerTriangle;
+        if (expanded && colors.Count != Indices.Count)
+            throw new InvalidOperationException($"Color count {colors.Count} does not match expected per-triangle color count {Indices.Count}.");
+
+        var indexCount = checked(Indices.Count * 3);
+        var outputVertexCount = expanded ? indexCount : vertexList.Count;
+        var positions = new float[checked(outputVertexCount * 3)];
+        float[] normals = PrimitiveSurfaceNormals.Count == 0 ? [] : new float[positions.Length];
+        var indices = new int[indexCount];
+        var packedColors = new float[checked((expanded ? indexCount : colors.Count) * 4)];
+
+        if (!expanded)
         {
-            int expectedColors = Indices.Count();
-            if (Colors.Count() != expectedColors)
+            for (var i = 0; i < vertexList.Count; i++)
             {
-                throw new InvalidOperationException($"Color count {Colors.Count()} does not match expected per-triangle color count {expectedColors}.");
+                WriteVector(positions, i * 3, vertexList[i]);
+                if (normals.Length != 0) WriteVector(normals, i * 3, PrimitiveSurfaceNormals[i]);
             }
-            return new
-            {
-                id = Id,
-                vertices = Indices.SelectMany(face => TriangleIndices(face)).SelectMany(ind => Coordinates(vertexList[ind])).ToArray(),
-                indices = Enumerable.Range(0, 3 * Indices.Count()).ToArray(),
-                colors = Colors.SelectMany(c =>
-                      ColorRgba.ToJavaScript(c).Concat(ColorRgba.ToJavaScript(c)).Concat(ColorRgba.ToJavaScript(c))).ToArray(),
-                primitiveSurfaceNormals = PrimitiveSurfaceNormals.Count == 0
-                    ? []
-                    : Indices.SelectMany(face => TriangleIndices(face))
-                        .SelectMany(ind => Coordinates(PrimitiveSurfaceNormals[ind])).ToArray(),
-                singleColor = false
-            };
+            for (var i = 0; i < colors.Count; i++) WriteColor(packedColors, i * 4, colors[i]);
         }
-        else
+
+        for (var face = 0; face < Indices.Count; face++)
         {
-            return new
+            var (a, b, c) = Indices[face];
+            for (var corner = 0; corner < 3; corner++)
             {
-                id = Id,
-                vertices = Vertices.SelectMany(v => Coordinates(v)).ToArray(),
-                indices = Indices.SelectMany(face => TriangleIndices(face)).ToArray(),
-                colors = Colors.SelectMany(c => ColorRgba.ToJavaScript(c)).ToArray(),
-                primitiveSurfaceNormals = PrimitiveSurfaceNormals.SelectMany(Coordinates).ToArray(),
-                singleColor = ColorMode == MeshColoring.UniformColor
-            };
+                var sourceIndex = corner == 0 ? a : corner == 1 ? b : c;
+                var destinationIndex = face * 3 + corner;
+                indices[destinationIndex] = expanded ? destinationIndex : sourceIndex;
+                if (!expanded) continue;
+                WriteVector(positions, destinationIndex * 3, vertexList[sourceIndex]);
+                if (normals.Length != 0) WriteVector(normals, destinationIndex * 3, PrimitiveSurfaceNormals[sourceIndex]);
+                WriteColor(packedColors, destinationIndex * 4, colors[face]);
+            }
         }
+
+        return new(Id, positions, indices, packedColors, normals, ColorMode == MeshColoring.UniformColor);
+    }
+
+    private static void WriteVector(float[] output, int offset, Vector3 value)
+    {
+        output[offset] = value.X;
+        output[offset + 1] = value.Y;
+        output[offset + 2] = value.Z;
+    }
+
+    private static void WriteColor(float[] output, int offset, ColorRgba value)
+    {
+        output[offset] = value.R / 255f;
+        output[offset + 1] = value.G / 255f;
+        output[offset + 2] = value.B / 255f;
+        output[offset + 3] = value.A / 255f;
     }
 }
+
+internal sealed record MeshUpload(string Id, float[] Vertices, int[] Indices,
+    float[] Colors, float[] PrimitiveSurfaceNormals, bool SingleColor);

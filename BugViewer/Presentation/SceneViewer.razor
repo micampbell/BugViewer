@@ -1,0 +1,63 @@
+@using NumericsVector3 = System.Numerics.Vector3
+@using Microsoft.FluentUI.AspNetCore.Components
+@using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
+@namespace BugViewer
+@implements IAsyncDisposable
+
+<section class="scene-viewer">
+    <header class="scene-viewer-header">
+        <div>
+            <span class="scene-id">#@ViewerId</span>
+            @if (IsActive)
+            {
+                <span class="active-badge">Active</span>
+            }
+            <h2>@Title</h2>
+            @if (!string.IsNullOrWhiteSpace(Heading))
+            {
+                <p>@Heading</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                <p>@Subtitle</p>
+            }
+        </div>
+        @if (OnClose.HasDelegate)
+        {
+            <FluentButton Class="rotated-icon-button" @onclick="CloseAsync" IconStart="@(new Icons.Regular.Size20.Add())" />
+        }
+    </header>
+    @if (StepCount > 1)
+    {
+        <div class="step-controls">
+            <button @onclick="PreviousStepAsync">Prev</button>
+            <input type="range" min="0" max="@(StepCount - 1)" @bind="step"
+                   @bind:event="oninput" @bind:after="RenderSceneAsync" />
+            <span>@(step + 1) / @StepCount</span>
+            <button @onclick="NextStepAsync">Next</button>
+            <button @onclick="ToggleAutoplayAsync">@(IsAutoplaying ? "Pause" : "Play")</button>
+            <label class="step-speed-control">
+                Speed
+                <select @bind="autoplayDelayMilliseconds">
+                    <option value="33">30 fps</option>
+                    <option value="100">10 fps</option>
+                    <option value="333">3 fps</option>
+                    <option value="1000">1 fps</option>
+                    <option value="3000">1 frame / 3 sec</option>
+                </select>
+            </label>
+            <label class="step-speed-control">
+                Step stride
+                <input type="number" min="1" max="@Math.Max(1, StepCount - 1)"
+                       @bind="autoplayStepIncrement" />
+            </label>
+        </div>
+    }
+    <div class="scene-viewer-canvas">
+        <BugViewer @ref="viewer" Height="100%" Width="100%" OnReady="OnViewerReadyAsync"
+                   Options="initialOptions" HoverSelectionKeys="HoverSelectionKeys" OnHoverSelectionKeyChanged="OnHoverSelectionKeyChanged"
+                   OnTriangleSelected="TriangleSelectedAsync"
+                   AutoResetCamera="@(CurrentRequest.Options is null ? Current.AutoResetCamera : (UpdateTypes?)null)" />
+    </div>
+</section>
+

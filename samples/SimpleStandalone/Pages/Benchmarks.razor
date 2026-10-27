@@ -1,0 +1,16 @@
+@page "/benchmarks"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<PageTitle>BugViewer loading benchmark</PageTitle>
+<h1>Scene loading benchmark</h1>
+<p>Three repetitions of each scene and transport, with cold, warm, and incremental loads.
+    Keep this tab visible. CPU submission and queue completion are separate measurements;
+    queue completion is not GPU execution time or proof of screen presentation.</p>
+<p><a href="/">Back to viewer</a></p>
+<button disabled="@running" @onclick="RunAsync">Run comparison</button>
+<button disabled="@(running || results.Count == 0)" @onclick="DownloadAsync">Download JSON report</button>
+<p role="status">@status</p>
+<canvas @ref="canvas" width="960" height="600" style="width:960px;height:600px;max-width:100%"></canvas>
+<pre style="white-space:pre-wrap">@summary</pre>
+<details><summary>Raw JSON report</summary><pre style="white-space:pre-wrap">@report</pre></details>

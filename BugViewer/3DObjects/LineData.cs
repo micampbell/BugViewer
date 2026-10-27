@@ -46,7 +46,7 @@ public record LineData : AbstractObject3D
             Thicknesses.Select(thickness => thickness < 0f ? automaticThickness : thickness));
     }
 
-    private object CreateJavascriptDataCore(IEnumerable<float> thicknesses)
+    private LineUpload CreateJavascriptDataCore(IEnumerable<float> thicknesses)
     {
         var thicknessList = thicknesses as IList<float> ?? thicknesses.ToList();
         var colorList = Colors as IList<ColorRgba> ?? Colors.ToList();
@@ -102,14 +102,9 @@ public record LineData : AbstractObject3D
             max = Vector3.Max(max, Vector3.Max(start, end));
         }
 
-        return new
-        {
-            id = Id,
-            segments = segments.ToArray(),
-            center = segments.Count == 0
-                ? new float[] { 0f, 0f, 0f }
-                : new[] { (min.X + max.X) / 2f, (min.Y + max.Y) / 2f, (min.Z + max.Z) / 2f }
-        };
+        return new(Id, segments.ToArray(), segments.Count == 0
+            ? [0f, 0f, 0f]
+            : [(min.X + max.X) / 2f, (min.Y + max.Y) / 2f, (min.Z + max.Z) / 2f]);
     }
 
 
@@ -307,3 +302,5 @@ public record LineData : AbstractObject3D
         return angles;
     }
 }
+
+internal sealed record LineUpload(string Id, float[] Segments, float[] Center);

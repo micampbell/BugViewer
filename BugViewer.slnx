@@ -1,7 +1,13 @@
 <Solution>
   <Folder Name="/samples/">
+    <Project Path="samples/LoadAndShowScene/LoadAndShowScene.csproj" />
     <Project Path="samples/SimpleStandalone/SimpleStandalone.csproj" Id="fd4b13c7-fedc-4651-8b9b-ed69c3ac9381" />
     <Project Path="samples/TVGLPresenter/TVGLPresenter.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BugViewer.SceneTests/BugViewer.SceneTests.csproj" />
+    <Project Path="tests/BugViewer.PerformanceTests/BugViewer.PerformanceTests.csproj" />
+    <Project Path="tests/ServerSmoke/ServerSmoke.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path="readme.md" />

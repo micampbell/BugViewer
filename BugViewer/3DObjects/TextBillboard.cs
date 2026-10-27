@@ -14,7 +14,7 @@ public record TextBillboard : AbstractObject3D
     /// Gets the billboard half-height in world-space units.
     /// </summary>
     public float Scale { get; init; } = 1f;
-    public Vector3 Anchor  => ((List<Vector3>)Vertices)[0];
+    public Vector3 Anchor => Vertices[0];
     private float _relativeX = 0.5f;
     private float _relativeY = 0.5f;
 

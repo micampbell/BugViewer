@@ -1189,26 +1189,7 @@ namespace BugViewer
                 _lifecycleState = ViewerLifecycleState.Flushing;
                 var module = _module;
 
-                await module.InvokeVoidAsync("updateDisplayOptions", Options.ToJavascriptOptions(Camera.PolarAngle));
-                await module.InvokeVoidAsync("writeViewMatrix", Camera.ConvertMatrixToJavaScript(),
-                    Camera.PolarAngle, Camera.ConvertPositionToJavaScript());
-                await WriteProjectionMatrixCoreAsync(module);
-
-                await module.InvokeVoidAsync("clearAllMeshes");
-                if (meshes.Count > 0)
-                    await module.InvokeVoidAsync("addMeshes", (object)meshes.Select(mesh => mesh.CreateJavascriptData()).ToArray());
-                ReindexMeshIndices();
-                await ApplyMeshFaceDisplayCoreAsync(module);
-
-                await module.InvokeVoidAsync("clearAllLines");
-                if (lines.Count > 0)
-                    await SendLinesCoreAsync(module, lines);
-                ReindexLineIndices();
-
-                await module.InvokeVoidAsync("clearAllTextBillboards");
-                for (var index = 0; index < billBoards.Count; index++)
-                    await module.InvokeVoidAsync("addTextBillboard", billBoards[index].CreateJavascriptData());
-                ReindexBillboardIndices();
+                await UploadSceneCoreAsync(module);
 
                 if (renderPauseDepth > 0)
                     await module.InvokeVoidAsync("pauseRendering");
