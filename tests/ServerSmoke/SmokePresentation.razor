@@ -1,0 +1,38 @@
+@page "/presentation"
+@using BugViewer
+@using Microsoft.AspNetCore.Components.Web
+<h1>Interactive Server presentation smoke test</h1>
+<p role="status">@status</p>
+<button @onclick="NextAsync" disabled="@(!ready)">Switch frame</button>
+<div style="height:650px">
+    <SceneViewer @ref="viewer" Scenes="scenes" OnReady="Ready" OnStepRendered="Rendered" />
+</div>
+@code {
+    private SceneViewer? viewer;
+    private bool ready;
+    private int step;
+    private string status = "Initializing";
+    private readonly IReadOnlyList<SceneRequest> scenes = [new SceneRequest
+    {
+        Title = "Chunked binary Server interop",
+        Steps = [Frame(0), Frame(1)]
+    }];
+    private void Ready() => ready = true;
+    private async Task NextAsync() => await viewer!.SetStepAsync(step = 1 - step);
+    private void Rendered(ScenePlaybackMetrics timing) => status =
+        $"PASS: frame {timing.Step}, {timing.UploadedBytes} uploaded bytes, {timing.CacheHits} cache hits, submitted {timing.SubmittedAtMs:F1}";
+    private static SceneRequest Frame(int frame)
+    {
+        var mesh = new SceneMesh { Id = "changing", ColorMode = MeshColoring.PerTriangle };
+        for (var index = 0; index < 10000; index++)
+        {
+            float x = index % 100, y = index / 100;
+            var start = mesh.Vertices.Count;
+            mesh.Vertices.AddRange([[x, y, frame], [x + .8f, y, frame], [x, y + .8f, frame]]);
+            mesh.Triangles.Add([start, start + 1, start + 2]);
+            mesh.PrimitiveSurfaceNormals.AddRange([[0, 0, 1], [0, 0, 1], [0, 0, 1]]);
+            mesh.Colors.Add(frame == 0 ? ColorRgba.Red : new ColorRgba(30, 100, 240));
+        }
+        return new SceneRequest { Meshes = [mesh] };
+    }
+}

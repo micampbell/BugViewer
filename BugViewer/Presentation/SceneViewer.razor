@@ -40,7 +40,7 @@
                            aria-label="Target step" title="Enter a step number; Enter applies, Escape cancels"
                            style="width: @(Math.Max(3, StepCount.ToString().Length) + 1)ch"
                            @bind="targetStep" @bind:event="oninput"
-                           @onkeydown="StepInputKeyDownAsync" @onblur="ApplyTargetStepAsync" />
+                           @onkeyup="StepInputKeyUpAsync" @onblur="ApplyTargetStepAsync" />
                 }
                 else
                 {

@@ -574,6 +574,8 @@ async function initWebGPU() {
 
     device = await adapter.requestDevice({ requiredFeatures });
     clearMeshPipelineCache();
+    clearPresentationResources(presentationMeshes);
+    clearPresentationResources(presentationLines);
     const initializedDevice = device;
     initializedDevice.lost.then(info => {
         if (isDisposing || device !== initializedDevice) return;
@@ -588,6 +590,9 @@ async function initWebGPU() {
         }
         clearMeshPipelineCache();
         rejectFrameWaiters(new Error('WebGPU device lost.'));
+        rejectPresentationSubmission(new Error('WebGPU device lost.'));
+        clearPresentationResources(presentationMeshes);
+        clearPresentationResources(presentationLines);
         device = null;
         const reason = info?.message || info?.reason || 'The WebGPU device was lost.';
         notifyDotNet('OnWebGpuError', `WebGPU device lost: ${reason}`);
@@ -982,6 +987,7 @@ function startRenderLoop() {
 }
 
 function renderFrame() {
+    const submissionStart = performance.now();
     const renderPass = getRenderPassDescriptor();
     if (!renderPass) return; // Skip frame if render targets aren't ready
 
@@ -1140,6 +1146,7 @@ function renderFrame() {
 
     pass.end();
     device.queue.submit([encoder.finish()]);
+    resolvePresentationSubmission(performance.now() - submissionStart);
     resolveFrameWaiters();
 }
 
@@ -1556,6 +1563,7 @@ async function addMeshCore(meshData) {
             colorBuffer,
             primitiveSurfaceNormalBuffer,
             primitiveSurfaceNormals: suppliedPrimitiveSurfaceNormals,
+            normalMode: usePrimitiveSurfaceNormals,
             indexBuffer,
             indexFormat,
             bindGroup,
@@ -1616,10 +1624,12 @@ function setMeshFaceDisplayCore(visible, useSurfaceNormals) {
     usePrimitiveSurfaceNormals = Boolean(useSurfaceNormals);
     for (const mesh of meshes) {
         mesh.visible = meshFacesVisible;
+        if (mesh.normalMode === usePrimitiveSurfaceNormals || !mesh.primitiveSurfaceNormalBuffer) continue;
         const normals = usePrimitiveSurfaceNormals
             ? mesh.primitiveSurfaceNormals
             : new Float32Array(mesh.primitiveSurfaceNormals.length);
         gpuDevice.queue.writeBuffer(mesh.primitiveSurfaceNormalBuffer, 0, normals);
+        mesh.normalMode = usePrimitiveSurfaceNormals;
     }
 }
 
@@ -1630,6 +1640,7 @@ export function removeMesh(index) {
 function removeMeshCore(index) {
     const mesh = meshes[index];
     if (!mesh) return;
+    if (mesh.presentationKey) presentationMeshes.delete(mesh.presentationKey);
     mesh.vertexBuffer?.destroy();
     mesh.colorBuffer?.destroy();
     mesh.primitiveSurfaceNormalBuffer?.destroy();
@@ -1680,6 +1691,7 @@ export function clearAllMeshes() {
 }
 
 function clearAllMeshesCore() {
+    clearPresentationResources(presentationMeshes);
     for (const mesh of meshes) {
         mesh.vertexBuffer?.destroy();
         mesh.colorBuffer?.destroy();
@@ -1728,6 +1740,7 @@ function removeLinesCore(lineId) {
     const index = lines.findIndex(candidate => candidate.id === lineId);
     if (index < 0) return;
     const line = lines[index];
+    if (line.presentationKey) presentationLines.delete(line.presentationKey);
     line.instanceBuffer?.destroy();
     lines.splice(index, 1);
 }
@@ -1761,6 +1774,7 @@ export function clearAllLines() {
 }
 
 function clearAllLinesCore() {
+    clearPresentationResources(presentationLines);
     for (const line of lines) {
         line.instanceBuffer?.destroy();
     }
@@ -1961,7 +1975,9 @@ function createBuffer(data, usage, ArrayType = Float32Array, operation = 'creati
     // Align buffer size to 4 bytes because createBuffer with mappedAtCreation=true
     // requires the size to be a multiple of 4 on many WebGPU implementations.
     const byteLength = typedArray.byteLength;
-    const alignedSize = (byteLength + 3) & ~3; // round up to next multiple of 4
+    const alignedSize = Math.ceil(byteLength / 4) * 4;
+    if (alignedSize > (gpuDevice.limits?.maxBufferSize ?? 256 * 1024 * 1024))
+        throw new Error(`Geometry buffer requires ${alignedSize} bytes, exceeding this device's buffer limit. Split the source geometry into smaller meshes or path batches.`);
 
     const buffer = gpuDevice.createBuffer({
         size: alignedSize,
@@ -2128,6 +2144,193 @@ export function addSceneBinary(metadata, bytes) {
     });
 }
 
+// Presentation resources are separate from the active draw lists. Uploading a
+// future frame never clears the currently visible frame. Only inactive resources
+// are evicted; a single active frame may exceed the configured cache budget.
+const presentationMeshes = new Map();
+const presentationLines = new Map();
+let presentationClock = 0;
+let presentationUpload = null;
+let presentationUploadMs = 0;
+let presentationAdded = [];
+let presentationSubmission = null;
+
+function destroyPresentationResource(resource) {
+    for (const field of ['vertexBuffer', 'colorBuffer', 'primitiveSurfaceNormalBuffer', 'indexBuffer', 'instanceBuffer'])
+        resource[field]?.destroy();
+}
+
+function clearPresentationResources(cache) {
+    for (const entry of cache.values()) destroyPresentationResource(entry.resource);
+    cache.clear();
+}
+
+function rememberPresentationResource(cache, key, resource) {
+    resource.presentationKey = key;
+    const bytes = ['vertexBuffer', 'colorBuffer', 'primitiveSurfaceNormalBuffer', 'indexBuffer', 'instanceBuffer']
+        .reduce((sum, field) => sum + (resource[field]?.size ?? 0), resource.primitiveSurfaceNormals?.byteLength ?? 0);
+    cache.set(key, { resource, bytes, used: ++presentationClock });
+    presentationAdded.push([cache, key]);
+}
+
+export function preparePresentationFrame(meshRefs, lineRefs) {
+    return enqueueGpuOperation(() => {
+        requireDevice('preparing a presentation frame');
+        abortPresentationFrameCore();
+        presentationUploadMs = 0;
+        return { meshes: meshRefs.filter(item => !presentationMeshes.has(item.key)).map(item => item.key),
+            lines: lineRefs.filter(item => !presentationLines.has(item.key)).map(item => item.key) };
+    });
+}
+
+export function uploadPresentationChunk(metadata, total, offset, bytes) {
+    return enqueueGpuOperation(async () => {
+        requireDevice('uploading presentation geometry');
+        if (!(bytes instanceof Uint8Array) || !Number.isSafeInteger(total) || total < 0 || total > 0x7fffffff
+            || !Number.isSafeInteger(offset) || offset < 0 || bytes.length > total - offset)
+            throw new Error('Invalid presentation upload chunk.');
+        if (offset === 0) {
+            if (presentationUpload) throw new Error('A presentation upload is already in progress.');
+            presentationUpload = { metadata, total, offset: 0,
+                bytes: bytes.length === total ? bytes : new Uint8Array(total) };
+        }
+        const upload = presentationUpload;
+        if (!upload || upload.offset !== offset || upload.total !== total)
+            throw new Error('Out-of-order presentation upload chunk.');
+        if (upload.bytes !== bytes) upload.bytes.set(bytes, offset);
+        upload.offset += bytes.length;
+        if (upload.offset !== total) return;
+        presentationUpload = null;
+        const started = performance.now();
+        const scene = decodeBinaryScene(upload.metadata, upload.bytes);
+        for (const mesh of scene.meshes) {
+            if (presentationMeshes.has(mesh.id)) continue;
+            if (!mesh.indices.length) {
+                rememberPresentationResource(presentationMeshes, mesh.id, { id: mesh.id, center: [0,0,0],
+                    primitiveSurfaceNormals: new Float32Array(0), normalMode: usePrimitiveSurfaceNormals, indexCount: 0 });
+                continue;
+            }
+            await addMeshCore(mesh);
+            rememberPresentationResource(presentationMeshes, mesh.id, meshes.pop());
+        }
+        for (const line of scene.lines) {
+            if (presentationLines.has(line.id)) continue;
+            if (!line.segments.length) {
+                // Empty line batches do not need a GPU buffer, but retain identity.
+                rememberPresentationResource(presentationLines, line.id, { id: line.id, center: line.center, instanceCount: 0 });
+            } else {
+                await addLinesCore(line);
+                rememberPresentationResource(presentationLines, line.id, lines.pop());
+            }
+        }
+        presentationUploadMs += performance.now() - started;
+    });
+}
+
+function trimPresentationCache(budget) {
+    const active = new Set([...meshes, ...lines]);
+    const entries = [...presentationMeshes.entries()].map(([key, entry]) => ({ key, entry, cache: presentationMeshes }))
+        .concat([...presentationLines.entries()].map(([key, entry]) => ({ key, entry, cache: presentationLines })));
+    let bytes = entries.reduce((sum, item) => sum + item.entry.bytes, 0);
+    for (const item of entries.sort((a, b) => a.entry.used - b.entry.used)) {
+        if (bytes <= budget) break;
+        if (active.has(item.entry.resource)) continue;
+        destroyPresentationResource(item.entry.resource);
+        item.cache.delete(item.key); bytes -= item.entry.bytes;
+    }
+}
+
+export function commitPresentationFrame(meshRefs, lineRefs, facesVisible, surfaceNormals, labels, budget, waitForFrame = true) {
+    return enqueueGpuOperation(async () => {
+        const resolve = (refs, cache) => refs.map(item => {
+            const entry = cache.get(item.key);
+            if (!entry) throw new Error(`Missing presentation resource '${item.key}'.`);
+            return { ...item, entry };
+        });
+        const nextMeshes = resolve(meshRefs, presentationMeshes);
+        const nextLines = resolve(lineRefs, presentationLines);
+        const nextLabels = [];
+        try {
+            if (labels !== null) for (const label of labels) {
+                await addTextBillboardCore(label);
+                nextLabels.push(textBillboards.pop());
+            }
+        } catch (error) {
+            for (const label of nextLabels) {
+                destroyPresentationResource(label); label.texture?.destroy();
+            }
+            throw error;
+        }
+        // No await between switching active lists and making the frame drawable.
+        for (const resource of [...meshes, ...lines])
+            if (!resource.presentationKey) destroyPresentationResource(resource);
+        meshes.length = 0; lines.length = 0;
+        for (const { id, entry } of nextMeshes) {
+            entry.resource.id = id; entry.used = ++presentationClock; meshes.push(entry.resource);
+        }
+        for (const { id, entry } of nextLines) {
+            entry.resource.id = id; entry.used = ++presentationClock;
+            if (entry.resource.instanceCount) lines.push(entry.resource);
+        }
+        if (labels !== null) {
+            clearAllTextBillboardsCore(); textBillboards.push(...nextLabels);
+        }
+        setMeshFaceDisplayCore(facesVisible, surfaceNormals);
+        presentationAdded = [];
+        trimPresentationCache(Math.max(0, budget));
+        if (!waitForFrame) return { uploadMs: presentationUploadMs, submittedAtMs: 0, submissionMs: 0, visible: false };
+        return new Promise((resolve, reject) => {
+            const waiter = { resolve, reject, uploadMs: presentationUploadMs,
+                timeout: setTimeout(() => {
+                    if (presentationSubmission === waiter) presentationSubmission = null;
+                    reject(new Error('No presentation frame was submitted within 15 seconds. Keep the viewer tab visible.'));
+                }, 15000) };
+            presentationSubmission = waiter;
+        });
+    });
+}
+
+function abortPresentationFrameCore() {
+    presentationUpload = null;
+    for (const [cache, key] of presentationAdded) {
+        const entry = cache.get(key);
+        if (entry) destroyPresentationResource(entry.resource);
+        cache.delete(key);
+    }
+    presentationAdded = [];
+}
+
+export function abortPresentationFrame() { return enqueueGpuOperation(abortPresentationFrameCore); }
+
+export function finishPresentationPrefetch(budget) {
+    return enqueueGpuOperation(() => { presentationAdded = []; trimPresentationCache(Math.max(0, budget)); });
+}
+
+function resolvePresentationSubmission(submissionMs) {
+    const waiter = presentationSubmission;
+    if (!waiter) return;
+    presentationSubmission = null;
+    clearTimeout(waiter.timeout);
+    waiter.resolve({ uploadMs: waiter.uploadMs, submittedAtMs: performance.now(), submissionMs,
+        visible: document.visibilityState !== 'hidden' });
+}
+
+export function cancelPresentationWait() {
+    const waiter = presentationSubmission;
+    presentationSubmission = null;
+    if (waiter) {
+        clearTimeout(waiter.timeout);
+        waiter.resolve({ uploadMs: waiter.uploadMs, submittedAtMs: 0, submissionMs: 0, visible: false });
+    }
+}
+
+function rejectPresentationSubmission(error) {
+    const waiter = presentationSubmission;
+    presentationSubmission = null;
+    if (waiter) { clearTimeout(waiter.timeout); waiter.reject(error); }
+    abortPresentationFrameCore();
+}
+
 // ============================================================================
 // Cleanup
 // ============================================================================
@@ -2135,6 +2338,7 @@ export function addSceneBinary(metadata, bytes) {
 export function disposeWebGPU_Canvas() {
     isDisposing = true;
     rejectFrameWaiters(new Error('WebGPU viewer disposed.'));
+    rejectPresentationSubmission(new Error('WebGPU viewer disposed.'));
     return enqueueGpuOperation(disposeWebGPUCanvasCore);
 }
 

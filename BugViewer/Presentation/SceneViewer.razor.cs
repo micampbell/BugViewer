@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using NumericsVector3 = System.Numerics.Vector3;
@@ -22,6 +23,12 @@ public partial class SceneViewer
     /// <summary>Optional actions displayed below the Camera accordion in the underlying viewer's settings.</summary>
     [Parameter] public RenderFragment? CameraActions { get; set; }
 
+    /// <summary>Optional timings for each completed step, including first browser submission.</summary>
+    [Parameter] public EventCallback<ScenePlaybackMetrics> OnStepRendered { get; set; }
+    private readonly ScenePreparationCache preparationCache = new(128L * 1024 * 1024);
+    private CancellationTokenSource? prefetchCancellation;
+    private Task? prefetchTask;
+    private int missedDeadlines;
     private int step;
     private bool isEditingStep;
     private string targetStep = "";
@@ -41,7 +48,8 @@ public partial class SceneViewer
     private SceneRequest Current => CurrentRequest is { Steps.Count: > 0 } stepped
         ? stepped.Steps[Math.Clamp(step, 0, stepped.Steps.Count - 1)]
         : CurrentRequest;
-    private int StepCount => CurrentRequest.StepGroups.Count > 0
+    /// <summary>Number of steps in the active timeline.</summary>
+    public int StepCount => CurrentRequest.StepGroups.Count > 0
         ? CurrentRequest.StepGroups.Max(group => group.Count)
         : CurrentRequest.Steps.Count;
     private string Heading => Current.Heading;
@@ -57,6 +65,8 @@ public partial class SceneViewer
     public global::BugViewer.BugViewer? Viewer => viewer;
     /// <summary>Zero-based selected step.</summary>
     public int CurrentStep => step;
+    /// <summary>Whether the first frame of the current presentation has been applied.</summary>
+    public bool IsReady => ready && appliedScenes.Length > 0;
     /// <summary>Keyboard keys that request hover selections for application-specific inspection.</summary>
     [Parameter] public IReadOnlyList<string> HoverSelectionKeys { get; set; } = [];
     /// <summary>Reports changes to the active hover-selection key.</summary>
@@ -64,10 +74,6 @@ public partial class SceneViewer
     /// <summary>Allows the host to remove transient inspection visuals before replacing a frame.</summary>
     [Parameter] public EventCallback OnBeforeSceneUpdate { get; set; }
     private bool displayPreferencesInitialized;
-    private readonly Dictionary<string, MeshData> renderedMeshes = [];
-    private readonly Dictionary<string, LineData> renderedLines = [];
-    private readonly Dictionary<string, RenderSignature> renderedMeshSignatures = [];
-    private readonly Dictionary<string, RenderSignature> renderedLineSignatures = [];
     private readonly SemaphoreSlim renderLock = new(1, 1);
     private readonly object renderRequestGate = new();
     private Task? renderLoopTask;
@@ -82,6 +88,8 @@ public partial class SceneViewer
             isEditingStep = false;
             focusStepInput = false;
             focusStepButton = false;
+            preparationCache.Clear();
+            prefetchCancellation?.Cancel();
             lastRequest = CurrentRequest;
             step = Math.Clamp(CurrentRequest.InitialStep, 0, Math.Max(0, StepCount - 1));
             if (!ready) initialOptions = CurrentRequest.Options?.Clone() ?? BugViewerOptions.Default.Clone();
@@ -154,7 +162,9 @@ public partial class SceneViewer
             await SetStepAsync(Math.Clamp(requestedStep, 1, Math.Max(1, StepCount)) - 1);
     }
 
-    private async Task StepInputKeyDownAsync(KeyboardEventArgs args)
+    // Apply on key-up so returning focus to the counter cannot make the same
+    // Enter key-down activate that button and immediately reopen the editor.
+    private async Task StepInputKeyUpAsync(KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
         {
@@ -189,6 +199,7 @@ public partial class SceneViewer
             return;
         }
 
+        missedDeadlines = 0;
         autoplayCancellation = new CancellationTokenSource();
         autoplayTask = AutoplayAsync(autoplayCancellation.Token);
         await InvokeAsync(StateHasChanged);
@@ -198,11 +209,23 @@ public partial class SceneViewer
     {
         try
         {
+            var clock = Stopwatch.StartNew();
+            double deadline = clock.Elapsed.TotalMilliseconds + autoplayDelayMilliseconds;
             while (!cancellationToken.IsCancellationRequested && StepCount > 1)
             {
-                await Task.Delay(autoplayDelayMilliseconds, cancellationToken);
+                var remaining = deadline - clock.Elapsed.TotalMilliseconds;
+                if (remaining > 0) await Task.Delay(TimeSpan.FromMilliseconds(remaining), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 step = (int)(((long)step + EffectiveStepStride) % StepCount);
                 await RenderSceneAsync();
+                deadline += autoplayDelayMilliseconds;
+                if (clock.Elapsed.TotalMilliseconds > deadline)
+                {
+                    missedDeadlines++;
+                    // Preserve every step; do not build up a catch-up queue or claim
+                    // a target FPS achieved by silently skipping geometry frames.
+                    deadline = clock.Elapsed.TotalMilliseconds;
+                }
                 if (!cancellationToken.IsCancellationRequested)
                     await InvokeAsync(StateHasChanged);
             }
@@ -245,6 +268,7 @@ public partial class SceneViewer
         {
             if (disposing)
                 return Task.CompletedTask;
+            prefetchCancellation?.Cancel();
             pendingRenderStep = step;
             renderLoopTask ??= ProcessRenderRequestsAsync();
         }
@@ -289,144 +313,135 @@ public partial class SceneViewer
         }
     }
 
-    private async Task RenderSceneCoreAsync(int stepIndex)
+    private bool IsObsolete(int index)
     {
-        if (viewer is null)
-            return;
+        lock (renderRequestGate) return disposing || pendingRenderStep is { } pending && pending != index;
+    }
 
+    private sealed record PreparedFrame(List<MeshData> Meshes, List<LineData> Lines, List<TextBillboard> Labels);
+
+    private async Task<PreparedFrame?> PrepareFrameAsync(int stepIndex, Func<bool> obsolete)
+    {
         var desiredMeshes = new List<MeshData>();
         var desiredLines = new List<LineData>();
-        var desiredMeshSignatures = new Dictionary<string, RenderSignature>();
-        var desiredLineSignatures = new Dictionary<string, RenderSignature>();
+        var slice = Stopwatch.StartNew();
         foreach (var scene in VisibleScenes(stepIndex))
         {
             foreach (var mesh in scene.Meshes)
-            {
-                desiredMeshes.Add(SceneGeometry.ToMeshData(mesh));
-                desiredMeshSignatures.Add(mesh.Id, new RenderSignature(mesh, null));
-            }
-            foreach (var pathBatch in scene.PathBatches)
-            {
-                desiredLines.Add(pathBatch);
-                desiredLineSignatures.Add(pathBatch.Id, new RenderSignature(pathBatch, null));
-            }
-            foreach (var pathBatch in ScenePathBatchBuilder.Build(scene))
-            {
-                desiredLines.Add(pathBatch);
-                desiredLineSignatures.Add(pathBatch.Id, new RenderSignature(scene, null));
-            }
+                desiredMeshes.Add(preparationCache.Get(new RenderSignature(mesh, null),
+                    () => SceneGeometry.ToMeshData(mesh), ScenePreparationCache.MeshBytes));
+            desiredLines.AddRange(scene.PathBatches);
+            desiredLines.AddRange(preparationCache.Get(new RenderSignature(scene, null),
+                () => ScenePathBatchBuilder.Build(scene), batches => batches.Sum(ScenePreparationCache.LineBytes)));
             foreach (var points in scene.PointSets)
-            {
-                var line = ToPointGlyphs(points);
-                desiredLines.Add(line);
-                desiredLineSignatures.Add(line.Id, new RenderSignature(points, null));
-            }
+                desiredLines.Add(preparationCache.Get((points, viewer!.PathThickness),
+                    () => ToPointGlyphs(points), ScenePreparationCache.LineBytes));
             foreach (var group in scene.StepGroups)
             {
                 foreach (var (mesh, transform) in SceneGeometry.ResolveStepElements(group, group.Meshes, stepIndex))
+                    desiredMeshes.Add(preparationCache.Get(new RenderSignature(mesh, transform),
+                        () => SceneGeometry.ToMeshData(mesh, transform), ScenePreparationCache.MeshBytes));
+                if (group.PathSource is { } source)
                 {
-                    desiredMeshes.Add(SceneGeometry.ToMeshData(mesh, transform));
-                    desiredMeshSignatures.Add(mesh.Id, new RenderSignature(mesh, transform));
+                    var index = group.Transforms is null && source.HistoryStepLimit is null ? -1 : stepIndex;
+                    var line = preparationCache.Get(new RenderSignature(group, null, index),
+                        () => StepPathBatchBuilder.Build(group, source, stepIndex), ScenePreparationCache.LineBytes);
+                    if (line is not null) desiredLines.Add(line);
                 }
-                if (group.PathSource is { } pathSource
-                    && StepPathBatchBuilder.Build(group, pathSource, stepIndex) is { } pathBatch)
+                // A browser event-loop yield lets newer slider requests supersede preparation.
+                if (slice.ElapsedMilliseconds >= 6)
                 {
-                    desiredLines.Add(pathBatch);
-                    var transform = group.Transforms is not null && stepIndex < group.Transforms.Count
-                        && group.Transforms[stepIndex] is not null
-                        ? group.Transforms[stepIndex]
-                        : (SceneTransform?)null;
-                    desiredLineSignatures.Add(pathBatch.Id,
-                        new RenderSignature(pathSource, transform, stepIndex));
+                    await Task.Delay(1);
+                    slice.Restart();
                 }
+                if (obsolete()) return null;
             }
         }
+        return new(desiredMeshes, desiredLines, VisibleScenes(stepIndex).SelectMany(scene => scene.Billboards).ToList());
+    }
 
-        var desiredMeshIds = desiredMeshes.Select(mesh => mesh.Id).ToHashSet();
-        var desiredLineIds = desiredLines.Select(line => line.Id).ToHashSet();
-        var changedMeshIds = desiredMeshSignatures
-            .Where(item => renderedMeshSignatures.TryGetValue(item.Key, out var rendered)
-                && rendered != item.Value)
-            .Select(item => item.Key).ToHashSet();
-        var changedLineIds = desiredLineSignatures
-            .Where(item => renderedLineSignatures.TryGetValue(item.Key, out var rendered)
-                && rendered != item.Value)
-            .Select(item => item.Key).ToHashSet();
-        var meshesToRemove = renderedMeshes.Values
-            .Where(mesh => !desiredMeshIds.Contains(mesh.Id) || changedMeshIds.Contains(mesh.Id)).ToList();
-        var linesToRemove = renderedLines.Values
-            .Where(line => !desiredLineIds.Contains(line.Id) || changedLineIds.Contains(line.Id)).ToList();
-        var meshesToAdd = desiredMeshes
-            .Where(mesh => !renderedMeshes.ContainsKey(mesh.Id) || changedMeshIds.Contains(mesh.Id)).ToList();
-        var linesToAdd = desiredLines
-            .Where(line => !renderedLines.ContainsKey(line.Id) || changedLineIds.Contains(line.Id)).ToList();
-
-        await viewer.PauseRenderingAsync();
-        try
+    private async Task RenderSceneCoreAsync(int stepIndex)
+    {
+        if (viewer is null) return;
+        var total = Stopwatch.StartNew();
+        var frame = await PrepareFrameAsync(stepIndex, () => IsObsolete(stepIndex));
+        if (frame is null || IsObsolete(stepIndex)) return;
+        var preparationMs = total.Elapsed.TotalMilliseconds;
+        await OnBeforeSceneUpdate.InvokeAsync();
+        ScenePlaybackMetrics timing;
+        if (appliedScenes.Length == 0 && (CurrentRequest.Options is not null || CurrentRequest.Camera is not null))
         {
-            await OnBeforeSceneUpdate.InvokeAsync();
-            if (appliedScenes.Length == 0 && (CurrentRequest.Options is not null || CurrentRequest.Camera is not null))
+            await viewer.LoadSnapshotAsync(new SceneSnapshot
             {
-                await viewer.LoadSnapshotAsync(new SceneSnapshot
-                {
-                    Meshes = desiredMeshes, Lines = desiredLines,
-                    Billboards = VisibleScenes(stepIndex).SelectMany(scene => scene.Billboards).ToList(),
-                    Options = CurrentRequest.Options?.Clone() ?? initialOptions.Clone(), Camera = CurrentRequest.Camera
-                });
-            }
-            else
-            {
-                if (meshesToRemove.Count > 0)
-                    await viewer.RemoveMeshesAsync(meshesToRemove);
-                if (linesToRemove.Count > 0)
-                    await viewer.RemoveLinesAsync(linesToRemove);
-                if (meshesToAdd.Count > 0)
-                    await viewer.AddMeshesAsync(meshesToAdd);
-                if (linesToAdd.Count > 0)
-                    await viewer.AddLinesAsync(linesToAdd);
-                await viewer.ClearAllTextBillboardsAsync();
-                foreach (var label in VisibleScenes(stepIndex).SelectMany(scene => scene.Billboards))
-                    await viewer.AddTextBillboardAsync(label.Id, label.Text, label.Anchor,
-                        label.BackgroundColor, label.TextColor, label.Scale, label.RelativeX, label.RelativeY);
-            }
-            var currentScene = CurrentAtStep(stepIndex);
-            if (!displayPreferencesInitialized)
-            {
-                // Scene requests provide the first view's defaults. After that, the user owns these
-                // settings for this viewer: changing frame or scene must not overwrite their choices.
-                // Apply the face mode only after meshes are present, because BugViewer otherwise cannot
-                // determine whether primitive-surface normals are available.
-                displayPreferencesInitialized = true;
-                if (CurrentRequest.Options is null)
-                {
-                    viewer.Options.ShowSurfacesAs = currentScene.ShowSurfacesAs;
-                    viewer.Options.ShowMeshBorders = currentScene.ShowMeshBorders;
-                }
-            }
+                Meshes = frame.Meshes, Lines = frame.Lines, Billboards = frame.Labels,
+                Options = CurrentRequest.Options?.Clone() ?? initialOptions.Clone(), Camera = CurrentRequest.Camera
+            }, upload: false);
+            timing = await viewer.ApplyPresentationFrameAsync(frame.Meshes, frame.Lines, frame.Labels, preserveView: true);
         }
-        finally
-        {
-            await viewer.ResumeRenderingAsync();
-        }
+        else
+            timing = await viewer.ApplyPresentationFrameAsync(frame.Meshes, frame.Lines, frame.Labels);
 
-        renderedMeshes.Clear();
-        foreach (var mesh in desiredMeshes)
-            renderedMeshes.Add(mesh.Id, mesh);
-        renderedLines.Clear();
-        foreach (var line in desiredLines)
-            renderedLines.Add(line.Id, line);
-        renderedMeshSignatures.Clear();
-        foreach (var item in desiredMeshSignatures)
-            renderedMeshSignatures.Add(item.Key, item.Value);
-        renderedLineSignatures.Clear();
-        foreach (var item in desiredLineSignatures)
-            renderedLineSignatures.Add(item.Key, item.Value);
+        if (disposing) return;
+
+        if (!displayPreferencesInitialized)
+        {
+            displayPreferencesInitialized = true;
+            if (CurrentRequest.Options is null)
+            {
+                var currentScene = CurrentAtStep(stepIndex);
+                viewer.Options.ShowSurfacesAs = currentScene.ShowSurfacesAs;
+                viewer.Options.ShowMeshBorders = currentScene.ShowMeshBorders;
+            }
+        }
         if (appliedScenes.Length == 0 && CurrentRequest.Options is null && CurrentRequest.Camera is null)
-        {
             await viewer.FitSceneAsync();
-        }
         appliedScenes = Scenes.ToArray();
         renderedStep = stepIndex;
+        if (OnStepRendered.HasDelegate)
+            await OnStepRendered.InvokeAsync(timing with { Step = stepIndex, PreparationMs = preparationMs,
+                TotalMs = total.Elapsed.TotalMilliseconds, MissedDeadlines = missedDeadlines });
+        SchedulePrefetch(stepIndex);
+    }
+
+    private void SchedulePrefetch(int fromStep)
+    {
+        if (disposing) return;
+        prefetchCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        prefetchCancellation = cancellation;
+        var previous = prefetchTask;
+        prefetchTask = PrefetchAsync(previous, fromStep, cancellation);
+    }
+
+    private async Task PrefetchAsync(Task? previous, int fromStep, CancellationTokenSource cancellation)
+    {
+        try
+        {
+            if (previous is not null) await previous;
+            await Task.Delay(1, cancellation.Token);
+            await renderLock.WaitAsync(cancellation.Token);
+            try
+            {
+                var meshes = new List<MeshData>(); var lines = new List<LineData>();
+                for (var offset = 1; offset <= 2 && StepCount > 1; offset++)
+                {
+                    var target = (int)(((long)fromStep + offset * (long)EffectiveStepStride) % StepCount);
+                    var frame = await PrepareFrameAsync(target, () => cancellation.IsCancellationRequested || disposing);
+                    if (frame is null || cancellation.IsCancellationRequested) return;
+                    meshes.AddRange(frame.Meshes); lines.AddRange(frame.Lines);
+                }
+                if (meshes.Count + lines.Count > 0)
+                    await viewer!.PrefetchPresentationAsync(meshes.Distinct<MeshData>(ReferenceEqualityComparer.Instance).ToList(),
+                        lines.Distinct<LineData>(ReferenceEqualityComparer.Instance).ToList(), cancellation.Token);
+            }
+            finally { renderLock.Release(); }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally
+        {
+            if (ReferenceEquals(prefetchCancellation, cancellation)) prefetchCancellation = null;
+            cancellation.Dispose();
+        }
     }
 
     private async Task TriangleSelectedAsync()
@@ -441,12 +456,12 @@ public partial class SceneViewer
     /// <summary>Enumerates source meshes corresponding to the selected frame.</summary>
     public IEnumerable<(SceneRequest Scene, SceneMesh Mesh)> VisibleSceneMeshes()
     {
-        foreach (var scene in VisibleScenes(step))
+        foreach (var scene in VisibleScenes(renderedStep))
         {
             foreach (var mesh in scene.Meshes)
                 yield return (scene, mesh);
             foreach (var group in scene.StepGroups)
-                foreach (var (mesh, _) in SceneGeometry.ResolveStepElements(group, group.Meshes, step))
+                foreach (var (mesh, _) in SceneGeometry.ResolveStepElements(group, group.Meshes, renderedStep))
                     yield return (scene, mesh);
         }
     }
@@ -455,7 +470,7 @@ public partial class SceneViewer
     // camera-readable diagnostic point glyph until its WebGPU point primitive is available.
     private LineData ToPointGlyphs(ScenePointSet points)
     {
-        var d = viewer.PathThickness / 2;
+        var d = viewer!.PathThickness / 2;
         var vertices = new List<NumericsVector3>();
         foreach (var p in points.Points)
         {
@@ -478,16 +493,21 @@ public partial class SceneViewer
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        await StopAutoplayAsync();
         Task? pendingRender;
         lock (renderRequestGate)
         {
+            if (disposing) return;
             disposing = true;
             pendingRenderStep = null;
             pendingRender = renderLoopTask;
+            prefetchCancellation?.Cancel();
         }
-        if (pendingRender is not null)
-            await pendingRender;
+        if (viewer is not null) await viewer.CancelPendingPresentationAsync();
+        await StopAutoplayAsync();
+        if (pendingRender is not null) await pendingRender;
+        prefetchCancellation?.Cancel();
+        if (prefetchTask is not null) await prefetchTask;
+        preparationCache.Clear();
         await renderLock.WaitAsync();
         renderLock.Release();
         renderLock.Dispose();

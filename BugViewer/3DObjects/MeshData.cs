@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace BugViewer;
 
@@ -25,67 +26,71 @@ public record MeshData : AbstractObject3D
 
     internal MeshUpload Pack()
     {
-        var vertexList = Vertices;
-        if (PrimitiveSurfaceNormals.Count != 0 && PrimitiveSurfaceNormals.Count != vertexList.Count)
-        {
-            throw new InvalidOperationException(
-                $"Primitive surface normal count {PrimitiveSurfaceNormals.Count} does not match vertex count {vertexList.Count}.");
-        }
-
-        var colors = Colors as IList<ColorRgba> ?? Colors.ToArray();
+        var vertices = AsSpan(Vertices);
+        var sourceNormals = AsSpan(PrimitiveSurfaceNormals);
+        var faces = AsSpan(Indices);
+        if (sourceNormals.Length != 0 && sourceNormals.Length != vertices.Length)
+            throw new InvalidOperationException($"Primitive surface normal count {sourceNormals.Length} does not match vertex count {vertices.Length}.");
+        var colors = AsSpan(Colors as IList<ColorRgba> ?? Colors.ToArray());
         var expanded = ColorMode == MeshColoring.PerTriangle;
-        if (expanded && colors.Count != Indices.Count)
-            throw new InvalidOperationException($"Color count {colors.Count} does not match expected per-triangle color count {Indices.Count}.");
+        if (expanded && colors.Length != faces.Length)
+            throw new InvalidOperationException($"Color count {colors.Length} does not match expected per-triangle color count {faces.Length}.");
 
-        var indexCount = checked(Indices.Count * 3);
-        var outputVertexCount = expanded ? indexCount : vertexList.Count;
+        var indexCount = checked(faces.Length * 3);
+        var outputVertexCount = expanded ? indexCount : vertices.Length;
         var positions = new float[checked(outputVertexCount * 3)];
-        float[] normals = PrimitiveSurfaceNormals.Count == 0 ? [] : new float[positions.Length];
+        float[] normals = sourceNormals.IsEmpty ? [] : new float[positions.Length];
         var indices = new int[indexCount];
-        var packedColors = new float[checked((expanded ? indexCount : colors.Count) * 4)];
+        var packedColors = new float[checked((expanded ? indexCount : colors.Length) * 4)];
+        var destinationVertices = MemoryMarshal.Cast<float, Vector3>(positions.AsSpan());
+        var destinationNormals = MemoryMarshal.Cast<float, Vector3>(normals.AsSpan());
+        var destinationColors = MemoryMarshal.Cast<float, Vector4>(packedColors.AsSpan());
 
         if (!expanded)
         {
-            for (var i = 0; i < vertexList.Count; i++)
+            vertices.CopyTo(destinationVertices);
+            sourceNormals.CopyTo(destinationNormals);
+            for (var index = 0; index < colors.Length; index++)
             {
-                WriteVector(positions, i * 3, vertexList[i]);
-                if (normals.Length != 0) WriteVector(normals, i * 3, PrimitiveSurfaceNormals[i]);
+                var color = colors[index];
+                destinationColors[index] = new(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
             }
-            for (var i = 0; i < colors.Count; i++) WriteColor(packedColors, i * 4, colors[i]);
         }
-
-        for (var face = 0; face < Indices.Count; face++)
+        for (var face = 0; face < faces.Length; face++)
         {
-            var (a, b, c) = Indices[face];
-            for (var corner = 0; corner < 3; corner++)
+            var (a, b, c) = faces[face];
+            var destination = face * 3;
+            if (!expanded)
             {
-                var sourceIndex = corner == 0 ? a : corner == 1 ? b : c;
-                var destinationIndex = face * 3 + corner;
-                indices[destinationIndex] = expanded ? destinationIndex : sourceIndex;
-                if (!expanded) continue;
-                WriteVector(positions, destinationIndex * 3, vertexList[sourceIndex]);
-                if (normals.Length != 0) WriteVector(normals, destinationIndex * 3, PrimitiveSurfaceNormals[sourceIndex]);
-                WriteColor(packedColors, destinationIndex * 4, colors[face]);
+                indices[destination] = a; indices[destination + 1] = b; indices[destination + 2] = c;
+                continue;
             }
+            // Copy complete attributes and compute the face color once, avoiding
+            // repeated interface dispatch and scalar helper calls in interpreted WASM.
+            destinationVertices[destination] = vertices[a];
+            destinationVertices[destination + 1] = vertices[b];
+            destinationVertices[destination + 2] = vertices[c];
+            if (!sourceNormals.IsEmpty)
+            {
+                destinationNormals[destination] = sourceNormals[a];
+                destinationNormals[destination + 1] = sourceNormals[b];
+                destinationNormals[destination + 2] = sourceNormals[c];
+            }
+            var color = colors[face];
+            var rgba = new Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
+            destinationColors[destination] = destinationColors[destination + 1] = destinationColors[destination + 2] = rgba;
+            indices[destination] = destination; indices[destination + 1] = destination + 1; indices[destination + 2] = destination + 2;
         }
-
         return new(Id, positions, indices, packedColors, normals, ColorMode == MeshColoring.UniformColor);
     }
 
-    private static void WriteVector(float[] output, int offset, Vector3 value)
+    private static ReadOnlySpan<T> AsSpan<T>(IList<T> values) => values switch
     {
-        output[offset] = value.X;
-        output[offset + 1] = value.Y;
-        output[offset + 2] = value.Z;
-    }
+        T[] array => array,
+        List<T> list => CollectionsMarshal.AsSpan(list),
+        _ => values.ToArray()
+    };
 
-    private static void WriteColor(float[] output, int offset, ColorRgba value)
-    {
-        output[offset] = value.R / 255f;
-        output[offset + 1] = value.G / 255f;
-        output[offset + 2] = value.B / 255f;
-        output[offset + 3] = value.A / 255f;
-    }
 }
 
 internal sealed record MeshUpload(string Id, float[] Vertices, int[] Indices,

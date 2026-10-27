@@ -90,9 +90,24 @@ automatically shows playback controls; opening a single scene removes them. Savi
 the complete timeline and current view. The keyboard commands target the focused or last
 clicked request viewer (or the only one on the page), and leave editors outside it alone.
 Set `EnableFileShortcuts="false"` to let the host own those keys. Use `MaxSceneFileSize` to
-adjust the 256 MB input limit and `FileName` to suggest names for programmatically supplied
+adjust the 1 GiB input allowance and `FileName` to suggest names for programmatically supplied
 requests. These file controls belong to `SceneRequestViewer`; applications using only the
 low-level `BugViewer` renderer should use this presentation component for scene files.
+Opening displays progress and can be canceled without replacing the current scene.
+The input allowance is configurable; available browser memory still determines the practical scene size.
+
+Stepped playback reuses prepared geometry and a bounded GPU resource cache, prefetches the
+next two stride positions, and transfers missing geometry in binary chunks. A frame becomes
+visible only after its resources are ready. Playback uses elapsed-time deadlines and does
+not skip steps to conceal missed deadlines. Source collections must remain immutable after
+publication; publish a new request when changing source geometry. Existing JSON files and
+the public Load/Save methods retain the version-1 format.
+
+`SceneViewer` and `SceneRequestViewer` expose `OnStepRendered` with timings, transferred
+bytes, cache hits, and the browser submission timestamp. The LoadAndShowScene sample's
+**Playback measurements** section runs a 10/30 fps check and exports these measurements.
+For large saved scenes, use its **Performance** publish profile; setup instructions
+and measured results are in [docs/performance.md](docs/performance.md).
 Plotly ships with the
 library and loads only when displaying a 2D request.
 

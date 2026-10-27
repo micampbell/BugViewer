@@ -18,6 +18,11 @@
         }
     </div>
     <p class="scene-file-status" role="status">@status</p>
+    @if (loading is not null)
+    {
+        <progress value="@loadPercent" max="100" aria-label="Scene loading progress"></progress>
+        <button type="button" @onclick="CancelOpen">Cancel opening</button>
+    }
     @if (fileError is not null)
     {
         <p class="scene-file-error" role="alert">@fileError</p>
@@ -28,7 +33,7 @@
     }
     else
     {
-        <SceneViewer @key="generation" @ref="sceneViewer" Scenes="requests">
+        <SceneViewer @key="generation" @ref="sceneViewer" Scenes="requests" OnStepRendered="OnStepRendered">
             <CameraActions>
                 <FluentStack Orientation="Orientation.Horizontal" aria-label="Scene file actions">
                     <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open"

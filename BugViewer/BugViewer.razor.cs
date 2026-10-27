@@ -571,13 +571,6 @@ namespace BugViewer
         /// </summary>
         public Vector3 SelectedPoint { get; private set; } = Vector3.NaN;
         // Triangle intersection data.
-        List<string> triangleToMesh = new();
-        List<int> triangleToInMeshIndex = new();
-        List<float> facePlaneDistances = new();
-        List<Vector3> faceNormals = new();
-        List<Vector3> bCoords = new();
-        List<Vector3> uBarycentricMultipliers = new();
-        List<Vector3> vBarycentricMultipliers = new();
 
         // MSAA sample count options.
         internal sealed record SampleCountOption(int Value, string Text);
@@ -824,33 +817,37 @@ namespace BugViewer
             meshIndex = -1;
             meshName = "";
             point = Vector3.Zero;
-            for (int index = 0; index < triangleToMesh.Count; index++)
+            foreach (var mesh in meshes)
             {
-                var normal = faceNormals[index];
-                if (Vector3.Dot(normal, dirVector) >= 0)
-                    continue; // ignore back faces
-                var faceDistance = facePlaneDistances[index];
-                var uBaryFactor = uBarycentricMultipliers[index];
-                var vBaryFactor = vBarycentricMultipliers[index];
-                var dot = Vector3.Dot(dirVector, normal);
+                var data = PreparePickingGeometry(mesh);
+                for (int index = 0; index < mesh.Indices.Count; index++)
+                {
+                    var normal = data.Normals[index];
+                    if (Vector3.Dot(normal, dirVector) >= 0)
+                        continue; // ignore back faces
+                    var faceDistance = data.Distances[index];
+                    var uBaryFactor = data.U[index];
+                    var vBaryFactor = data.V[index];
+                    var dot = Vector3.Dot(dirVector, normal);
 
-                var anchorDistanceToPlane = faceDistance - Vector3.Dot(anchor, normal);
-                var thisDistance = anchorDistanceToPlane / dot;
-                if (thisDistance < 0 || thisDistance >= distance)
-                    continue;
-                var thisPoint = anchor + thisDistance * dirVector; // yes, it is normally '+' but in the previous line
+                    var anchorDistanceToPlane = faceDistance - Vector3.Dot(anchor, normal);
+                    var thisDistance = anchorDistanceToPlane / dot;
+                    if (thisDistance < 0 || thisDistance >= distance)
+                        continue;
+                    var thisPoint = anchor + thisDistance * dirVector; // yes, it is normally '+' but in the previous line
 
-                var wVector = thisPoint - bCoords[index];
-                var u = Vector3.Dot(wVector, uBaryFactor);
-                if (u <= 0 || u >= 1) continue;
-                var v = Vector3.Dot(wVector, vBaryFactor);
-                if (v <= 0 || v >= 1) continue;
-                if (u + v > 1) continue;
-                // yes intersecting!
-                distance = thisDistance;
-                meshName = triangleToMesh[index];
-                meshIndex = triangleToInMeshIndex[index];
-                point = thisPoint;
+                    var wVector = thisPoint - data.B[index];
+                    var u = Vector3.Dot(wVector, uBaryFactor);
+                    if (u <= 0 || u >= 1) continue;
+                    var v = Vector3.Dot(wVector, vBaryFactor);
+                    if (v <= 0 || v >= 1) continue;
+                    if (u + v > 1) continue;
+                    // yes intersecting!
+                    distance = thisDistance;
+                    meshName = mesh.Id;
+                    meshIndex = index;
+                    point = thisPoint;
+                }
             }
             return meshIndex != -1;
         }
@@ -1615,35 +1612,33 @@ namespace BugViewer
             await SynchronizeMeshDisplayLinesCoreAsync(module);
         }
 
-        private void DefineMeshLookups(MeshData mesh)
-        {
-            for (int i = 0; i < mesh.Indices.Count; i++)
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<MeshData, PickingGeometry> pickingGeometry = new();
+        private sealed record PickingGeometry(float[] Distances, Vector3[] Normals, Vector3[] B, Vector3[] U, Vector3[] V);
+
+        private PickingGeometry PreparePickingGeometry(MeshData mesh) =>
+            pickingGeometry.GetValue(mesh, source =>
             {
-                var tri = mesh.Indices[i];
-                var a = mesh.Vertices[tri.a];
-                var b = mesh.Vertices[tri.b];
-                var c = mesh.Vertices[tri.c];
-                var v1 = a - b;
-                var v2 = c - b;
-                var v1Sqd = v1.LengthSquared();
-                var v2Sqd = v2.LengthSquared();
-                var normal = Vector3.Normalize(Vector3.Cross(-v1, v2));
-                var dist = Vector3.Dot(normal, a);
-                var v1Dotv2 = Vector3.Dot(v1, v2);
-                var oneOverDenom = 1 / (v1Sqd * v2Sqd - v1Dotv2 * v1Dotv2);
-                var uBaryMultiplier = Vector3.Multiply(oneOverDenom,
-                    Vector3.Multiply(v1Sqd, v2) - Vector3.Multiply(v1Dotv2, v1));
-                var vBaryMultiplier = Vector3.Multiply(oneOverDenom,
-                    Vector3.Multiply(v2Sqd, v1) - Vector3.Multiply(v1Dotv2, v2));
-                triangleToMesh.Add(mesh.Id);
-                triangleToInMeshIndex.Add(i);
-                facePlaneDistances.Add(dist);
-                faceNormals.Add(normal);
-                bCoords.Add(b);
-                uBarycentricMultipliers.Add(uBaryMultiplier);
-                vBarycentricMultipliers.Add(vBaryMultiplier);
-            }
-        }
+                var count = source.Indices.Count;
+                var distances = new float[count];
+                var normals = new Vector3[count]; var origins = new Vector3[count];
+                var us = new Vector3[count]; var vs = new Vector3[count];
+                for (var i = 0; i < count; i++)
+                {
+                    var (ia, ib, ic) = source.Indices[i];
+                    var a = source.Vertices[ia]; var b = source.Vertices[ib]; var c = source.Vertices[ic];
+                    var v1 = a - b; var v2 = c - b;
+                    var v1Sqd = v1.LengthSquared(); var v2Sqd = v2.LengthSquared();
+                    var normal = Vector3.Normalize(Vector3.Cross(-v1, v2));
+                    var dot = Vector3.Dot(v1, v2);
+                    var denominator = 1 / (v1Sqd * v2Sqd - dot * dot);
+                    distances[i] = Vector3.Dot(normal, a); normals[i] = normal; origins[i] = b;
+                    us[i] = denominator * (v1Sqd * v2 - dot * v1);
+                    vs[i] = denominator * (v2Sqd * v1 - dot * v2);
+                }
+                return new PickingGeometry(distances, normals, origins, us, vs);
+            });
+
+        private void DefineMeshLookups(MeshData mesh) => PreparePickingGeometry(mesh);
 
         /// <summary>
         /// Adds a line to the scene. If a line with the same ID already exists, it will be replaced.
@@ -1658,14 +1653,8 @@ namespace BugViewer
 
         private void RebuildMeshLookups()
         {
-            triangleToMesh.Clear();
-            triangleToInMeshIndex.Clear();
-            facePlaneDistances.Clear();
-            faceNormals.Clear();
-            bCoords.Clear();
-            uBarycentricMultipliers.Clear();
-            vBarycentricMultipliers.Clear();
-            foreach (var mesh in meshes) DefineMeshLookups(mesh);
+            // Picking reads the current mesh list and lazily cached per-mesh data.
+            // No triangle-sized global arrays need to be rebuilt on a frame change.
             SelectedMeshName = null;
             SelectedTriangleInMeshIndex = -1;
             SelectedPoint = Vector3.NaN;
@@ -1864,9 +1853,9 @@ namespace BugViewer
             }
         }
 
-        private LineData? CreateMeshDisplayLines(MeshData mesh, bool bordersOnly)
+        private LineData? CreateMeshDisplayLines(MeshData mesh, bool bordersOnly, bool automaticThickness = false)
         {
-            var edgeCounts = new Dictionary<(int first, int second), int>();
+            var edgeCounts = new Dictionary<ulong, byte>(mesh.Indices.Count);
             foreach (var (a, b, c) in mesh.Indices)
             {
                 CountEdge(a, b);
@@ -1876,16 +1865,15 @@ namespace BugViewer
 
             // An internal edge is shared by exactly two triangles in this primitive mesh.
             // Open and non-manifold edges are both borders.
-            var edges = edgeCounts.Where(pair => !bordersOnly || pair.Value != 2)
-                .Select(pair => pair.Key).ToList();
-            if (edges.Count == 0)
-                return null;
-            var vertices = new List<Vector3>(edges.Count * 2);
-            foreach (var (first, second) in edges)
+            var vertices = new List<Vector3>();
+            foreach (var (key, count) in edgeCounts)
             {
-                vertices.Add(mesh.Vertices[first]);
-                vertices.Add(mesh.Vertices[second]);
+                if (bordersOnly && count == 2) continue;
+                vertices.Add(mesh.Vertices[(int)(key >> 32)]);
+                vertices.Add(mesh.Vertices[(int)(key & uint.MaxValue)]);
             }
+            if (vertices.Count == 0) return null;
+            var thickness = automaticThickness ? LineData.AutomaticThickness : PathThickness;
 
             return new LineData
             {
@@ -1893,15 +1881,16 @@ namespace BugViewer
                 Vertices = vertices,
                 Colors = Enumerable.Repeat(ColorRgba.Black, Math.Max(0, vertices.Count - 1)),
                 Thicknesses = Enumerable.Range(0, Math.Max(0, vertices.Count - 1))
-                    .Select(index => index % 2 == 0 ? PathThickness : 0f),
+                    .Select(index => index % 2 == 0 ? thickness : 0f),
                 FadeFactors = Enumerable.Repeat(0f, Math.Max(0, vertices.Count - 1))
             };
 
             void CountEdge(int first, int second)
             {
-                var key = first < second ? (first, second) : (second, first);
-                edgeCounts.TryGetValue(key, out var count);
-                edgeCounts[key] = count + 1;
+                var key = ((ulong)(uint)Math.Min(first, second) << 32) | (uint)Math.Max(first, second);
+                ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(edgeCounts, key, out _);
+                // Only exactly two is an internal edge; larger multiplicities are borders.
+                if (count < 3) count++;
             }
         }
 
@@ -1919,6 +1908,7 @@ namespace BugViewer
                     || meshes[index].ColorMode != MeshColoring.UniformColor)
                     return;
 
+                presentationResources.Remove(meshes[index]);
                 meshes[index].Colors = [color];
                 if (module is not null)
                 {
@@ -1955,6 +1945,7 @@ namespace BugViewer
                 if (colorList.Count != mesh.Indices.Count)
                     throw new ArgumentException("The color count must match the mesh triangle count.", nameof(colors));
 
+                presentationResources.Remove(mesh);
                 mesh.Colors = colorList;
                 if (module is not null)
                 {

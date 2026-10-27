@@ -230,6 +230,64 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     Assert(Json(SceneRequest.Load(downloaded)) == Json(restored), "Save As lost the complete stepped request.");
 });
 
+await renderer.Dispatcher.InvokeAsync(async () =>
+{
+    var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+    var gpu = new TestViewer(); await renderer.AttachAsync(gpu);
+    var module = new PresentationModule();
+    typeof(global::BugViewer.BugViewer).GetField("_module", flags)!.SetValue(gpu, module);
+    var lifecycle = typeof(global::BugViewer.BugViewer).GetField("_lifecycleState", flags)!;
+    lifecycle.SetValue(gpu, Enum.Parse(lifecycle.FieldType, "Ready"));
+    var display = new TestSceneViewer(); await renderer.AttachAsync(display);
+    var first = new SceneRequest { Meshes = [Triangle("first")], ShowMeshBorders = false };
+    var second = new SceneRequest { Meshes = [Triangle("second")], ShowMeshBorders = false };
+    var timeline = new SceneRequest { Steps = [first, second], ShowMeshBorders = false };
+    await display.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?> { [nameof(SceneViewer.Scenes)] = new[] { timeline } }));
+    typeof(SceneViewer).GetField("viewer", flags)!.SetValue(display, gpu);
+    await (Task)typeof(SceneViewer).GetMethod("OnViewerReadyAsync", flags)!.Invoke(display, null)!;
+    var meshField = typeof(global::BugViewer.BugViewer).GetField("meshes", flags)!;
+    var preparedFirst = ((List<MeshData>)meshField.GetValue(gpu)!)[0];
+    await display.SetStepAsync(1);
+    Assert(((List<MeshData>)meshField.GetValue(gpu)!)[0].Id == "second", "Frame switch retained the previous mesh.");
+    var rayArguments = new object[] { new Vector3(.2f, .2f, 5), -Vector3.UnitZ, "", -1, 0f, Vector3.Zero };
+    Assert((bool)typeof(global::BugViewer.BugViewer).GetMethod("DoesRayGoThroughTriangle", flags)!.Invoke(gpu, rayArguments)!
+        && (string)rayArguments[2] == "second" && (int)rayArguments[3] == 0,
+        "Cached picking data did not follow the visible mesh.");
+    var sphere = typeof(global::BugViewer.BugViewer).GetField("BoundingSphere", flags)!.GetValue(gpu)!;
+    var center = (Vector3)sphere.GetType().GetField("Center", flags)!.GetValue(sphere)!;
+    var radiusSquared = (float)sphere.GetType().GetField("RadiusSquared", flags)!.GetValue(sphere)!;
+    Assert(((List<MeshData>)meshField.GetValue(gpu)!).SelectMany(mesh => mesh.Vertices)
+        .All(point => Vector3.DistanceSquared(point, center) <= radiusSquared * 1.0001f),
+        "Cached playback bounds do not enclose the visible geometry.");
+    var uploaded = module.UploadedBytes;
+    await display.SetStepAsync(0);
+    Assert(ReferenceEquals(preparedFirst, ((List<MeshData>)meshField.GetValue(gpu)!)[0]), "Revisiting a step rebuilt its source mesh.");
+    Assert(module.UploadedBytes == uploaded, "Revisiting a resident step uploaded geometry again.");
+    Assert(module.MaximumChunk <= 1024 * 1024, "An upload exceeded the bounded interop chunk size.");
+    Assert(module.Commits >= 3, "Step changes did not use complete-frame commits.");
+    await gpu.ChangeMeshColorsAsync("first", [new ColorRgba(0, 0, 255)]);
+    await display.SetStepAsync(0);
+    Assert(module.UploadedBytes > uploaded, "Inspection color changes did not invalidate the cached upload.");
+    await display.DisposeAsync();
+
+    var restoredDisplay = new TestSceneViewer(); await renderer.AttachAsync(restoredDisplay);
+    await restoredDisplay.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
+    {
+        [nameof(SceneViewer.Scenes)] = new[] { first with { Camera = camera, Options = options, Billboards = request.Billboards } }
+    }));
+    typeof(SceneViewer).GetField("viewer", flags)!.SetValue(restoredDisplay, gpu);
+    module.Calls.Clear();
+    await (Task)typeof(SceneViewer).GetMethod("OnViewerReadyAsync", flags)!.Invoke(restoredDisplay, null)!;
+    Assert(module.Calls.Contains("updateDisplayOptions") && module.Calls.Contains("writeViewMatrix")
+        && module.Labels == 1, "Saved view state and initial billboards did not reach the renderer.");
+    await restoredDisplay.DisposeAsync();
+
+    var loader = new TestRequestViewer(); await renderer.AttachAsync(loader);
+    var open = typeof(SceneRequestViewer).GetMethod("OpenSceneFileAsync", flags)!;
+    await (Task)open.Invoke(loader, [new InputFileChangeEventArgs([new MemoryBrowserFile("large.json", Encoding.UTF8.GetBytes(Json(first)), 338114058)])])!;
+    Assert((await loader.GetSceneAsync()).RequestId == first.RequestId, "A 322.5 MiB file is still rejected by the default allowance.");
+});
+
 if (args is ["--write-examples", var directory])
 {
     Directory.CreateDirectory(directory);
@@ -327,5 +385,43 @@ sealed class SceneFileRuntime : IJSRuntime, IJSObjectReference
     }
     public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
         => InvokeAsync<TValue>(identifier, args);
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+sealed class PresentationModule : IJSObjectReference
+{
+    private readonly HashSet<string> meshes = [], lines = [];
+    public long UploadedBytes { get; private set; }
+    public int MaximumChunk { get; private set; }
+    public int Commits { get; private set; }
+    public int Labels { get; private set; }
+    public List<string> Calls { get; } = [];
+    private static string Key(object item) => (string)item.GetType().GetProperty("Key")!.GetValue(item)!;
+    public ValueTask<T> InvokeAsync<T>(string identifier, object?[]? args)
+    {
+        Calls.Add(identifier);
+        object? result = null;
+        if (identifier == "preparePresentationFrame")
+        {
+            result = Activator.CreateInstance(typeof(T), nonPublic: true)!;
+            typeof(T).GetProperty("Meshes")!.SetValue(result, ((System.Collections.IEnumerable)args![0]!).Cast<object>().Select(Key).Where(key => !meshes.Contains(key)).ToArray());
+            typeof(T).GetProperty("Lines")!.SetValue(result, ((System.Collections.IEnumerable)args[1]!).Cast<object>().Select(Key).Where(key => !lines.Contains(key)).ToArray());
+        }
+        if (identifier == "uploadPresentationChunk")
+        {
+            var bytes = (byte[])args![3]!; UploadedBytes += bytes.Length; MaximumChunk = Math.Max(MaximumChunk, bytes.Length);
+            if (args[0] is { } metadata)
+                foreach (var (name, cache) in new[] { ("meshes", meshes), ("lines", lines) })
+                    foreach (var item in (System.Collections.IEnumerable)metadata.GetType().GetProperty(name)!.GetValue(metadata)!)
+                        cache.Add((string)item.GetType().GetProperty("Id")!.GetValue(item)!);
+        }
+        if (identifier == "commitPresentationFrame")
+        {
+            Commits++;
+            if (args![4] is Array labels) Labels = labels.Length;
+        }
+        return ValueTask.FromResult(result is null ? default! : (T)result);
+    }
+    public ValueTask<T> InvokeAsync<T>(string identifier, CancellationToken cancellationToken, object?[]? args) => InvokeAsync<T>(identifier, args);
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

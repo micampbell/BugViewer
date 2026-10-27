@@ -12,5 +12,25 @@
         <a href="scenes/example.bugscene.json" download="example.bugscene.json">Download a stepped 3D example</a>
         <a href="scenes/plots.bugscene.json" download="plots.bugscene.json">Download a 2D example</a>
     </div>
-    <SceneRequestViewer />
+    <details class="playback-diagnostics">
+        <summary>Playback measurements</summary>
+        <p>Measures distinct submitted steps at 10 and 30 fps, followed by slider-style jumps.
+            Keep this tab visible throughout the check.</p>
+        <button @onclick="RunPlaybackCheckAsync" disabled="@(checking || presentation?.IsReady != true || (presentation?.StepCount ?? 0) < 2)">Run playback check</button>
+        <button @onclick="CancelCheck" disabled="@(!checking)">Cancel check</button>
+        <button @onclick="DownloadReportAsync" disabled="@(measurements.Count == 0)">Download measurements</button>
+        <p role="status" id="playback-check-status">@checkStatus</p>
+        @if (latest is { } timing)
+        {
+            <p>Step @(timing.Step + 1): @timing.TotalMs.ToString("F1") ms ·
+                @((timing.UploadedBytes / 1024.0).ToString("F0")) KiB uploaded · @timing.CacheHits cached resources</p>
+            <table>
+                <thead><tr><th>Prepare</th><th>Bounds / selection / edges</th><th>Pack</th><th>Interop / wait</th><th>Browser upload</th><th>CPU submission</th></tr></thead>
+                <tbody><tr><td>@timing.PreparationMs.ToString("F1") ms</td><td>@timing.SceneUpdateMs.ToString("F1") ms</td>
+                    <td>@timing.PackingMs.ToString("F1") ms</td><td>@timing.InteropMs.ToString("F1") ms</td>
+                    <td>@timing.BrowserUploadMs.ToString("F1") ms</td><td>@timing.SubmissionMs.ToString("F1") ms</td></tr></tbody>
+            </table>
+        }
+    </details>
+    <SceneRequestViewer @ref="presentation" MaxSceneFileSize="@(1024L * 1024 * 1024)" OnStepRendered="StepRendered" />
 </main>

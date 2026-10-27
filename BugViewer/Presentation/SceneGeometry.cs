@@ -37,12 +37,28 @@ public static class SceneGeometry
     {
         var normalTransform = SceneTransform.Identity;
         var valid = transform is null || transform.Value.TryNormalTransform(out normalTransform);
+        var vertices = new Vector3[mesh.Vertices.Count];
+        for (var index = 0; index < vertices.Length; index++)
+        {
+            var point = mesh.Vertices[index];
+            vertices[index] = transform is { } matrix ? matrix.Transform(new(point[0], point[1], point[2]))
+                : new(point[0], point[1], point[2]);
+        }
+        var indices = new (int, int, int)[mesh.Triangles.Count];
+        for (var index = 0; index < indices.Length; index++)
+        {
+            var triangle = mesh.Triangles[index]; indices[index] = (triangle[0], triangle[1], triangle[2]);
+        }
+        var normals = new Vector3[mesh.PrimitiveSurfaceNormals.Count];
+        if (valid)
+            for (var index = 0; index < normals.Length; index++)
+                normals[index] = normalTransform.TransformNormal(mesh.PrimitiveSurfaceNormals[index]);
         return new MeshData
         {
             Id = mesh.Id,
-            Vertices = mesh.Vertices.Select(v => transform?.Transform(new(v[0],v[1],v[2])) ?? new Vector3(v[0],v[1],v[2])).ToList(),
-            Indices = mesh.Triangles.Select(t => (t[0],t[1],t[2])).ToList(),
-            PrimitiveSurfaceNormals = mesh.PrimitiveSurfaceNormals.Select(n => valid ? normalTransform.TransformNormal(n) : Vector3.Zero).ToList(),
+            Vertices = vertices,
+            Indices = indices,
+            PrimitiveSurfaceNormals = normals,
             HasPrimitiveSurfaces = mesh.HasPrimitiveSurfaces,
             // Face inspection updates triangle colors, including meshes whose source color is uniform.
             Colors = mesh.ColorMode == MeshColoring.PerVertex ? mesh.Colors.ToList() : ExpandedColors(mesh),

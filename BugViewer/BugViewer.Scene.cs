@@ -31,7 +31,7 @@ public partial class BugViewer
     /// Replaces geometry, labels, settings, and camera with an independent copy of a scene.
     /// Invalid scenes are rejected before the viewer is changed. Geometry is queued if WebGPU is not ready.
     /// </summary>
-    internal async Task LoadSnapshotAsync(SceneSnapshot scene)
+    internal async Task LoadSnapshotAsync(SceneSnapshot scene, bool upload = true)
     {
         ArgumentNullException.ThrowIfNull(scene);
         scene.Validate();
@@ -93,7 +93,7 @@ public partial class BugViewer
                             * SphereRadius * Math.Max(1, _canvasHeight / Math.Max(1, _canvasWidth)));
                 }
 
-                if (module is not null)
+                if (module is not null && upload)
                     await UploadSceneCoreAsync(module);
             }
             finally

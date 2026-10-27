@@ -72,7 +72,7 @@ public partial record SceneRequest
         ArgumentNullException.ThrowIfNull(stream);
         var scene = await JsonSerializer.DeserializeAsync(stream, SceneRequestJsonContext.Default.SceneRequest, cancellationToken)
             ?? throw new InvalidDataException("The file does not contain a scene.");
-        scene.Validate();
+        await scene.ValidateAsync(cancellationToken);
         return scene;
     }
 
@@ -94,6 +94,8 @@ public partial record SceneRequest
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    IncludeFields = true, IgnoreReadOnlyProperties = true, UseStringEnumConverter = true)]
+    IncludeFields = true, IgnoreReadOnlyProperties = true, UseStringEnumConverter = true,
+    DefaultBufferSize = 262144,
+    Converters = [typeof(SceneFloat3Converter), typeof(SceneInt3Converter), typeof(SceneColorConverter), typeof(ScenePointConverter)])]
 [JsonSerializable(typeof(SceneRequest))]
 internal partial class SceneRequestJsonContext : JsonSerializerContext;

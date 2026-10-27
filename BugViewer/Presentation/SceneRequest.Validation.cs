@@ -3,9 +3,27 @@ namespace BugViewer;
 public partial record SceneRequest
 {
     /// <summary>Checks the portable data before saving or displaying it.</summary>
-    public void Validate() => Validate(new HashSet<SceneRequest>(ReferenceEqualityComparer.Instance));
+    public void Validate()
+    {
+        foreach (var _ in ValidateCore(new HashSet<SceneRequest>(ReferenceEqualityComparer.Instance))) { }
+    }
 
-    private void Validate(HashSet<SceneRequest> ancestors)
+    internal async Task ValidateAsync(CancellationToken cancellationToken)
+    {
+        var slice = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var _ in ValidateCore(new HashSet<SceneRequest>(ReferenceEqualityComparer.Instance)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (slice.ElapsedMilliseconds >= 6)
+            {
+                await Task.Delay(1, cancellationToken);
+                slice.Restart();
+            }
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private IEnumerable<bool> ValidateCore(HashSet<SceneRequest> ancestors)
     {
         if (!ancestors.Add(this)) throw new InvalidDataException("Scene steps contain a cycle.");
         try
@@ -18,7 +36,7 @@ public partial record SceneRequest
                 || Title is null || Heading is null || Subtitle is null)
                 throw new InvalidDataException("Scene collections, presentation kind, or initial step are invalid.");
             var meshIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var mesh in Meshes) ValidateMesh(mesh, meshIds);
+            foreach (var mesh in Meshes) { ValidateMesh(mesh, meshIds); yield return true; }
             var pathIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var path in Paths)
             {
@@ -41,7 +59,7 @@ public partial record SceneRequest
             {
                 if (group is null || group.Meshes is null) throw new InvalidDataException("A step group is invalid.");
                 foreach (var mesh in group.Meshes)
-                    if (mesh is not null) ValidateMesh(mesh, meshIds);
+                    if (mesh is not null) { ValidateMesh(mesh, meshIds); yield return true; }
                 if (group.Transforms is not null)
                     foreach (var transform in group.Transforms)
                         if (transform is { } matrix && matrix.Values.Any(value => !double.IsFinite(value)))
@@ -52,8 +70,11 @@ public partial record SceneRequest
                     || source.HistoryStepLimit < 0 || source.Thicknesses.Any(value => !double.IsFinite(value) || !float.IsFinite((float)value)))
                     throw new InvalidDataException($"Step path source '{source.Id}' is invalid.");
                 foreach (var path in source.Paths)
+                {
                     if (path is null || path.Any(point => !double.IsFinite(point.X) || !double.IsFinite(point.Y) || !double.IsFinite(point.Z)))
                         throw new InvalidDataException($"Step path source '{source.Id}' contains invalid coordinates.");
+                    yield return true;
+                }
             }
             // Share validation of renderer-native batches, billboards, options and camera snapshots.
             new SceneSnapshot { Lines = PathBatches, Billboards = Billboards,
@@ -80,7 +101,7 @@ public partial record SceneRequest
             foreach (var step in Steps)
             {
                 if (step is null || step.Kind != Kind) throw new InvalidDataException("All steps must have the request's presentation kind.");
-                step.Validate(ancestors);
+                foreach (var checkpoint in step.ValidateCore(ancestors)) yield return checkpoint;
             }
         }
         finally { ancestors.Remove(this); }

@@ -10,7 +10,7 @@ async function harness() {
     const resource = () => ({ destroy() { this.destroyed = true; }, createView() { return {}; } });
     const device = {
         lost: new Promise(resolve => { lose = resolve; }),
-        createBuffer({ size }) { const buffer = { ...resource(), data: new ArrayBuffer(size),
+        createBuffer({ size }) { const buffer = { size, ...resource(), data: new ArrayBuffer(size),
             getMappedRange() { return this.data; }, unmap() {} }; counters.buffers.push(buffer); return buffer; },
         createBindGroupLayout(descriptor) { counters.layouts++; return { descriptor }; },
         createPipelineLayout: descriptor => ({ descriptor }),
@@ -186,4 +186,83 @@ const mesh = (id, singleColor = true, alpha = 1) => ({ id, vertices: [0,0,0, 1,0
     await api.disposeWebGPU_Canvas();
     await rejected;
 }
-console.log('PASS: pipeline reuse/configuration, pending promises, retries, cleanup, initialization failure, device loss, binary views/bounds, incremental resources, lines/billboards, and submission timing.');
+
+// Real presentation protocol: staged chunks, atomic activation, cache hits,
+// prefetch, bounded eviction, abort, and disposal while waiting for submission.
+function presentationFixture(key) {
+    const bytes = new Uint8Array(60);
+    new Float32Array(bytes.buffer, 0, 9).set([0,0,0, 1,0,0, 0,1,0]);
+    new Float32Array(bytes.buffer, 36, 4).set([1,0,0,1]);
+    new Uint16Array(bytes.buffer, 52, 3).set([0,1,2]);
+    return { bytes, metadata: { meshes: [{ id:key, vertexOffset:0, vertexCount:9,
+        colorOffset:36, colorCount:4, normalOffset:52, normalCount:0,
+        indexOffset:52, indexCount:3, index32:false, singleColor:true }], lines:[] } };
+}
+const drain = () => new Promise(resolve => setTimeout(resolve, 0));
+async function activate(api, refs, budget = 1024) {
+    const pending = api.commitPresentationFrame(refs, [], true, true, null, budget);
+    await drain(); api.testing.renderTarget(); api.testing.renderFrame();
+    return await pending;
+}
+{
+    const { api, counters } = await harness();
+    await api.addMesh(mesh('previous'));
+    const previous = api.testing.state().meshes[0];
+    const a = [{ key:'a', id:'logical' }], b = [{ key:'b', id:'logical' }];
+    assert.deepEqual([...(await api.preparePresentationFrame(a, [])).meshes], ['a']);
+    const fixture = presentationFixture('a');
+    await api.uploadPresentationChunk(fixture.metadata, 60, 0, fixture.bytes.subarray(0, 32));
+    assert.equal(api.testing.state().meshes[0], previous);
+    await api.uploadPresentationChunk(null, 60, 32, fixture.bytes.subarray(32));
+    assert.equal(api.testing.state().meshes[0], previous, 'staging must not change active geometry');
+    const timing = await activate(api, a);
+    assert.ok(timing.submittedAtMs > 0);
+    assert.equal(timing.visible, true);
+    const retainedA = api.testing.state().meshes[0];
+    assert.equal(retainedA.id, 'logical');
+    assert.equal(previous.vertexBuffer.destroyed, true);
+    await api.preparePresentationFrame(b, []);
+    const fixtureB = presentationFixture('b');
+    await api.uploadPresentationChunk(fixtureB.metadata, 60, 0, fixtureB.bytes);
+    await api.finishPresentationPrefetch(1024);
+    assert.equal(api.testing.state().meshes[0], retainedA);
+    assert.equal((await api.preparePresentationFrame(b, [])).meshes.length, 0);
+    await activate(api, b);
+    const retainedB = api.testing.state().meshes[0];
+    const bufferCount = counters.buffers.length;
+    assert.equal((await api.preparePresentationFrame(a, [])).meshes.length, 0);
+    await activate(api, a);
+    assert.equal(api.testing.state().meshes[0], retainedA);
+    assert.equal(counters.buffers.length, bufferCount, 'revisiting a cached step must allocate no GPU buffers');
+    await activate(api, a, 0);
+    assert.equal(retainedB.vertexBuffer.destroyed, true, 'inactive geometry must be evicted under budget pressure');
+    assert.notEqual(retainedA.vertexBuffer.destroyed, true, 'active geometry must stay pinned');
+    assert.deepEqual([...(await api.preparePresentationFrame(b, [])).meshes], ['b']);
+    await api.uploadPresentationChunk(fixtureB.metadata, 60, 0, fixtureB.bytes);
+    await api.abortPresentationFrame();
+    assert.equal(api.testing.state().meshes[0], retainedA);
+    assert.deepEqual([...(await api.preparePresentationFrame(b, [])).meshes], ['b']);
+    await assert.rejects(api.uploadPresentationChunk(null, 60, 32, fixtureB.bytes.subarray(32)), /Out-of-order/);
+    await api.abortPresentationFrame();
+    const canceled = api.commitPresentationFrame(a, [], true, false, null, 1024);
+    await drain(); api.cancelPresentationWait();
+    assert.equal((await canceled).submittedAtMs, 0, 'disposal must unblock a hidden-browser submission wait');
+    const paused = await api.commitPresentationFrame(a, [], true, false, null, 1024, false);
+    assert.equal(paused.visible, false, 'paused viewers must not wait for an animation frame');
+    const waiting = api.commitPresentationFrame(a, [], true, false, null, 1024);
+    const rejected = assert.rejects(waiting, /disposed/);
+    await drain(); await api.disposeWebGPU_Canvas(); await rejected;
+    assert.ok(counters.buffers.every(buffer => buffer.destroyed));
+}
+{
+    const { api } = await harness();
+    const refs = [{ key:'empty', id:'empty mesh' }];
+    await api.preparePresentationFrame(refs, []);
+    await api.uploadPresentationChunk({ meshes:[{ id:'empty', vertexOffset:0, vertexCount:0,
+        colorOffset:0, colorCount:0, normalOffset:0, normalCount:0,
+        indexOffset:0, indexCount:0, index32:false, singleColor:true }], lines:[] }, 0, 0, new Uint8Array());
+    await activate(api, refs);
+    assert.equal(api.testing.state().meshes[0].indexCount, 0);
+    await api.disposeWebGPU_Canvas();
+}
+console.log('PASS: renderer pipelines, binary data, presentation staging/activation/cache/prefetch/eviction, cancellation, lifecycle, and submission timing.');
