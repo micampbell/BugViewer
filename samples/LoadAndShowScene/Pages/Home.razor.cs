@@ -10,7 +10,7 @@ namespace LoadAndShowScene.Pages;
 public partial class Home : IAsyncDisposable
 {
     [Inject] private IJSRuntime JS { get; set; } = default!;
-    private SceneRequestViewer? presentation;
+    private SceneViewer? presentation;
     private ScenePlaybackMetrics? latest;
     private readonly List<Measurement> measurements = [];
     private CancellationTokenSource? checkCancellation;

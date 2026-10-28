@@ -37,20 +37,20 @@ UTF-8 JSON. Optional viewer settings, camera, and `InitialStep` restore the save
 Saving a stepped request retains the whole timeline, including history limits and null
 transform barriers, rather than just the displayed frame.
 
-Use `SceneRequestViewer` to display either kind of request:
+Use `SceneViewer` to display either kind of request:
 
 ```razor
 @using BugViewer
-<SceneRequestViewer @ref="viewer" Scene="request" />
+<SceneViewer @ref="viewer" Scene="request" />
 
 @code {
-    private SceneRequestViewer? viewer;
+    private SceneViewer? viewer;
     private SceneRequest request = new();
 }
 ```
 
 ```csharp
-// Save or replace the contents of a SceneRequestViewer.
+// Save or replace the contents of a SceneViewer.
 await viewer.SaveSceneAsync("part.bugscene.json");
 await viewer.LoadSceneAsync("part.bugscene.json");
 
@@ -78,11 +78,10 @@ the visible frame is converted for rendering. Use `Steps` for complete frames an
 collections as immutable so cached step resolution stays valid.
 
 The low-level `BugViewer` component still accepts renderer-native meshes and lines.
-`SceneViewer` adds 3D playback and `PlotViewer` adds 2D playback; `SceneRequestViewer`
-selects between them and provides the component persistence API, Open/Save As buttons, and
+`SceneViewer` displays 3D playback or 2D plots and provides the component persistence API, Open/Save As buttons, and
 **Ctrl+Alt+O / Ctrl+Alt+S** shortcuts. Plain Ctrl+O / Ctrl+S remain available to the browser;
 AltGr input is ignored. The 3D viewer also has Open and Save As icons in **Settings**, below
-the Camera accordion, visible even when the accordion is collapsed.
+the Camera accordion, visible even when the accordion is collapsed. In 2D, the icons appear above the plot.
 Save As prompts for a filename before downloading; Cancel or Escape leaves the scene unchanged.
 Names without a `.json` or `.bugscene` extension receive `.bugscene.json` automatically.
 Opening a request with steps
@@ -91,7 +90,7 @@ the complete timeline and current view. The keyboard commands target the focused
 clicked request viewer (or the only one on the page), and leave editors outside it alone.
 Set `EnableFileShortcuts="false"` to let the host own those keys. Use `MaxSceneFileSize` to
 adjust the 1 GiB input allowance and `FileName` to suggest names for programmatically supplied
-requests. These file controls belong to `SceneRequestViewer`; applications using only the
+requests. These file controls belong to `SceneViewer`; applications using only the
 low-level `BugViewer` renderer should use this presentation component for scene files.
 Opening displays progress and can be canceled without replacing the current scene.
 The input allowance is configurable; available browser memory still determines the practical scene size.
@@ -103,9 +102,7 @@ not skip steps to conceal missed deadlines. Source collections must remain immut
 publication; publish a new request when changing source geometry. Existing JSON files and
 the public Load/Save methods retain the version-1 format.
 
-`SceneViewer` and `SceneRequestViewer` expose `OnStepRendered` with timings, transferred
-bytes, cache hits, and the browser submission timestamp. The LoadAndShowScene sample's
-**Playback measurements** section runs a 10/30 fps check and exports these measurements.
+`SceneViewer` exposes `OnStepRendered` with timings, transferred bytes, cache hits, and the browser submission timestamp.
 For large saved scenes, use its **Performance** publish profile; setup instructions
 and measured results are in [docs/performance.md](docs/performance.md).
 Plotly ships with the

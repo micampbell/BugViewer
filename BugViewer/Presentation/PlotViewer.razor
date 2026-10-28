@@ -4,7 +4,9 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<section class="scene-viewer">
+<section class="scene-viewer @(HideHeader ? "embedded" : null)">
+    @if (!HideHeader)
+    {
     <header class="scene-viewer-header">
         <div>
             <span class="scene-id">#@ViewerId</span>
@@ -17,6 +19,7 @@
             <FluentButton Class="rotated-icon-button" @onclick="CloseAsync" IconStart="@(new Icons.Regular.Size20.Add())" />
         }
     </header>
+    }
     @if (StepCount > 1)
     {
         <div class="step-controls"><button @onclick="PreviousStep">Prev</button><input type="range" min="0" max="@(StepCount - 1)" @bind="step" @bind:after="RenderCurrentAsync" /><span>@(step + 1) / @StepCount</span><button @onclick="NextStep">Next</button></div>

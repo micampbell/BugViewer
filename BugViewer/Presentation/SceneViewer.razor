@@ -1,32 +1,42 @@
 @using NumericsVector3 = System.Numerics.Vector3
 @using Microsoft.FluentUI.AspNetCore.Components
 @using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
+@using FileIcons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24
 @namespace BugViewer
 @implements IAsyncDisposable
+@inject IJSRuntime JS
 
-<section class="scene-viewer">
-    <header class="scene-viewer-header">
-        <div>
-            <span class="scene-id">#@ViewerId</span>
-            @if (IsActive)
-            {
-                <span class="active-badge">Active</span>
-            }
-            <h2>@Title</h2>
-            @if (!string.IsNullOrWhiteSpace(Heading))
-            {
-                <p>@Heading</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(Subtitle))
-            {
-                <p>@Subtitle</p>
-            }
+<section @ref="container" class="scene-viewer" tabindex="0" aria-label="Scene viewer"
+         data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
+    <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@isBusy" />
+    <button @ref="openButton" type="button" hidden disabled="@isBusy" data-scene-file-command="open"></button>
+    <button @ref="saveButton" type="button" hidden disabled="@(isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync"></button>
+    @if (loading is not null)
+    {
+        <div class="scene-file-progress" role="status">
+            <progress value="@loadPercent" max="100" aria-label="Scene loading progress"></progress>
+            <button type="button" @onclick="CancelOpen">Cancel opening</button>
         </div>
-        @if (OnClose.HasDelegate)
-        {
-            <FluentButton Class="rotated-icon-button" @onclick="CloseAsync" IconStart="@(new Icons.Regular.Size20.Add())" />
-        }
-    </header>
+    }
+    @if (fileError is not null)
+    {
+        <p class="scene-file-error" role="alert">@fileError</p>
+    }
+
+    @if (CurrentRequest.Kind == PresentationKind.TwoDimensional)
+    {
+        <div class="plot-file-actions" aria-label="Scene file actions">
+            <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
+                <FluentIcon Value="@(new FileIcons.FolderOpen())" />
+            </FluentButton>
+            <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
+                <FluentIcon Value="@(new FileIcons.Save())" />
+            </FluentButton>
+        </div>
+        <PlotViewer @key="generation" @ref="plotViewer" Scenes="ActiveScenes" HideHeader="true" />
+    }
+    else
+    {
     @if (StepCount > 1)
     {
         <div class="step-controls">
@@ -69,11 +79,35 @@
         </div>
     }
     <div class="scene-viewer-canvas">
-        <BugViewer @ref="viewer" Height="100%" Width="100%" OnReady="OnViewerReadyAsync"
-                   CameraActions="CameraActions"
+        <BugViewer @key="generation" @ref="viewer" Height="100%" Width="100%" OnReady="OnViewerReadyAsync"
                    Options="initialOptions" HoverSelectionKeys="HoverSelectionKeys" OnHoverSelectionKeyChanged="OnHoverSelectionKeyChanged"
                    OnTriangleSelected="TriangleSelectedAsync"
-                   AutoResetCamera="@(CurrentRequest.Options is null ? Current.AutoResetCamera : (UpdateTypes?)null)" />
+                   AutoResetCamera="@(CurrentRequest.Options is null ? Current.AutoResetCamera : (UpdateTypes?)null)">
+            <CameraActions>
+                @CameraActions
+                <FluentStack Orientation="Orientation.Horizontal" aria-label="Scene file actions">
+                    <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
+                        <FluentIcon Value="@(new FileIcons.FolderOpen())" />
+                    </FluentButton>
+                    <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
+                        <FluentIcon Value="@(new FileIcons.Save())" />
+                    </FluentButton>
+                </FluentStack>
+            </CameraActions>
+        </BugViewer>
     </div>
+    }
+    <dialog @ref="saveAsDialog" class="scene-save-dialog" aria-labelledby="@saveAsTitleId">
+        <form @onsubmit="ConfirmSaveAsAsync" @onsubmit:preventDefault>
+            <h2 id="@saveAsTitleId">Save scene as</h2>
+            <label>File name <input @ref="saveAsInput" type="text" @bind="saveAsName" @bind:event="oninput" maxlength="240" /></label>
+            <p>The file includes all steps and the current view.</p>
+            @if (saveAsError is not null) { <p class="scene-file-error" role="alert">@saveAsError</p> }
+            <div class="scene-save-actions">
+                <button type="button" @onclick="CancelSaveAsAsync">Cancel</button>
+                <button type="submit">Save</button>
+            </div>
+        </form>
+    </dialog>
 </section>
 

@@ -5,7 +5,7 @@ using NumericsVector3 = System.Numerics.Vector3;
 
 namespace BugViewer;
 
-/// <summary>Displays 3D requests with lazy step resolution, playback, and selection events.</summary>
+/// <summary>Displays 3D and 2D requests with playback, selection, and scene file operations.</summary>
 public partial class SceneViewer
 {
     /// <summary>Identifier displayed in the header and passed to OnClose.</summary>
@@ -43,8 +43,7 @@ public partial class SceneViewer
     private CancellationTokenSource? autoplayCancellation;
     private Task? autoplayTask;
     private bool IsAutoplaying => autoplayCancellation is not null;
-    private SceneRequest CurrentRequest => Scenes.LastOrDefault()
-        ?? new SceneRequest { RequestId = Guid.Empty };
+    private SceneRequest CurrentRequest => ActiveScenes.LastOrDefault() ?? emptyRequest;
     private SceneRequest Current => CurrentRequest is { Steps.Count: > 0 } stepped
         ? stepped.Steps[Math.Clamp(step, 0, stepped.Steps.Count - 1)]
         : CurrentRequest;
@@ -52,9 +51,7 @@ public partial class SceneViewer
     public int StepCount => CurrentRequest.StepGroups.Count > 0
         ? CurrentRequest.StepGroups.Max(group => group.Count)
         : CurrentRequest.Steps.Count;
-    private string Heading => Current.Heading;
-    private string Title => Current.Title.Length == 0 ? "3D Scene" : Current.Title;
-    private string Subtitle => Current.Subtitle;
+
     private global::BugViewer.BugViewer? viewer;
 
     private SceneRequest[] appliedScenes = [];
@@ -83,8 +80,26 @@ public partial class SceneViewer
     /// <inheritdoc />
     protected override async Task OnParametersSetAsync()
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxSceneFileSize);
+        if (!ReferenceEquals(lastScenesParameter, Scenes))
+        {
+            lastScenesParameter = Scenes;
+            loadedScenes = null;
+        }
+        if (Scene is not null && !ReferenceEquals(lastSceneParameter, Scene))
+        {
+            Scene.Validate();
+            lastSceneParameter = Scene;
+            loadedScenes = [Scene];
+        }
         if (!ReferenceEquals(lastRequest, CurrentRequest))
         {
+            if (lastRequest is not null && lastRequest.Kind != CurrentRequest.Kind)
+            {
+                await StopAutoplayAsync();
+                if (renderLoopTask is not null) await renderLoopTask;
+                ResetRenderer();
+            }
             isEditingStep = false;
             focusStepInput = false;
             focusStepButton = false;
@@ -95,12 +110,22 @@ public partial class SceneViewer
             if (!ready) initialOptions = CurrentRequest.Options?.Clone() ?? BugViewerOptions.Default.Clone();
         }
         if (step >= StepCount) step = Math.Max(0, StepCount - 1);
-        if (ready && !appliedScenes.SequenceEqual(Scenes)) await RenderSceneAsync();
+        if (ready && !appliedScenes.SequenceEqual(ActiveScenes)) await RenderSceneAsync();
     }
 
     /// <inheritdoc />
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (files is null && fileInput?.Element is { } input)
+        {
+            files = new SceneFileInterop(JS);
+            await files.InitializeAsync(container, input, openButton, saveButton);
+        }
+        if (showSaveAsAfterRender && files is not null)
+        {
+            showSaveAsAfterRender = false;
+            await files.ShowSaveAsAsync(saveAsDialog, saveAsInput);
+        }
         if (focusStepInput && isEditingStep)
         {
             focusStepInput = false;
@@ -123,6 +148,8 @@ public partial class SceneViewer
     /// <summary>Captures the complete request and current view without flattening its steps.</summary>
     public async Task<SceneRequest> CaptureAsync()
     {
+        if (CurrentRequest.Kind == PresentationKind.TwoDimensional)
+            return plotViewer?.Capture() ?? CurrentRequest;
         if (viewer is null || !ready) return CurrentRequest with { InitialStep = step };
         await renderLock.WaitAsync();
         try
@@ -138,6 +165,11 @@ public partial class SceneViewer
     /// <summary>Displays one step of the complete presentation.</summary>
     public async Task SetStepAsync(int index)
     {
+        if (CurrentRequest.Kind == PresentationKind.TwoDimensional && plotViewer is not null)
+        {
+            await plotViewer.SetStepAsync(index);
+            return;
+        }
         step = Math.Clamp(index, 0, Math.Max(0, StepCount - 1));
         if (ready) await RenderSceneAsync();
         await InvokeAsync(StateHasChanged);
@@ -256,9 +288,9 @@ public partial class SceneViewer
 
     private IEnumerable<SceneRequest> VisibleScenes(int stepIndex)
     {
-        for (var index = 0; index < Scenes.Count - 1; index++)
-            yield return Scenes[index];
-        if (Scenes.Count > 0)
+        for (var index = 0; index < ActiveScenes.Count - 1; index++)
+            yield return ActiveScenes[index];
+        if (ActiveScenes.Count > 0)
             yield return CurrentAtStep(stepIndex);
     }
 
@@ -395,7 +427,7 @@ public partial class SceneViewer
         }
         if (appliedScenes.Length == 0 && CurrentRequest.Options is null && CurrentRequest.Camera is null)
             await viewer.FitSceneAsync();
-        appliedScenes = Scenes.ToArray();
+        appliedScenes = ActiveScenes.ToArray();
         renderedStep = stepIndex;
         if (OnStepRendered.HasDelegate)
             await OnStepRendered.InvokeAsync(timing with { Step = stepIndex, PreparationMs = preparationMs,
@@ -502,6 +534,8 @@ public partial class SceneViewer
             pendingRender = renderLoopTask;
             prefetchCancellation?.Cancel();
         }
+        disposed = true;
+        await lifetime.CancelAsync();
         if (viewer is not null) await viewer.CancelPendingPresentationAsync();
         await StopAutoplayAsync();
         if (pendingRender is not null) await pendingRender;
@@ -511,6 +545,8 @@ public partial class SceneViewer
         await renderLock.WaitAsync();
         renderLock.Release();
         renderLock.Dispose();
+        if (files is not null) await files.DisposeAsync();
+        lifetime.Dispose();
     }
 
     private readonly record struct RenderSignature(object Source, SceneTransform? Transform, int StepIndex = -1);

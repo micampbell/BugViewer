@@ -26,7 +26,7 @@ async function harness() {
     const document = new Element();
     document.body = new Element(document);
     const context = vm.createContext({ document, AbortController });
-    const source = await readFile(new URL('../BugViewer/Presentation/SceneRequestViewer.razor.js', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../BugViewer/Presentation/SceneViewer.razor.js', import.meta.url), 'utf8');
     const module = new vm.SourceTextModule(source, { context });
     await module.link(() => { throw new Error('Unexpected import'); });
     await module.evaluate();

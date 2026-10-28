@@ -5,7 +5,7 @@ namespace BugViewer;
 
 internal sealed class SceneFileInterop(IJSRuntime js) : IAsyncDisposable
 {
-    private const string ModulePath = "./_content/BugViewer/Presentation/SceneRequestViewer.razor.js";
+    private const string ModulePath = "./_content/BugViewer/Presentation/SceneViewer.razor.js";
     private const string InitializeMethod = "initialize";
     private const string DownloadMethod = "downloadScene";
     private const string DisposeMethod = "dispose";

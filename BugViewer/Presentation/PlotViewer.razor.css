@@ -1,4 +1,5 @@
 .scene-viewer { height: 75vh; min-height: 24rem; box-sizing: border-box; display: flex; flex-direction: column; margin: 0 0 1rem; padding: 1rem; background: white; border: 1px solid #d5d5dd; border-radius: .4rem; }
+.scene-viewer.embedded { flex: 1 1 auto; height: auto; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; }
 .scene-viewer-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 .scene-viewer-canvas { flex: 1 1 auto; min-height: 0; }
 .scene-viewer-header h2 { margin: .35rem 0; font-size: 1.1rem; }

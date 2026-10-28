@@ -159,9 +159,19 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     try { await loader.LoadSceneAsync(new SceneRequest { Version = 99 }); throw new Exception("Invalid load accepted."); }
     catch (InvalidDataException) { }
     Assert((await loader.GetSceneAsync()).RequestId == restored.RequestId, "Invalid load replaced the current request.");
+    var parameterViewer = new TestRequestViewer(); await renderer.AttachAsync(parameterViewer);
+    var sceneParameters = ParameterView.FromDictionary(new Dictionary<string, object?> { [nameof(SceneViewer.Scene)] = request });
+    await parameterViewer.SetParametersAsync(sceneParameters);
+    await parameterViewer.LoadSceneAsync(plots);
+    await parameterViewer.SetParametersAsync(sceneParameters);
+    Assert((await parameterViewer.GetSceneAsync()).RequestId == plots.RequestId,
+        "A parent rerender replaced the scene opened by the viewer.");
+    await parameterViewer.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?> { [nameof(SceneViewer.Scene)] = restored }));
+    Assert((await parameterViewer.GetSceneAsync()).RequestId == restored.RequestId,
+        "A newly supplied scene did not replace the opened scene.");
 
     // Exercise the same file handler used by Open Scene and Ctrl+Alt+O, including mode changes.
-    var openFile = typeof(SceneRequestViewer).GetMethod("OpenSceneFileAsync", flags)!;
+    var openFile = typeof(SceneViewer).GetMethod("OpenSceneFileAsync", flags)!;
     async Task Open(SceneRequest scene, string name)
     {
         var file = new MemoryBrowserFile(name, Encoding.UTF8.GetBytes(Json(scene)));
@@ -174,8 +184,8 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         await Open(candidate, "switch.bugscene.json");
         var frames = loader.Markup();
         var view = frames.Single(frame => frame.FrameType == RenderTreeFrameType.Component
-            && (frame.ComponentType == typeof(SceneViewer) || frame.ComponentType == typeof(PlotViewer)));
-        Assert(view.ComponentType == (candidate.Kind == PresentationKind.TwoDimensional ? typeof(PlotViewer) : typeof(SceneViewer)),
+            && (frame.ComponentType == typeof(global::BugViewer.BugViewer) || frame.ComponentType == typeof(PlotViewer)));
+        Assert(view.ComponentType == (candidate.Kind == PresentationKind.TwoDimensional ? typeof(PlotViewer) : typeof(global::BugViewer.BugViewer)),
             "Opening a file did not select the correct rendering surface.");
         Assert(!Equals(view.ComponentKey, priorKey), "Loading retained the old renderer and playback state.");
         priorKey = view.ComponentKey;
@@ -199,30 +209,30 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     {
         await (Task)openFile.Invoke(loader, [new InputFileChangeEventArgs([file])])!;
         Assert((await loader.GetSceneAsync()).RequestId == single.RequestId, "Failed file open replaced the current scene.");
-        Assert(typeof(SceneRequestViewer).GetField("fileError", flags)!.GetValue(loader) is string { Length: > 0 },
+        Assert(typeof(SceneViewer).GetField("fileError", flags)!.GetValue(loader) is string { Length: > 0 },
             "Failed file open did not report an error.");
     }
 
     var fileRuntime = new SceneFileRuntime();
-    var interopType = typeof(SceneRequestViewer).Assembly.GetType("BugViewer.SceneFileInterop")!;
+    var interopType = typeof(SceneViewer).Assembly.GetType("BugViewer.SceneFileInterop")!;
     var fileInterop = Activator.CreateInstance(interopType, fileRuntime)!;
     await (Task)interopType.GetMethod("InitializeAsync")!.Invoke(fileInterop,
         [default(ElementReference), default(ElementReference), default(ElementReference), default(ElementReference)])!;
-    typeof(SceneRequestViewer).GetField("files", flags)!.SetValue(loader, fileInterop);
-    Task FileCommand(string name) => (Task)typeof(SceneRequestViewer).GetMethod(name, flags)!.Invoke(loader, null)!;
+    typeof(SceneViewer).GetField("files", flags)!.SetValue(loader, fileInterop);
+    Task FileCommand(string name) => (Task)typeof(SceneViewer).GetMethod(name, flags)!.Invoke(loader, null)!;
     await Open(restored, "original.bugscene.json");
     await FileCommand("BeginSaveAsAsync");
-    Assert((string)typeof(SceneRequestViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene.json",
+    Assert((string)typeof(SceneViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene.json",
         "Save As did not suggest the opened filename.");
     await FileCommand("CancelSaveAsAsync");
     Assert(fileRuntime.Downloads.Count == 0, "Canceling Save As downloaded a file.");
     foreach (var badName in new[] { " ", "../part", "part?", "part." })
     {
-        typeof(SceneRequestViewer).GetField("saveAsName", flags)!.SetValue(loader, badName);
+        typeof(SceneViewer).GetField("saveAsName", flags)!.SetValue(loader, badName);
         await FileCommand("ConfirmSaveAsAsync");
         Assert(fileRuntime.Downloads.Count == 0, "An invalid filename was downloaded.");
     }
-    typeof(SceneRequestViewer).GetField("saveAsName", flags)!.SetValue(loader, "renamed scene");
+    typeof(SceneViewer).GetField("saveAsName", flags)!.SetValue(loader, "renamed scene");
     await FileCommand("ConfirmSaveAsAsync");
     var download = fileRuntime.Downloads.Single();
     Assert(download.Name == "renamed scene.bugscene.json", "Save As ignored the chosen name or scene extension.");
@@ -283,7 +293,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     await restoredDisplay.DisposeAsync();
 
     var loader = new TestRequestViewer(); await renderer.AttachAsync(loader);
-    var open = typeof(SceneRequestViewer).GetMethod("OpenSceneFileAsync", flags)!;
+    var open = typeof(SceneViewer).GetMethod("OpenSceneFileAsync", flags)!;
     await (Task)open.Invoke(loader, [new InputFileChangeEventArgs([new MemoryBrowserFile("large.json", Encoding.UTF8.GetBytes(Json(first)), 338114058)])])!;
     Assert((await loader.GetSceneAsync()).RequestId == first.RequestId, "A 322.5 MiB file is still rejected by the default allowance.");
 });
@@ -324,10 +334,11 @@ sealed class TestSceneViewer : SceneViewer
     protected override void BuildRenderTree(RenderTreeBuilder builder) { }
     protected override Task OnAfterRenderAsync(bool firstRender) => Task.CompletedTask;
 }
-sealed class TestRequestViewer : SceneRequestViewer
+sealed class TestRequestViewer : SceneViewer
 {
     public RenderTreeFrame[] Markup() { using var builder = new RenderTreeBuilder(); base.BuildRenderTree(builder); return builder.GetFrames().Array.Take(builder.GetFrames().Count).ToArray(); }
     protected override void BuildRenderTree(RenderTreeBuilder builder) { }
+    protected override Task OnAfterRenderAsync(bool firstRender) => Task.CompletedTask;
 }
 
 sealed class MemoryBrowserFile(string name, byte[] bytes, long? size = null) : IBrowserFile

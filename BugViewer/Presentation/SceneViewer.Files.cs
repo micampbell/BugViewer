@@ -4,23 +4,21 @@ using Microsoft.JSInterop;
 
 namespace BugViewer;
 
-/// <summary>Displays a complete portable request, with 3D step playback or 2D plots.</summary>
-public partial class SceneRequestViewer
+public partial class SceneViewer
 {
-    /// <summary>Optional request supplied by the parent. Loading through the methods replaces the active request.</summary>
+    /// <summary>Optional request supplied by the parent. Loading a file replaces the active request.</summary>
     [Parameter] public SceneRequest? Scene { get; set; }
-    /// <summary>Enables Ctrl+Alt+O and Ctrl+Alt+S for the active viewer. Enabled by default.</summary>
+    /// <summary>Enables Ctrl+Alt+O and Ctrl+Alt+S for the active viewer.</summary>
     [Parameter] public bool EnableFileShortcuts { get; set; } = true;
     /// <summary>Maximum browser input file size in bytes. Defaults to 1 GiB.</summary>
     [Parameter] public long MaxSceneFileSize { get; set; } = 1024L * 1024 * 1024;
-    /// <summary>Optional diagnostics for each submitted 3D step.</summary>
-    [Parameter] public EventCallback<ScenePlaybackMetrics> OnStepRendered { get; set; }
-    /// <summary>Suggested Save As filename for a supplied request. Opened files retain their own filename.</summary>
+    /// <summary>Suggested Save As filename for a supplied request.</summary>
     [Parameter] public string FileName { get; set; } = "scene.bugscene.json";
-    private SceneRequest? lastParameter;
-    private SceneRequest current = new();
-    private IReadOnlyList<SceneRequest> requests = [];
-    private SceneViewer? sceneViewer;
+
+    private readonly SceneRequest emptyRequest = new() { RequestId = Guid.Empty };
+    private IReadOnlyList<SceneRequest>? loadedScenes, lastScenesParameter;
+    private SceneRequest? lastSceneParameter;
+    private IReadOnlyList<SceneRequest> ActiveScenes => loadedScenes ?? Scenes;
     private PlotViewer? plotViewer;
     private int generation;
     private ElementReference container, openButton, saveButton;
@@ -31,59 +29,21 @@ public partial class SceneRequestViewer
     private int loadPercent;
     private bool isBusy, disposed;
     private string? openedFileName, fileError;
-    private string status = "Open a scene file to begin.";
     private ElementReference saveAsDialog, saveAsInput;
     private readonly string saveAsTitleId = $"scene-save-title-{Guid.NewGuid():N}";
     private string saveAsName = "";
     private string? saveAsError;
     private bool showSaveAsAfterRender;
 
-    /// <summary>Number of steps in the active 3D timeline, or zero before a timeline is loaded.</summary>
-    public int StepCount => sceneViewer?.StepCount ?? 0;
-    /// <summary>Whether the active 3D presentation has applied its first frame.</summary>
-    public bool IsReady => sceneViewer?.IsReady ?? false;
-
-    /// <summary>Displays a zero-based step of the active 3D timeline.</summary>
-    public Task SetStepAsync(int index) => sceneViewer?.SetStepAsync(index)
-        ?? throw new InvalidOperationException("A 3D viewer is not ready.");
-
-    /// <inheritdoc />
-    protected override void OnParametersSet()
+    private void ResetRenderer()
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxSceneFileSize);
-        if (Scene is not null && !ReferenceEquals(Scene, lastParameter))
-        {
-            Scene.Validate();
-            lastParameter = Scene;
-            SetScene(Scene);
-        }
-    }
-
-    private void SetScene(SceneRequest scene)
-    {
-        current = scene;
-        requests = [scene];
-        sceneViewer = null;
-        plotViewer = null;
         generation++;
-        openedFileName = null;
-        fileError = null;
-        status = string.IsNullOrWhiteSpace(scene.Title) ? "Scene loaded." : $"Loaded {scene.Title}.";
-    }
-
-    /// <inheritdoc />
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && fileInput?.Element is { } input)
-        {
-            files = new SceneFileInterop(JS);
-            await files.InitializeAsync(container, input, openButton, saveButton);
-        }
-        if (showSaveAsAfterRender && files is not null)
-        {
-            showSaveAsAfterRender = false;
-            await files.ShowSaveAsAsync(saveAsDialog, saveAsInput);
-        }
+        ready = false;
+        viewer = null;
+        plotViewer = null;
+        appliedScenes = [];
+        displayPreferencesInitialized = false;
+        prefetchCancellation?.Cancel();
     }
 
     private async Task OpenSceneFileAsync(InputFileChangeEventArgs args)
@@ -91,7 +51,6 @@ public partial class SceneRequestViewer
         if (isBusy || disposed) return;
         isBusy = true;
         fileError = null;
-        status = $"Opening {args.File.Name}…";
         loading = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         loadPercent = 0;
         try
@@ -102,7 +61,6 @@ public partial class SceneRequestViewer
             using var progress = new SceneReadProgressStream(stream, bytes => InvokeAsync(() =>
             {
                 loadPercent = (int)Math.Min(100, bytes * 100 / Math.Max(1, args.File.Size));
-                status = loadPercent < 100 ? $"Opening {args.File.Name}… {loadPercent}%" : "Validating scene…";
                 StateHasChanged();
             }));
             var scene = await SceneRequest.LoadAsync(progress, loading.Token);
@@ -110,17 +68,11 @@ public partial class SceneRequestViewer
             if (disposed) return;
             await SetValidatedSceneAsync(scene);
             openedFileName = args.File.Name;
-            status = $"Opened {openedFileName}.";
         }
-        catch (OperationCanceledException) when (disposed) { }
-        catch (OperationCanceledException) when (loading.IsCancellationRequested)
-        {
-            status = "Opening canceled. The current scene is unchanged.";
-        }
+        catch (OperationCanceledException) when (disposed || loading.IsCancellationRequested) { }
         catch (Exception exception) when (IsFileException(exception))
         {
             fileError = $"Could not open the scene: {exception.Message}";
-            status = requests.Count == 0 ? "Open a scene file to begin." : "The current scene is unchanged.";
         }
         finally { loading.Dispose(); loading = null; isBusy = false; }
     }
@@ -129,7 +81,7 @@ public partial class SceneRequestViewer
 
     private Task BeginSaveAsAsync()
     {
-        if (isBusy || disposed || files is null || requests.Count == 0) return Task.CompletedTask;
+        if (isBusy || disposed || files is null || ActiveScenes.Count == 0) return Task.CompletedTask;
         saveAsName = openedFileName ?? FileName;
         saveAsError = null;
         showSaveAsAfterRender = true;
@@ -162,7 +114,7 @@ public partial class SceneRequestViewer
 
     private async Task DownloadSceneAsync(string name)
     {
-        if (isBusy || disposed || files is null || requests.Count == 0) return;
+        if (isBusy || disposed || files is null || ActiveScenes.Count == 0) return;
         isBusy = true;
         fileError = null;
         try
@@ -172,7 +124,6 @@ public partial class SceneRequestViewer
             stream.Position = 0;
             await files.DownloadAsync(name, stream);
             openedFileName = name;
-            status = $"Downloaded {name}.";
         }
         catch (OperationCanceledException) when (disposed) { }
         catch (Exception exception) when (IsFileException(exception))
@@ -194,10 +145,19 @@ public partial class SceneRequestViewer
         await SetValidatedSceneAsync(scene);
     }
 
-    private Task SetValidatedSceneAsync(SceneRequest scene) => InvokeAsync(() =>
+    private Task SetValidatedSceneAsync(SceneRequest scene) => InvokeAsync(async () =>
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        SetScene(scene); StateHasChanged();
+        await StopAutoplayAsync();
+        if (renderLoopTask is not null) await renderLoopTask;
+        ResetRenderer();
+        lastScenesParameter = Scenes;
+        loadedScenes = [scene];
+        lastRequest = null;
+        openedFileName = null;
+        fileError = null;
+        await OnParametersSetAsync();
+        StateHasChanged();
     });
 
     /// <summary>Loads a request from UTF-8 JSON, leaving the stream open.</summary>
@@ -209,9 +169,7 @@ public partial class SceneRequestViewer
         await SetValidatedSceneAsync(await SceneRequest.LoadAsync(path, cancellationToken));
 
     /// <summary>Captures the complete request with the current step, camera and display settings.</summary>
-    public async Task<SceneRequest> GetSceneAsync() => current.Kind == PresentationKind.TwoDimensional
-        ? plotViewer?.Capture() ?? current
-        : sceneViewer is null ? current : await sceneViewer.CaptureAsync();
+    public Task<SceneRequest> GetSceneAsync() => CaptureAsync();
 
     /// <summary>Saves the complete request, leaving the output stream open.</summary>
     public async Task SaveSceneAsync(Stream stream, CancellationToken cancellationToken = default) =>
@@ -220,14 +178,4 @@ public partial class SceneRequestViewer
     /// <summary>Saves the complete request to a local file.</summary>
     public async Task SaveSceneAsync(string path, CancellationToken cancellationToken = default) =>
         await (await GetSceneAsync()).SaveAsync(path, cancellationToken);
-
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (disposed) return;
-        disposed = true;
-        await lifetime.CancelAsync();
-        if (files is not null) await files.DisposeAsync();
-        lifetime.Dispose();
-    }
 }

@@ -15,6 +15,8 @@ public partial class PlotViewer
     [Parameter] public EventCallback<int> OnClose { get; set; }
     /// <summary>Invoked when the underlying rendering surface is available.</summary>
     [Parameter] public EventCallback OnReady { get; set; }
+    /// <summary>Hides the presentation header when embedded in another viewer.</summary>
+    [Parameter] public bool HideHeader { get; set; }
     private ElementReference plotElement;
     private PlotlyInterop? plotly;
     private bool dataChanged = true;
@@ -22,6 +24,13 @@ public partial class PlotViewer
     private SceneRequest? lastRequest;
     /// <summary>Returns the active request with the currently selected step.</summary>
     public SceneRequest Capture() => (Scenes.LastOrDefault() ?? new SceneRequest()) with { InitialStep = step };
+    /// <summary>Displays a zero-based step of the plot timeline.</summary>
+    public async Task SetStepAsync(int index)
+    {
+        step = Math.Clamp(index, 0, Math.Max(0, StepCount - 1));
+        await RenderCurrentAsync();
+        await InvokeAsync(StateHasChanged);
+    }
     private SceneRequest Current => Scenes.LastOrDefault() is { Steps.Count: > 0 } stepped ? stepped.Steps[Math.Clamp(step, 0, stepped.Steps.Count - 1)] : Scenes.LastOrDefault() ?? new SceneRequest { RequestId = Guid.Empty, Kind = PresentationKind.TwoDimensional };
     private int StepCount => Scenes.LastOrDefault()?.Steps.Count ?? 0;
     private string Title => Current.Title.Length == 0 ? "2D Scene" : Current.Title;
