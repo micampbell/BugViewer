@@ -11,7 +11,7 @@ function handleKeyDown(event) {
     // Leave shortcuts in editors outside the viewer to their owning application.
     if (!containingViewer && event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
     const viewer = containingViewer ?? activeViewer ?? (viewers.size === 1 ? [...viewers][0] : null);
-    if (!viewer?.enabled) return;
+    if (!viewer?.enabled || (key === 'o' && !viewer.openEnabled)) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -49,6 +49,7 @@ class SceneFileControls {
 
     contains(element) { return this.#container.contains(element); }
     get enabled() { return this.#container.dataset.sceneShortcuts === 'true'; }
+    get openEnabled() { return this.#container.dataset.sceneOpenEnabled !== 'false'; }
     command(key) {
         if (this.#container.querySelector('dialog[open]')) return;
         (key === 'o' ? this.#openButton : this.#saveButton).click();

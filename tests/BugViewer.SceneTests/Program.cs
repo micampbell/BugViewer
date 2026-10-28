@@ -7,11 +7,26 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Components.Rendering;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.JSInterop;
 
 static void Assert(bool value, string message) { if (!value) throw new Exception(message); }
+static bool HasActiveBadge(RenderTreeFrame[] frames) => frames.Any(frame =>
+    frame.FrameType == RenderTreeFrameType.Markup && frame.MarkupContent.Contains("active-badge"));
+static EventCallback<MouseEventArgs> CloseHandler(RenderTreeFrame[] frames)
+{
+    for (var index = 0; index < frames.Length; index++)
+    {
+        if (frames[index].FrameType != RenderTreeFrameType.Component
+            || frames[index].ComponentType != typeof(Microsoft.FluentUI.AspNetCore.Components.FluentButton)) continue;
+        var attributes = frames.Skip(index + 1).TakeWhile(frame => frame.FrameType == RenderTreeFrameType.Attribute).ToArray();
+        if (attributes.Any(frame => frame.AttributeName == "Title" && Equals(frame.AttributeValue, "Close viewer")))
+            return (EventCallback<MouseEventArgs>)attributes.Single(frame => frame.AttributeName == "OnClick").AttributeValue;
+    }
+    throw new Exception("Close button not found.");
+}
 static string Json(SceneRequest request)
 {
     using var stream = new MemoryStream(); request.Save(stream); return Encoding.UTF8.GetString(stream.ToArray());
@@ -137,12 +152,74 @@ using var services = new ServiceCollection().BuildServiceProvider();
 await using var renderer = new TestRenderer(services);
 await renderer.Dispatcher.InvokeAsync(async () =>
 {
+    var controls = new TestSceneViewer(); await renderer.AttachAsync(controls);
+    int closedId = -1, readyCount = 0;
+    var onClose = EventCallback.Factory.Create<int>(controls, id => closedId = id);
+    var onReady = EventCallback.Factory.Create(controls, () => readyCount++);
+    await controls.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
+    {
+        [nameof(SceneViewer.ViewerId)] = 42, [nameof(SceneViewer.IsActive)] = true,
+        [nameof(SceneViewer.Scenes)] = new[] { restored },
+        [nameof(SceneViewer.OnClose)] = onClose, [nameof(SceneViewer.OnReady)] = onReady
+    }));
+    var header = controls.Markup();
+    Assert(HasActiveBadge(header)
+        && header.Any(frame => frame.FrameType == RenderTreeFrameType.Text && frame.TextContent == restored.Title)
+        && header.Any(frame => frame.FrameType == RenderTreeFrameType.Text && frame.TextContent == restored.Heading)
+        && header.Any(frame => frame.FrameType == RenderTreeFrameType.Text && frame.TextContent == restored.Subtitle),
+        "3D viewer header omitted its active indicator or scene metadata.");
+    await CloseHandler(header).InvokeAsync(new MouseEventArgs());
+    Assert(closedId == 42, "3D close button did not pass the viewer ID.");
+    await controls.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
+    {
+        [nameof(SceneViewer.IsActive)] = false, [nameof(SceneViewer.OnClose)] = default(EventCallback<int>)
+    }));
+    header = controls.Markup();
+    Assert(!HasActiveBadge(header)
+        && !header.Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+            && frame.AttributeName == "Title" && Equals(frame.AttributeValue, "Close viewer")),
+        "Inactive or non-closable 3D viewer showed the corresponding control.");
+
+    await controls.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
+    {
+        [nameof(SceneViewer.IsActive)] = true, [nameof(SceneViewer.Scenes)] = new[] { plots },
+        [nameof(SceneViewer.OnClose)] = onClose
+    }));
+    var plotFrames = controls.Markup();
+    var plotIndex = Array.FindIndex(plotFrames, frame => frame.FrameType == RenderTreeFrameType.Component && frame.ComponentType == typeof(PlotViewer));
+    Assert(plotIndex >= 0, "2D scene did not render a PlotViewer.");
+    var plotAttributes = plotFrames.Skip(plotIndex + 1).TakeWhile(frame => frame.FrameType == RenderTreeFrameType.Attribute)
+        .ToDictionary(frame => frame.AttributeName, frame => frame.AttributeValue);
+    Assert(Equals(plotAttributes[nameof(PlotViewer.ViewerId)], 42)
+        && Equals(plotAttributes[nameof(PlotViewer.IsActive)], true)
+        && !plotAttributes.ContainsKey(nameof(PlotViewer.HideHeader)), "2D viewer header parameters were not forwarded.");
+    closedId = -1;
+    await ((EventCallback<int>)plotAttributes[nameof(PlotViewer.OnClose)]).InvokeAsync(42);
+    await ((EventCallback)plotAttributes[nameof(PlotViewer.OnReady)]).InvokeAsync();
+    Assert(closedId == 42 && readyCount == 1, "2D viewer callbacks were not forwarded.");
+    var plot = new TestPlotViewer(); await renderer.AttachAsync(plot);
+    await plot.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
+    {
+        [nameof(PlotViewer.ViewerId)] = 42, [nameof(PlotViewer.IsActive)] = true,
+        [nameof(PlotViewer.Scenes)] = new[] { plots }, [nameof(PlotViewer.OnClose)] = onClose
+    }));
+    var plotHeader = plot.Markup();
+    Assert(HasActiveBadge(plotHeader),
+        "2D viewer did not show the active indicator.");
+    closedId = -1;
+    await CloseHandler(plotHeader).InvokeAsync(new MouseEventArgs());
+    Assert(closedId == 42, "2D close button did not pass the viewer ID.");
+
     var gpu = new TestViewer(); await renderer.AttachAsync(gpu);
     var display = new TestSceneViewer(); await renderer.AttachAsync(display);
-    await display.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string,object?> { [nameof(SceneViewer.Scenes)] = new[] { restored } }));
+    await display.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string,object?>
+    {
+        [nameof(SceneViewer.Scenes)] = new[] { restored }, [nameof(SceneViewer.OnReady)] = onReady
+    }));
     var flags = BindingFlags.Instance | BindingFlags.NonPublic;
     typeof(SceneViewer).GetField("viewer", flags)!.SetValue(display, gpu);
     await (Task)typeof(SceneViewer).GetMethod("OnViewerReadyAsync", flags)!.Invoke(display, null)!;
+    Assert(readyCount == 2, "3D viewer did not report readiness.");
     Assert(gpu.GetCameraState() == restored.Camera, "Camera was not restored after scene upload.");
     Assert(gpu.Options.GridSize == 73, "Geometry upload overwrote the saved grid settings.");
     await display.SetStepAsync(3);
@@ -221,7 +298,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     typeof(SceneViewer).GetField("files", flags)!.SetValue(loader, fileInterop);
     Task FileCommand(string name) => (Task)typeof(SceneViewer).GetMethod(name, flags)!.Invoke(loader, null)!;
     await Open(restored, "original.bugscene.json");
-    await FileCommand("BeginSaveAsAsync");
+    await loader.ShowSaveAsAsync();
     Assert((string)typeof(SceneViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene.json",
         "Save As did not suggest the opened filename.");
     await FileCommand("CancelSaveAsAsync");
@@ -335,6 +412,12 @@ sealed class TestSceneViewer : SceneViewer
     protected override Task OnAfterRenderAsync(bool firstRender) => Task.CompletedTask;
 }
 sealed class TestRequestViewer : SceneViewer
+{
+    public RenderTreeFrame[] Markup() { using var builder = new RenderTreeBuilder(); base.BuildRenderTree(builder); return builder.GetFrames().Array.Take(builder.GetFrames().Count).ToArray(); }
+    protected override void BuildRenderTree(RenderTreeBuilder builder) { }
+    protected override Task OnAfterRenderAsync(bool firstRender) => Task.CompletedTask;
+}
+sealed class TestPlotViewer : PlotViewer
 {
     public RenderTreeFrame[] Markup() { using var builder = new RenderTreeBuilder(); base.BuildRenderTree(builder); return builder.GetFrames().Array.Take(builder.GetFrames().Count).ToArray(); }
     protected override void BuildRenderTree(RenderTreeBuilder builder) { }

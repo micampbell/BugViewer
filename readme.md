@@ -82,13 +82,17 @@ The low-level `BugViewer` component still accepts renderer-native meshes and lin
 **Ctrl+Alt+O / Ctrl+Alt+S** shortcuts. Plain Ctrl+O / Ctrl+S remain available to the browser;
 AltGr input is ignored. The 3D viewer also has Open and Save As icons in **Settings**, below
 the Camera accordion, visible even when the accordion is collapsed. In 2D, the icons appear above the plot.
+The viewer header displays `ViewerId`, an active indicator when `IsActive` is true, and the
+scene title and heading (also the subtitle for 3D). Supplying `OnClose` shows a close button
+that passes `ViewerId` to the host; `OnReady` is forwarded for both 3D and 2D rendering.
 Save As prompts for a filename before downloading; Cancel or Escape leaves the scene unchanged.
 Names without a `.json` or `.bugscene` extension receive `.bugscene.json` automatically.
 Opening a request with steps
 automatically shows playback controls; opening a single scene removes them. Saving keeps
 the complete timeline and current view. The keyboard commands target the focused or last
 clicked request viewer (or the only one on the page), and leave editors outside it alone.
-Set `EnableFileShortcuts="false"` to let the host own those keys. Use `MaxSceneFileSize` to
+Set `EnableFileShortcuts="false"` to let the host own those keys. Set `EnableOpenScene="false"`
+for a save-only viewer, or call `ShowSaveAsAsync()` from a host control. Use `MaxSceneFileSize` to
 adjust the 1 GiB input allowance and `FileName` to suggest names for programmatically supplied
 requests. These file controls belong to `SceneViewer`; applications using only the
 low-level `BugViewer` renderer should use this presentation component for scene files.

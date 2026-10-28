@@ -140,3 +140,14 @@ test('Save As focuses the filename and prevents file commands while its modal is
     h.key('s');
     assert.equal(v.save.clicks, 1);
 });
+
+test('a save-only viewer leaves the open shortcut untouched', async () => {
+    const h = await harness(), v = h.viewer();
+    v.root.dataset.sceneOpenEnabled = 'false';
+    v.open.disabled = v.input.disabled = true;
+    assert.equal(h.key('o').defaultPrevented, false);
+    assert.equal(v.input.clicks, 0);
+    assert.equal(h.key('s').defaultPrevented, true);
+    assert.equal(v.save.clicks, 1);
+    v.binding.dispose();
+});

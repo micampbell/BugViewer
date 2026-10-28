@@ -10,6 +10,8 @@ public partial class SceneViewer
     [Parameter] public SceneRequest? Scene { get; set; }
     /// <summary>Enables Ctrl+Alt+O and Ctrl+Alt+S for the active viewer.</summary>
     [Parameter] public bool EnableFileShortcuts { get; set; } = true;
+    /// <summary>Enables the browser open button and shortcut; programmatic loading remains available.</summary>
+    [Parameter] public bool EnableOpenScene { get; set; } = true;
     /// <summary>Maximum browser input file size in bytes. Defaults to 1 GiB.</summary>
     [Parameter] public long MaxSceneFileSize { get; set; } = 1024L * 1024 * 1024;
     /// <summary>Suggested Save As filename for a supplied request.</summary>
@@ -87,6 +89,9 @@ public partial class SceneViewer
         showSaveAsAfterRender = true;
         return InvokeAsync(StateHasChanged);
     }
+
+    /// <summary>Opens the Save As dialog for the current presentation.</summary>
+    public Task ShowSaveAsAsync() => BeginSaveAsAsync();
 
     private Task CancelSaveAsAsync() => files is null ? Task.CompletedTask : files.CloseSaveAsAsync(saveAsDialog);
 

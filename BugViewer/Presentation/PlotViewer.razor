@@ -16,7 +16,8 @@
         </div>
         @if (OnClose.HasDelegate)
         {
-            <FluentButton Class="rotated-icon-button" @onclick="CloseAsync" IconStart="@(new Icons.Regular.Size20.Add())" />
+            <FluentButton Class="rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Icons.Regular.Size20.Add())"
+                          Title="Close viewer" aria-label="Close viewer" />
         }
     </header>
     }
@@ -26,4 +27,3 @@
     }
     <div class="plot-viewer" @ref="plotElement"></div>
 </section>
-

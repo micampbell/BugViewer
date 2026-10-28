@@ -1,15 +1,13 @@
-@using NumericsVector3 = System.Numerics.Vector3
-@using Microsoft.FluentUI.AspNetCore.Components
-@using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
 @using FileIcons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24
+@using Microsoft.FluentUI.AspNetCore.Components
 @namespace BugViewer
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
 <section @ref="container" class="scene-viewer" tabindex="0" aria-label="Scene viewer"
-         data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
-    <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@isBusy" />
-    <button @ref="openButton" type="button" hidden disabled="@isBusy" data-scene-file-command="open"></button>
+         data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" data-scene-open-enabled="@(EnableOpenScene ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
+    <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@(isBusy || !EnableOpenScene)" />
+    <button @ref="openButton" type="button" hidden disabled="@(isBusy || !EnableOpenScene)" data-scene-file-command="open"></button>
     <button @ref="saveButton" type="button" hidden disabled="@(isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync"></button>
     @if (loading is not null)
     {
@@ -26,17 +24,35 @@
     @if (CurrentRequest.Kind == PresentationKind.TwoDimensional)
     {
         <div class="plot-file-actions" aria-label="Scene file actions">
-            <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
-                <FluentIcon Value="@(new FileIcons.FolderOpen())" />
-            </FluentButton>
+            @if (EnableOpenScene)
+            {
+                <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
+                    <FluentIcon Value="@(new FileIcons.FolderOpen())" />
+                </FluentButton>
+            }
             <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
                 <FluentIcon Value="@(new FileIcons.Save())" />
             </FluentButton>
         </div>
-        <PlotViewer @key="generation" @ref="plotViewer" Scenes="ActiveScenes" HideHeader="true" />
+        <PlotViewer @key="generation" @ref="plotViewer" ViewerId="ViewerId" IsActive="IsActive"
+                    Scenes="ActiveScenes" OnClose="OnClose" OnReady="OnReady" />
     }
     else
     {
+    <header class="scene-viewer-header">
+        <div>
+            <span class="scene-id">#@ViewerId</span>
+            @if (IsActive) { <span class="active-badge">Active</span> }
+            <h2>@(Current.Title.Length == 0 ? "3D Scene" : Current.Title)</h2>
+            @if (!string.IsNullOrWhiteSpace(Current.Heading)) { <p>@Current.Heading</p> }
+            @if (!string.IsNullOrWhiteSpace(Current.Subtitle)) { <p>@Current.Subtitle</p> }
+        </div>
+        @if (OnClose.HasDelegate)
+        {
+            <FluentButton Class="rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.Add())"
+                          Title="Close viewer" aria-label="Close viewer" />
+        }
+    </header>
     @if (StepCount > 1)
     {
         <div class="step-controls">
@@ -86,9 +102,12 @@
             <CameraActions>
                 @CameraActions
                 <FluentStack Orientation="Orientation.Horizontal" aria-label="Scene file actions">
-                    <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
-                        <FluentIcon Value="@(new FileIcons.FolderOpen())" />
-                    </FluentButton>
+                    @if (EnableOpenScene)
+                    {
+                        <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
+                            <FluentIcon Value="@(new FileIcons.FolderOpen())" />
+                        </FluentButton>
+                    }
                     <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
                         <FluentIcon Value="@(new FileIcons.Save())" />
                     </FluentButton>
@@ -110,4 +129,3 @@
         </form>
     </dialog>
 </section>
-
