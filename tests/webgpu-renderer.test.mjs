@@ -4,9 +4,9 @@ import vm from 'node:vm';
 
 // Execute the actual renderer in an isolated module; only browser/GPU endpoints
 // are substituted. The appended hooks are test-only and never ship in the RCL.
-async function harness() {
+async function harness({ reverseTransparentSort = false } = {}) {
     let fail = false, pending = null, lose;
-    const counters = { pipelines: 0, shaders: 0, layouts: 0, buffers: [], submissions: 0 };
+    const counters = { pipelines: 0, shaders: 0, layouts: 0, buffers: [], submissions: 0, draws: [] };
     const resource = () => ({ destroy() { this.destroyed = true; }, createView() { return {}; } });
     const device = {
         lost: new Promise(resolve => { lose = resolve; }),
@@ -23,7 +23,15 @@ async function harness() {
             return { descriptor };
         },
         createTexture: resource, createSampler: () => ({}), destroy() {},
-        createCommandEncoder: () => ({ beginRenderPass: () => new Proxy({}, { get: () => () => {} }), end() {}, finish: () => ({}) }),
+        createCommandEncoder: () => ({ beginRenderPass: () => {
+            let pipeline, vertexBuffer;
+            return new Proxy({
+                setPipeline(value) { pipeline = value; },
+                setVertexBuffer(slot, value) { if (slot === 0) vertexBuffer = value; },
+                draw() { counters.draws.push({ pipeline, vertexBuffer }); },
+                drawIndexed() { counters.draws.push({ pipeline, vertexBuffer }); }
+            }, { get: (target, key) => target[key] ?? (() => {}) });
+        }, end() {}, finish: () => ({}) }),
         queue: { writeBuffer() {}, copyExternalImageToTexture() {},
             submit() { counters.submissions++; }, onSubmittedWorkDone: async () => {} }
     };
@@ -38,6 +46,11 @@ async function harness() {
         createImageBitmap: async () => ({ close() {} })
     });
     let source = await readFile(new URL('../BugViewer/wwwroot/js/webgpu-canvas.js', import.meta.url), 'utf8');
+    if (reverseTransparentSort) {
+        const correct = 'transparentDrawables.sort((a, b) => a.depth - b.depth);';
+        assert.ok(source.includes(correct), 'Expected transparent sort was not found');
+        source = source.replace(correct, 'transparentDrawables.sort((a, b) => b.depth - a.depth);');
+    }
     source += `
         export const testing = {
             setDevice(value) { device = value; isDisposing = false; clearMeshPipelineCache();
@@ -48,6 +61,12 @@ async function harness() {
             async initialize() { isDisposing = false; context = { configure() {}, unconfigure() {} }; await initWebGPU(); },
             renderTarget() { context = { getCurrentTexture: () => ({ createView: () => ({}) }) };
                 colorAttachment = {}; renderPassDescriptor = {}; },
+            transparentFixtures() {
+                viewMatrix.set([1,0,0,0, 0,1,0,0, 0,0,1,0, 3,4,-10,1]);
+                gridIsTransparent = true; gridPipeline = { name: 'grid' }; gridVertexBuffer = { destroy() {} };
+                coordinateThickness = 1; coordinateAxes = { pipeline: { name: 'axes' } };
+                instancedLinePipeline = { name: 'line' };
+            },
             lose: () => device.destroy()
         };`;
     const module = new vm.SourceTextModule(source, { context });
@@ -64,6 +83,48 @@ async function harness() {
 const mesh = (id, singleColor = true, alpha = 1) => ({ id, vertices: [0,0,0, 1,0,0, 0,1,0],
     indices: [0,1,2], colors: singleColor ? [1,0,0,alpha] : [1,0,0,alpha, 0,1,0,alpha, 0,0,1,alpha],
     primitiveSurfaceNormals: [], singleColor });
+{
+    const { api, counters } = await harness();
+    api.testing.renderTarget();
+    api.testing.transparentFixtures();
+    await api.addMesh(mesh('transparent', true, .5));
+    const transparentMesh = api.testing.state().meshes[0];
+    transparentMesh.center = [0, 0, -2];
+    const state = api.testing.state();
+    const farLine = { center: [0, 0, -4], instanceBuffer: { destroy() {} }, instanceCount: 1 };
+    const nearLine = { center: [0, 0, 2], instanceBuffer: { destroy() {} }, instanceCount: 1 };
+    state.lines.push(nearLine, farLine);
+    const farBillboard = { position: [0, 0, -3], pipeline: {}, vertexBuffer: { destroy() {} }, indexBuffer: { destroy() {} }, indexCount: 6 };
+    state.textBillboards.push(farBillboard);
+    api.testing.renderFrame();
+    assert.deepEqual(counters.draws.map(draw => draw.vertexBuffer === farLine.instanceBuffer ? 'far line'
+        : draw.vertexBuffer === nearLine.instanceBuffer ? 'near line'
+        : draw.vertexBuffer === transparentMesh.vertexBuffer ? 'mesh'
+        : draw.vertexBuffer === farBillboard.vertexBuffer ? 'billboard' : draw.pipeline.name),
+    ['far line', 'billboard', 'mesh', 'grid', 'axes', 'near line']);
+    counters.draws.length = 0;
+    nearLine.center = [0, 0, -3];
+    api.testing.renderFrame();
+    assert.ok(counters.draws.findIndex(draw => draw.vertexBuffer === nearLine.instanceBuffer)
+        < counters.draws.findIndex(draw => draw.vertexBuffer === transparentMesh.vertexBuffer),
+        'A line behind the transparent mesh must be drawn first');
+    await api.disposeWebGPU_Canvas();
+}
+{
+    const { api, counters } = await harness({ reverseTransparentSort: true });
+    api.testing.renderTarget();
+    api.testing.transparentFixtures();
+    await api.addMesh(mesh('transparent', true, .5));
+    const transparentMesh = api.testing.state().meshes[0];
+    transparentMesh.center = [0, 0, -2];
+    const nearLine = { center: [0, 0, 2], instanceBuffer: { destroy() {} }, instanceCount: 1 };
+    api.testing.state().lines.push(nearLine);
+    api.testing.renderFrame();
+    assert.ok(counters.draws.findIndex(draw => draw.vertexBuffer === nearLine.instanceBuffer)
+        < counters.draws.findIndex(draw => draw.vertexBuffer === transparentMesh.vertexBuffer),
+        'The former reversed comparator should reproduce the incorrect near-before-far order');
+    await api.disposeWebGPU_Canvas();
+}
 {
     const { api, counters } = await harness();
     await api.addMeshes(Array.from({ length: 512 }, (_, i) => mesh(String(i))));

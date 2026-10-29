@@ -1052,8 +1052,8 @@ function renderFrame() {
     // Add transparent grid
     if (gridPipeline && gridIsTransparent) {
         transparentDrawables.push({
-            // The grid is at the origin, so its depth is determined by the view matrix's translation
-            depth: (viewMatrix[12] * viewMatrix[12] + viewMatrix[13] * viewMatrix[13] + viewMatrix[14] * viewMatrix[14]),
+            // The grid is centered at the origin; use the same view-space Z as other drawables.
+            depth: viewMatrix[14],
             draw: () => {
                 pass.setPipeline(gridPipeline);
                 pass.setBindGroup(0, frameBindGroup);
@@ -1068,7 +1068,7 @@ function renderFrame() {
     // Add coordinate axes
     if (coordinateThickness && coordinateAxes) {
         transparentDrawables.push({
-            depth: (viewMatrix[12] * viewMatrix[12] + viewMatrix[13] * viewMatrix[13] + viewMatrix[14] * viewMatrix[14]),
+            depth: viewMatrix[14],
             draw: () => {
                 pass.setPipeline(coordinateAxes.pipeline);
                 pass.setBindGroup(0, frameBindGroup);
@@ -1136,8 +1136,8 @@ function renderFrame() {
         });
     }
 
-    // Sort transparent objects from back to front (descending depth)
-    transparentDrawables.sort((a, b) => b.depth - a.depth);
+    // View-space Z is negative in front of the camera; farther objects have smaller Z.
+    transparentDrawables.sort((a, b) => a.depth - b.depth);
 
     // Execute draw calls
     for (const drawable of transparentDrawables) {
