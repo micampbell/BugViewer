@@ -17,6 +17,8 @@ public partial class SceneViewer
     /// <summary>Suggested Save As filename for a supplied request.</summary>
     [Parameter] public string FileName { get; set; } = "scene.bugscene.json";
 
+    [Parameter] public bool ShowHeader { get; set; } = false;
+
     private readonly SceneRequest emptyRequest = new() { RequestId = Guid.Empty };
     private IReadOnlyList<SceneRequest>? loadedScenes, lastScenesParameter;
     private SceneRequest? lastSceneParameter;
@@ -27,13 +29,15 @@ public partial class SceneViewer
     private InputFile? fileInput;
     private SceneFileInterop? files;
     private readonly CancellationTokenSource lifetime = new();
-    private CancellationTokenSource? loading;
+    private CancellationTokenSource? loading, saving;
     private int loadPercent;
-    private bool isBusy, disposed;
+    private bool isBusy, disposed, fileOperationCanCancel;
+    private string? fileOperationStatus;
     private string? openedFileName, fileError;
     private ElementReference saveAsDialog, saveAsInput;
     private readonly string saveAsTitleId = $"scene-save-title-{Guid.NewGuid():N}";
     private string saveAsName = "";
+    private string saveStartStep = "1", saveEndStep = "1", saveStepStride = "1";
     private string? saveAsError;
     private bool showSaveAsAfterRender;
 
@@ -55,8 +59,12 @@ public partial class SceneViewer
         fileError = null;
         loading = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         loadPercent = 0;
+        fileOperationCanCancel = true;
+        fileOperationStatus = "Opening scene…";
         try
         {
+            await RefreshFileOperationAsync();
+            loading.Token.ThrowIfCancellationRequested();
             if (args.File.Size > MaxSceneFileSize)
                 throw new IOException($"The file is {args.File.Size / 1048576.0:N1} MiB; this viewer allows {MaxSceneFileSize / 1048576.0:N1} MiB. Increase MaxSceneFileSize in the host to open larger scenes.");
             await using var stream = args.File.OpenReadStream(MaxSceneFileSize, loading.Token);
@@ -68,6 +76,9 @@ public partial class SceneViewer
             var scene = await SceneRequest.LoadAsync(progress, loading.Token);
             loading.Token.ThrowIfCancellationRequested();
             if (disposed) return;
+            fileOperationCanCancel = false;
+            fileOperationStatus = "Displaying scene…";
+            await RefreshFileOperationAsync();
             await SetValidatedSceneAsync(scene);
             openedFileName = args.File.Name;
         }
@@ -76,15 +87,30 @@ public partial class SceneViewer
         {
             fileError = $"Could not open the scene: {exception.Message}";
         }
-        finally { loading.Dispose(); loading = null; isBusy = false; }
+        finally { loading.Dispose(); loading = null; fileOperationStatus = null; fileOperationCanCancel = false; isBusy = false; }
     }
 
-    private void CancelOpen() => loading?.Cancel();
+    private void CancelFileOperation()
+    {
+        if (!fileOperationCanCancel) return;
+        fileOperationCanCancel = false;
+        fileOperationStatus = "Canceling…";
+        (loading ?? saving)?.Cancel();
+    }
+
+    private async Task RefreshFileOperationAsync()
+    {
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(1);
+    }
 
     private Task BeginSaveAsAsync()
     {
         if (isBusy || disposed || files is null || ActiveScenes.Count == 0) return Task.CompletedTask;
         saveAsName = openedFileName ?? FileName;
+        saveStartStep = "1";
+        saveEndStep = Math.Max(1, StepCount).ToString();
+        saveStepStride = "1";
         saveAsError = null;
         showSaveAsAfterRender = true;
         return InvokeAsync(StateHasChanged);
@@ -110,32 +136,56 @@ public partial class SceneViewer
             saveAsError = "Enter a file name without folders or special filename characters.";
             return;
         }
+        int start = 1, end = 1, stride = 1;
+        if (StepCount > 0 && (!int.TryParse(saveStartStep, out start) || !int.TryParse(saveEndStep, out end)
+            || !int.TryParse(saveStepStride, out stride) || start < 1 || end < start || end > StepCount || stride < 1))
+        {
+            saveAsError = $"Enter a start and end between 1 and {StepCount}, with the start no greater than the end, and a positive stride.";
+            return;
+        }
         if (!name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
             && !name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase))
             name += ".bugscene.json";
         await files.CloseSaveAsAsync(saveAsDialog);
-        await DownloadSceneAsync(name);
+        await DownloadSceneAsync(name, start, end, stride);
     }
 
-    private async Task DownloadSceneAsync(string name)
+    private async Task DownloadSceneAsync(string name, int start, int end, int stride)
     {
         if (isBusy || disposed || files is null || ActiveScenes.Count == 0) return;
         isBusy = true;
         fileError = null;
+        saving = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        fileOperationCanCancel = true;
+        fileOperationStatus = "Preparing scene…";
         try
         {
+            await RefreshFileOperationAsync();
+            saving.Token.ThrowIfCancellationRequested();
             await using var stream = new MemoryStream();
-            await SaveSceneAsync(stream, lifetime.Token);
+            var scene = await GetSceneAsync();
+            saving.Token.ThrowIfCancellationRequested();
+            if (StepCount > 0)
+                scene = await SceneRangeExporter.ExportAsync(scene, start - 1, end - 1, stride, saving.Token);
+            fileOperationStatus = "Writing scene…";
+            await RefreshFileOperationAsync();
+            saving.Token.ThrowIfCancellationRequested();
+            using var progress = new SceneWriteProgressStream(stream);
+            await scene.SaveAsync(progress, saving.Token);
+            saving.Token.ThrowIfCancellationRequested();
             stream.Position = 0;
+            fileOperationCanCancel = false;
+            fileOperationStatus = "Handing download to browser…";
+            await RefreshFileOperationAsync();
             await files.DownloadAsync(name, stream);
             openedFileName = name;
         }
-        catch (OperationCanceledException) when (disposed) { }
+        catch (OperationCanceledException) when (disposed || saving.IsCancellationRequested) { }
         catch (Exception exception) when (IsFileException(exception))
         {
             fileError = $"Could not save the scene: {exception.Message}";
         }
-        finally { isBusy = false; }
+        finally { saving.Dispose(); saving = null; fileOperationStatus = null; fileOperationCanCancel = false; isBusy = false; }
     }
 
     private static bool IsFileException(Exception exception) => exception is System.Text.Json.JsonException

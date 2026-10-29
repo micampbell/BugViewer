@@ -1,12 +1,18 @@
-.scene-viewer { height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; background: white; }
+.scene-viewer { position: relative; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; background: white; }
 .scene-viewer:focus-visible { outline: 2px solid #1769aa; outline-offset: -2px; }
 .plot-file-actions { display: flex; gap: .25rem; }
+.scene-file-progress { position: absolute; z-index: 10; top: .75rem; left: 50%; transform: translateX(-50%); width: min(24rem, calc(100% - 1.5rem)); box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .75rem; background: white; border: 1px solid #999; border-radius: .5rem; box-shadow: 0 2px 8px rgb(0 0 0 / 20%); }
+.scene-file-progress > span:first-child { flex-basis: 100%; }
+.scene-file-progress progress { flex: 1 1 8rem; min-width: 0; }
 .scene-file-error { color: #b32121; }
 .scene-save-dialog { border: 1px solid #999; border-radius: .5rem; padding: 1.25rem; width: min(28rem, 90vw); }
 .scene-save-dialog::backdrop { background: rgb(0 0 0 / 35%); }
 .scene-save-dialog h2 { margin: 0 0 1rem; font-size: 1.2rem; }
 .scene-save-dialog label { display: flex; flex-direction: column; gap: .4rem; }
 .scene-save-dialog input { padding: .45rem; }
+.scene-save-range { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0 0; }
+.scene-save-range label { flex: 1 1 5rem; min-width: 0; }
+.scene-save-range input { width: 100%; box-sizing: border-box; }
 .scene-save-dialog p { font-size: .9rem; }
 .scene-save-actions { display: flex; justify-content: flex-end; gap: .5rem; }
 .scene-save-actions button { padding: .4rem .8rem; }

@@ -9,11 +9,23 @@
     <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@(isBusy || !EnableOpenScene)" />
     <button @ref="openButton" type="button" hidden disabled="@(isBusy || !EnableOpenScene)" data-scene-file-command="open"></button>
     <button @ref="saveButton" type="button" hidden disabled="@(isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync"></button>
-    @if (loading is not null)
+    @if (fileOperationStatus is not null)
     {
         <div class="scene-file-progress" role="status">
-            <progress value="@loadPercent" max="100" aria-label="Scene loading progress"></progress>
-            <button type="button" @onclick="CancelOpen">Cancel opening</button>
+            <span>@fileOperationStatus</span>
+            @if (loading is not null && fileOperationCanCancel)
+            {
+                <progress value="@loadPercent" max="100" aria-label="Scene opening progress"></progress>
+                <span>@loadPercent%</span>
+            }
+            else
+            {
+                <progress aria-label="Scene file operation progress"></progress>
+            }
+            @if (fileOperationCanCancel)
+            {
+                <button type="button" @onclick="CancelFileOperation">Cancel</button>
+            }
         </div>
     }
     @if (fileError is not null)
@@ -39,20 +51,34 @@
     }
     else
     {
-    <header class="scene-viewer-header">
-        <div>
-            <span class="scene-id">#@ViewerId</span>
-            @if (IsActive) { <span class="active-badge">Active</span> }
-            <h2>@(Current.Title.Length == 0 ? "3D Scene" : Current.Title)</h2>
-            @if (!string.IsNullOrWhiteSpace(Current.Heading)) { <p>@Current.Heading</p> }
-            @if (!string.IsNullOrWhiteSpace(Current.Subtitle)) { <p>@Current.Subtitle</p> }
-        </div>
-        @if (OnClose.HasDelegate)
+        @if (ShowHeader)
         {
-            <FluentButton Class="rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.Add())"
-                          Title="Close viewer" aria-label="Close viewer" />
+            <header class="scene-viewer-header">
+                <div>
+                    <span class="scene-id">#@ViewerId</span>
+                    @if (IsActive)
+                    {
+                        <span class="active-badge">Active</span>                     
+                    }
+                    <h2>@(Current.Title.Length == 0 ? "3D Scene" : Current.Title)</h2>
+                    @if (!string.IsNullOrWhiteSpace(Current.Heading))
+                    {
+                        <p>@Current.Heading
+                        </p>                     
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Current.Subtitle))
+                    {
+                        <p>@Current.Subtitle
+                        </p>                     
+                    }
+                </div>
+                @if (OnClose.HasDelegate)
+                {
+                    <FluentButton Class="rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.Add())"
+                    Title="Close viewer" aria-label="Close viewer" />
+                }
+            </header>
         }
-    </header>
     @if (StepCount > 1)
     {
         <div class="step-controls">
@@ -120,7 +146,20 @@
         <form @onsubmit="ConfirmSaveAsAsync" @onsubmit:preventDefault>
             <h2 id="@saveAsTitleId">Save scene as</h2>
             <label>File name <input @ref="saveAsInput" type="text" @bind="saveAsName" @bind:event="oninput" maxlength="240" /></label>
-            <p>The file includes all steps and the current view.</p>
+            @if (StepCount > 0)
+            {
+                <fieldset class="scene-save-range">
+                    <legend>Steps to save (1–@StepCount)</legend>
+                    <label>Start step <input type="text" inputmode="numeric" @bind="saveStartStep" @bind:event="oninput" /></label>
+                    <label>End step <input type="text" inputmode="numeric" @bind="saveEndStep" @bind:event="oninput" /></label>
+                    <label>Stride <input type="text" inputmode="numeric" @bind="saveStepStride" @bind:event="oninput" /></label>
+                </fieldset>
+                <p>Each saved step combines up to the specified number of steps and includes the current view.</p>
+            }
+            else
+            {
+                <p>The file includes the current view.</p>
+            }
             @if (saveAsError is not null) { <p class="scene-file-error" role="alert">@saveAsError</p> }
             <div class="scene-save-actions">
                 <button type="button" @onclick="CancelSaveAsAsync">Cancel</button>

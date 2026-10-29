@@ -87,17 +87,30 @@ scene title and heading (also the subtitle for 3D). Supplying `OnClose` shows a 
 that passes `ViewerId` to the host; `OnReady` is forwarded for both 3D and 2D rendering.
 Save As prompts for a filename before downloading; Cancel or Escape leaves the scene unchanged.
 Names without a `.json` or `.bugscene` extension receive `.bugscene.json` automatically.
+For a stepped scene, Save As also accepts a 1-based inclusive start and end and a positive stride.
+The default selects all steps with stride 1. Each saved 3D step combines the elements visible or
+introduced in its consecutive stride-sized group, retaining the latest version of an object; visible
+history at the start of the selected range is included. The final group may contain fewer steps.
+For 2D, each saved step uses the last plot in its group. The saved presentation opens at its first step.
+Full-range stride-1 saves preserve source steps and transforms. Other 3D selections materialize grouped
+frames using renderer-precision coordinates, so files and memory use may increase and original source
+transforms and double-precision coordinates may not be retained. Programmatic `SaveSceneAsync` still
+saves the complete request.
 Opening a request with steps
 automatically shows playback controls; opening a single scene removes them. Saving keeps
-the complete timeline and current view. The keyboard commands target the focused or last
+the selected timeline and current view. The keyboard commands target the focused or last
 clicked request viewer (or the only one on the page), and leave editors outside it alone.
 Set `EnableFileShortcuts="false"` to let the host own those keys. Set `EnableOpenScene="false"`
 for a save-only viewer, or call `ShowSaveAsAsync()` from a host control. Use `MaxSceneFileSize` to
 adjust the 1 GiB input allowance and `FileName` to suggest names for programmatically supplied
 requests. These file controls belong to `SceneViewer`; applications using only the
 low-level `BugViewer` renderer should use this presentation component for scene files.
-Opening displays progress and can be canceled without replacing the current scene.
-The input allowance is configurable; available browser memory still determines the practical scene size.
+Opening and saving display progress in the same nonmodal viewer overlay. Opening reports bytes read
+and can be canceled without replacing the current scene; saving shows its current stage and can be
+canceled during preparation or serialization. Once the download is handed to the browser it cannot be
+canceled from the viewer. Some synchronous work may delay cancellation. Saving buffers the exported
+scene and JSON in memory, and the browser may make additional copies; the input allowance is configurable,
+but available browser memory still determines the practical scene size.
 
 Stepped playback reuses prepared geometry and a bounded GPU resource cache, prefetches the
 next two stride positions, and transfers missing geometry in binary chunks. A frame becomes

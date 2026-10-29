@@ -35,6 +35,12 @@ static SceneRequest RoundTrip(SceneRequest request)
 {
     using var stream = new MemoryStream(); request.Save(stream); stream.Position = 0; return SceneRequest.Load(stream);
 }
+static Task<SceneRequest> Export(SceneRequest request, int start, int end, int stride, CancellationToken cancellationToken = default)
+{
+    var method = typeof(SceneRequest).Assembly.GetType("BugViewer.SceneRangeExporter")!
+        .GetMethod("ExportAsync", BindingFlags.Static | BindingFlags.NonPublic)!;
+    return (Task<SceneRequest>)method.Invoke(null, [request, start, end, stride, cancellationToken])!;
+}
 static SceneMesh Triangle(string id, MeshColoring mode = MeshColoring.PerTriangle) => new()
 {
     Id = id, Vertices = [[0,0,0],[2,0,0],[0,2,0]], Triangles = [[2,0,1]],
@@ -119,6 +125,65 @@ var plots = new SceneRequest
 Assert(Json(RoundTrip(plots)) == Json(plots), "2D plots, heatmaps, or overlay-only steps were lost.");
 var completeSteps = new SceneRequest { Steps = [new SceneRequest { Meshes = [Triangle("first")] }, new SceneRequest()] };
 Assert(RoundTrip(completeSteps).Steps[1].Meshes.Count == 0, "Empty complete steps changed.");
+var sourceFrames = Enumerable.Range(0, 5).Select(index =>
+{
+    var changing = Triangle("changing");
+    changing.Vertices[0] = [index, 0, 0];
+    return new SceneRequest { Meshes = [changing, Triangle($"mesh-{index}")] };
+}).ToList();
+var frameTimeline = new SceneRequest { Steps = sourceFrames, Camera = camera, Options = options, InitialStep = 3 };
+var frameJson = Json(frameTimeline);
+var groupedFrames = RoundTrip(await Export(frameTimeline, 1, 4, 3));
+Assert(groupedFrames.Steps.Count == 2 && groupedFrames.InitialStep == 0 && groupedFrames.Camera == camera
+    && groupedFrames.Options!.GridSize == 73, "Grouped export lost its partial group or view state.");
+Assert(groupedFrames.Steps[0].Meshes.Select(mesh => mesh.Id).ToHashSet().SetEquals(["changing", "mesh-1", "mesh-2", "mesh-3"])
+    && groupedFrames.Steps[0].Meshes.Single(mesh => mesh.Id == "changing").Vertices[0][0] == 3
+    && groupedFrames.Steps[1].Meshes.Single(mesh => mesh.Id == "changing").Vertices[0][0] == 4,
+    "Grouped frames lost contributions or did not use the latest object version.");
+Assert(Json(frameTimeline) == frameJson, "Export changed the original timeline.");
+var wholeGroup = await Export(restored, 0, 3, 1);
+Assert(wholeGroup.StepGroups.Count == 1 && wholeGroup.Steps.Count == 0 && wholeGroup.InitialStep == 0,
+    "A complete stride-one export did not preserve source transforms.");
+var firstGroup = RoundTrip(await Export(restored, 0, 0, 1));
+Assert(firstGroup.Steps[0].Paths.Single(path => path.Id.StartsWith("step-paths-step-1")).Vertices[0][0] == .125f,
+    "Range export rounded double-precision coordinates before transforming them.");
+var historicalGroup = RoundTrip(await Export(restored, 2, 3, 2));
+var historicalFrame = historicalGroup.Steps.Single();
+Assert(historicalFrame.Meshes.Any(mesh => mesh.Id == "step2" && mesh.Vertices[0][0] == 5)
+    && historicalFrame.Meshes.Any(mesh => mesh.Id == "step3")
+    && historicalFrame.Paths.Any(path => path.Id.StartsWith("step-paths-step-3") && path.Vertices[0][0] == 9)
+    && historicalFrame.Paths.Any(path => path.Id.StartsWith("step-paths-step-4") && path.Vertices[0][0] == 11)
+    && historicalFrame.Billboards.Count == 1 && historicalFrame.PathBatches.Count == 1,
+    "Step-group export lost visible history, transformed paths, meshes, or static content.");
+var barrierGroup = RoundTrip(await Export(restored, 1, 1, 1)).Steps.Single();
+Assert(!barrierGroup.Meshes.Any(mesh => mesh.Id == "step0")
+    && !barrierGroup.Paths.Any(path => path.Id.StartsWith("step-paths-step-1"))
+    && barrierGroup.Paths.Any(path => path.Id.StartsWith("step-paths-step-2")),
+    "Step-group export crossed a null-transform history barrier.");
+var shortHistory = new SceneRequest { StepGroups = [new SceneStepGroup { PathSource = new SceneStepPathSource
+{
+    Id = "short-history", HistoryStepLimit = 1,
+    Paths = Enumerable.Range(0, 3).Select(index => (IEnumerable<ScenePoint>)new[]
+        { new ScenePoint(index, 0, 0), new ScenePoint(index, 1, 0) }).ToArray()
+} }] };
+Assert(RoundTrip(await Export(shortHistory, 0, 2, 3)).Steps.Single().Paths.Count == 3,
+    "Grouping dropped intermediate paths that had expired from the final step's history.");
+var collisionSource = restored with { Paths = [.. restored.Paths, new ScenePath
+    { Id = "step-paths-step-3", Vertices = [[0,0,0], [1,1,1]] }] };
+var collisionFrame = RoundTrip(await Export(collisionSource, 2, 3, 2)).Steps.Single();
+Assert(collisionFrame.Paths.Select(path => path.Id).Distinct().Count() == collisionFrame.Paths.Count,
+    "Exported step paths collided with an existing path ID.");
+var plotTimeline = plots with { Steps = [plots.Steps[0], plots.Steps[1], plots.Steps[0]] };
+var groupedPlots = RoundTrip(await Export(plotTimeline, 0, 2, 2));
+Assert(groupedPlots.InitialStep == 0 && groupedPlots.Steps.Count == 2
+    && groupedPlots.Steps[0].Plot!.Traces.Single().Name == "overlay only"
+    && groupedPlots.Steps[1].Plot!.Heatmap is not null, "2D grouping did not retain the last plot of each group.");
+using (var cancelled = new CancellationTokenSource())
+{
+    cancelled.Cancel();
+    try { await Export(restored, 0, 3, 2, cancelled.Token); throw new Exception("Canceled range export succeeded."); }
+    catch (OperationCanceledException) { }
+}
 Reject(new SceneRequest { Version = 99 });
 Reject(new SceneRequest { Format = "Other" });
 Reject(new SceneRequest { Meshes = [Triangle("same"),Triangle("same")] });
@@ -160,6 +225,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     {
         [nameof(SceneViewer.ViewerId)] = 42, [nameof(SceneViewer.IsActive)] = true,
         [nameof(SceneViewer.Scenes)] = new[] { restored },
+        [nameof(SceneViewer.ShowHeader)] = true,
         [nameof(SceneViewer.OnClose)] = onClose, [nameof(SceneViewer.OnReady)] = onReady
     }));
     var header = controls.Markup();
@@ -297,10 +363,51 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         [default(ElementReference), default(ElementReference), default(ElementReference), default(ElementReference)])!;
     typeof(SceneViewer).GetField("files", flags)!.SetValue(loader, fileInterop);
     Task FileCommand(string name) => (Task)typeof(SceneViewer).GetMethod(name, flags)!.Invoke(loader, null)!;
+    bool HasProgress() => loader.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+        && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-file-progress"));
+    var cancelOperation = typeof(SceneViewer).GetMethod("CancelFileOperation", flags)!;
+    var canceledOpen = (Task)openFile.Invoke(loader, [new InputFileChangeEventArgs([new MemoryBrowserFile("cancel.json", Encoding.UTF8.GetBytes(Json(plots)))])])!;
+    Assert(HasProgress() && (string)typeof(SceneViewer).GetField("fileOperationStatus", flags)!.GetValue(loader)! == "Opening scene…",
+        "Opening did not show the shared progress overlay.");
+    Assert(loader.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute && frame.AttributeName == "aria-label"
+        && Equals(frame.AttributeValue, "Scene opening progress")), "Opening progress was not labeled.");
+    cancelOperation.Invoke(loader, null);
+    await canceledOpen;
+    Assert(!HasProgress() && (await loader.GetSceneAsync()).RequestId == single.RequestId,
+        "Canceled opening did not clean up or preserved scene incorrectly.");
+    var canceledSave = (Task)typeof(SceneViewer).GetMethod("DownloadSceneAsync", flags)!.Invoke(loader, ["cancel.json", 1, 1, 1])!;
+    Assert(HasProgress() && (string)typeof(SceneViewer).GetField("fileOperationStatus", flags)!.GetValue(loader)! == "Preparing scene…",
+        "Saving did not show the shared progress overlay.");
+    Assert(loader.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Markup
+        && frame.MarkupContent.Contains("aria-label=\"Scene file operation progress\"")), "Saving progress was not labeled.");
+    cancelOperation.Invoke(loader, null);
+    await canceledSave;
+    Assert(!HasProgress() && fileRuntime.Downloads.Count == 0 && typeof(SceneViewer).GetField("fileError", flags)!.GetValue(loader) is null,
+        "Canceled saving downloaded a file or left progress/error state behind.");
+    fileRuntime.DownloadGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    var handoff = (Task)typeof(SceneViewer).GetMethod("DownloadSceneAsync", flags)!.Invoke(loader, ["handoff.json", 1, 1, 1])!;
+    await fileRuntime.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    Assert(HasProgress() && !(bool)typeof(SceneViewer).GetField("fileOperationCanCancel", flags)!.GetValue(loader)!,
+        "Browser download handoff should display progress without a cancel button.");
+    fileRuntime.DownloadGate.SetException(new JSException("download failed"));
+    await handoff;
+    Assert(!HasProgress() && typeof(SceneViewer).GetField("fileError", flags)!.GetValue(loader) is string error && error.Contains("download failed"),
+        "Download failure did not clear progress and report the error.");
+    fileRuntime.DownloadGate = null;
+    bool HasRange() => loader.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+        && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-save-range"));
+    await Open(single, "single.json");
+    Assert(!HasRange(), "A single scene showed step range controls.");
+    await Open(plots, "plots.json");
+    Assert(HasRange(), "A stepped 2D scene did not show step range controls.");
     await Open(restored, "original.bugscene.json");
     await loader.ShowSaveAsAsync();
     Assert((string)typeof(SceneViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene.json",
         "Save As did not suggest the opened filename.");
+    Assert(HasRange() && (string)typeof(SceneViewer).GetField("saveStartStep", flags)!.GetValue(loader)! == "1"
+        && (string)typeof(SceneViewer).GetField("saveEndStep", flags)!.GetValue(loader)! == "4"
+        && (string)typeof(SceneViewer).GetField("saveStepStride", flags)!.GetValue(loader)! == "1",
+        "Save As did not default to the full 1-based range and stride one.");
     await FileCommand("CancelSaveAsAsync");
     Assert(fileRuntime.Downloads.Count == 0, "Canceling Save As downloaded a file.");
     foreach (var badName in new[] { " ", "../part", "part?", "part." })
@@ -310,11 +417,38 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         Assert(fileRuntime.Downloads.Count == 0, "An invalid filename was downloaded.");
     }
     typeof(SceneViewer).GetField("saveAsName", flags)!.SetValue(loader, "renamed scene");
+    foreach (var (start, end, stride) in new[] { ("0", "4", "1"), ("3", "2", "1"), ("1", "5", "1"), ("1", "4", "0"), ("x", "4", "1") })
+    {
+        typeof(SceneViewer).GetField("saveStartStep", flags)!.SetValue(loader, start);
+        typeof(SceneViewer).GetField("saveEndStep", flags)!.SetValue(loader, end);
+        typeof(SceneViewer).GetField("saveStepStride", flags)!.SetValue(loader, stride);
+        await FileCommand("ConfirmSaveAsAsync");
+        Assert(fileRuntime.Downloads.Count == 0 && typeof(SceneViewer).GetField("saveAsError", flags)!.GetValue(loader) is string { Length: > 0 },
+            "An invalid step range was accepted.");
+    }
+    await loader.ShowSaveAsAsync();
+    typeof(SceneViewer).GetField("saveAsName", flags)!.SetValue(loader, "renamed scene");
     await FileCommand("ConfirmSaveAsAsync");
     var download = fileRuntime.Downloads.Single();
     Assert(download.Name == "renamed scene.bugscene.json", "Save As ignored the chosen name or scene extension.");
     using var downloaded = new MemoryStream(download.Data);
     Assert(Json(SceneRequest.Load(downloaded)) == Json(restored), "Save As lost the complete stepped request.");
+    await loader.ShowSaveAsAsync();
+    typeof(SceneViewer).GetField("saveStartStep", flags)!.SetValue(loader, "3");
+    typeof(SceneViewer).GetField("saveEndStep", flags)!.SetValue(loader, "4");
+    typeof(SceneViewer).GetField("saveStepStride", flags)!.SetValue(loader, "2");
+    await FileCommand("ConfirmSaveAsAsync");
+    using var rangedDownload = new MemoryStream(fileRuntime.Downloads.Last().Data);
+    Assert(Json(SceneRequest.Load(rangedDownload)) == Json(historicalGroup), "Save As did not export the selected grouped range.");
+    Assert(Json(await loader.GetSceneAsync()) == Json(restored), "Saving a range changed the active scene.");
+    await Open(plots, "plots.json");
+    await loader.ShowSaveAsAsync();
+    typeof(SceneViewer).GetField("saveStepStride", flags)!.SetValue(loader, "2");
+    await FileCommand("ConfirmSaveAsAsync");
+    using var plotDownload = new MemoryStream(fileRuntime.Downloads.Last().Data);
+    var savedPlot = SceneRequest.Load(plotDownload);
+    Assert(savedPlot.InitialStep == 0 && savedPlot.Steps.Count == 1 && savedPlot.Steps[0].Plot!.Traces.Single().Name == "overlay only",
+        "Save As did not export the final plot in a grouped 2D range.");
 });
 
 await renderer.Dispatcher.InvokeAsync(async () =>
@@ -466,11 +600,15 @@ sealed class RecordingModule : IJSObjectReference
 sealed class SceneFileRuntime : IJSRuntime, IJSObjectReference
 {
     public List<(string Name, byte[] Data)> Downloads { get; } = [];
+    public TaskCompletionSource? DownloadGate { get; set; }
+    public TaskCompletionSource DownloadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public async ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
     {
         if (identifier is "import" or "initialize") return (TValue)(object)this;
         if (identifier == "downloadScene")
         {
+            DownloadStarted.TrySetResult();
+            if (DownloadGate is not null) await DownloadGate.Task;
             using var copy = new MemoryStream();
             await ((DotNetStreamReference)args![1]!).Stream.CopyToAsync(copy);
             Downloads.Add(((string)args[0]!, copy.ToArray()));
