@@ -6,10 +6,10 @@
 @inject IJSRuntime JS
 
 <section @ref="container" class="scene-viewer" tabindex="0" aria-label="Scene viewer"
-         data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" data-scene-open-enabled="@(EnableOpenScene ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
+         data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" data-scene-open-enabled="@(EnableOpenScene ? "true" : "false")" data-scene-save-enabled="@(EnableSaveScene ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
     <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@(isBusy || !EnableOpenScene)" />
     <button @ref="openButton" type="button" hidden disabled="@(isBusy || !EnableOpenScene)" data-scene-file-command="open"></button>
-    <button @ref="saveButton" type="button" hidden disabled="@(isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync"></button>
+    <button @ref="saveButton" type="button" hidden disabled="@(!EnableSaveScene || isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync"></button>
     @if (fileOperationStatus is not null)
     {
         <div class="scene-file-progress" role="status">
@@ -43,9 +43,12 @@
                     <FluentIcon Value="@(new FileIcons.FolderOpen())" /> Open scene
                 </button>
             }
-            <button type="button" disabled="@(isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync">
-                <FluentIcon Value="@(new FileIcons.Save())" /> Save as
-            </button>
+            @if (EnableSaveScene)
+            {
+                <button type="button" disabled="@(isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync">
+                    <FluentIcon Value="@(new FileIcons.Save())" /> Save as
+                </button>
+            }
         </div>
     }
 
@@ -60,9 +63,12 @@
                         <FluentIcon Value="@(new FileIcons.FolderOpen())" />
                     </FluentButton>
                 }
-                <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
-                    <FluentIcon Value="@(new FileIcons.Save())" />
-                </FluentButton>
+                @if (EnableSaveScene)
+                {
+                    <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
+                        <FluentIcon Value="@(new FileIcons.Save())" />
+                    </FluentButton>
+                }
             </div>
         }
         <PlotViewer @key="generation" @ref="plotViewer" ViewerId="ViewerId" IsActive="IsActive"
@@ -166,9 +172,12 @@
                             <FluentIcon Value="@(new FileIcons.FolderOpen())" />
                         </FluentButton>
                     }
-                    <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
-                        <FluentIcon Value="@(new FileIcons.Save())" />
-                    </FluentButton>
+                    @if (EnableSaveScene)
+                    {
+                        <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
+                            <FluentIcon Value="@(new FileIcons.Save())" />
+                        </FluentButton>
+                    }
                 </FluentStack>
             </CameraActions>
         </BugViewer>

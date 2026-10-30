@@ -4,14 +4,5 @@
 <PageTitle>Load and show a scene</PageTitle>
 
 <main class="scene-page">
-    <header class="scene-intro">
-        <strong>BugViewer</strong>
-        <span>Open a scene from your device. Files are processed in your browser.</span>
-        <span>Try an example:
-            <a href="scenes/single.bugscene.json" download>3D</a>,
-            <a href="scenes/example.bugscene.json" download>stepped 3D</a>, or
-            <a href="scenes/plots.bugscene.json" download>2D</a>.
-        </span>
-    </header>
-    <SceneViewer @ref="presentation" ShowFileActions="true" MaxSceneFileSize="@(1024L * 1024 * 1024)" />
+    <SceneViewer @ref="presentation" EnableSaveScene="false" MaxSceneFileSize="@(1024L * 1024 * 1024)" />
 </main>

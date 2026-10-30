@@ -141,8 +141,8 @@ stay in a presenter-side table. Those runtime details are excluded from the file
 requests retain geometry and playback, but do not recreate live TVGL objects or callbacks.
 
 Browser applications use streams from `InputFile` and browser downloads instead of local file paths.
-The [LoadAndShowScene sample](samples/LoadAndShowScene/Pages/Home.razor) demonstrates both,
-including downloadable single 3D, stepped 3D, and 2D examples:
+The [LoadAndShowScene sample](samples/LoadAndShowScene/Pages/Home.razor) is a viewing-only
+app for previously saved scenes:
 
 ```powershell
 dotnet run --project samples/LoadAndShowScene
@@ -153,9 +153,10 @@ The standalone WebAssembly app runs in a browser via its development server; do 
 launch its output DLL as a .NET console application. Stop any existing sample server
 before debugging if it is already using port 5220.
 
-Open the displayed localhost URL in a WebGPU-capable browser. Choose **Open Scene** to browse
-for a `.bugscene.json` file, then **Save As** to name and download it with the current settings and view.
-Scenes with no saved camera are automatically framed. Loading replaces the current request.
+Open the displayed localhost URL in a WebGPU-capable browser. Use the Settings gear's
+**Open scene** control or Ctrl+Alt+O to browse for a `.bugscene.json` file. In a 2D scene,
+the Open control appears above the plot. Scenes with no saved camera are automatically framed.
+Loading replaces the current request.
 
 ### Host the standalone viewer
 
@@ -177,8 +178,8 @@ To prepare a GitHub Pages deployment:
 3. Open the URL reported by the deployment. The workflow uses the Pages base path,
    so both a repository subpath and a root/custom-domain site are supported.
 
-The deployed page provides **Open scene**, **Save as**, and downloadable example
-scenes. Ctrl+Alt+O and Ctrl+Alt+S are also available. Treat the deployed site and
+The deployed page provides **Open scene** in Settings and the Ctrl+Alt+O shortcut.
+Treat the deployed site and
 browser extensions as trusted code when viewing sensitive files; the local-file
 design is not a guarantee against a compromised host or browser.
 
