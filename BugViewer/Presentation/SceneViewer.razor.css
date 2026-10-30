@@ -1,6 +1,9 @@
 .scene-viewer { position: relative; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; background: white; }
 .scene-viewer:focus-visible { outline: 2px solid #1769aa; outline-offset: -2px; }
 .plot-file-actions { display: flex; gap: .25rem; }
+.scene-file-actions { display: flex; flex-wrap: wrap; gap: .5rem; padding: .5rem; }
+.scene-file-actions button { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .65rem; cursor: pointer; }
+.scene-file-actions button:disabled { cursor: default; }
 .scene-file-progress { position: absolute; z-index: 10; top: .75rem; left: 50%; transform: translateX(-50%); width: min(24rem, calc(100% - 1.5rem)); box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .75rem; background: white; border: 1px solid #999; border-radius: .5rem; box-shadow: 0 2px 8px rgb(0 0 0 / 20%); }
 .scene-file-progress > span:first-child { flex-basis: 100%; }
 .scene-file-progress progress { flex: 1 1 8rem; min-width: 0; }

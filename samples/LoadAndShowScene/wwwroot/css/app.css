@@ -5,7 +5,9 @@ html, body {
 }
 
 #app, .scene-page { height: 100%; }
-.scene-page > .scene-viewer { height: 100%; }
+.scene-page { display: flex; flex-direction: column; }
+.scene-intro { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem; padding: .5rem; }
+.scene-page > .scene-viewer { flex: 1 1 auto; min-height: 0; }
 .scene-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
 .scene-open { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; font-weight: 600; }
 .scene-error { color: #b32121; }

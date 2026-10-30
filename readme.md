@@ -157,6 +157,31 @@ Open the displayed localhost URL in a WebGPU-capable browser. Choose **Open Scen
 for a `.bugscene.json` file, then **Save As** to name and download it with the current settings and view.
 Scenes with no saved camera are automatically framed. Loading replaces the current request.
 
+### Host the standalone viewer
+
+The sample is a static Blazor WebAssembly site: it loads scene files selected by the
+user into the browser and saves through a browser download. The sample does not need
+a server API for scene processing. The site assets must still be downloaded, and
+there is currently no service worker or offline-install support. A WebGPU-capable
+browser and a secure context (HTTPS, or localhost for development) are required.
+Browser memory can limit the practical file size below the configured 1 GiB limit.
+
+To prepare a GitHub Pages deployment:
+
+1. In the repository's **Settings > Pages**, choose **GitHub Actions** as the build
+   and deployment source. Check the visibility and availability of Pages for your
+   repository before publishing; do not put private scene files in the website.
+2. Push the workflow and app changes to the default branch. In **Actions**, select
+   **Deploy scene viewer to GitHub Pages** and run it manually. The workflow does not
+   deploy automatically on push.
+3. Open the URL reported by the deployment. The workflow uses the Pages base path,
+   so both a repository subpath and a root/custom-domain site are supported.
+
+The deployed page provides **Open scene**, **Save as**, and downloadable example
+scenes. Ctrl+Alt+O and Ctrl+Alt+S are also available. Treat the deployed site and
+browser extensions as trusted code when viewing sensitive files; the local-file
+design is not a guarantee against a compromised host or browser.
+
 Run the persistence and viewer-integration checks with:
 
 ```powershell

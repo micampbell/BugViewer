@@ -166,6 +166,13 @@ try {
     await page.send('DOM.enable');
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 800, deviceScaleFactor: 1, mobile: false });
     await waitFor('scene viewer', () => page.evaluate("!!document.querySelector('.scene-viewer input[type=file]')"));
+    const toolbar = await page.evaluate(`(() => {
+        const open = document.querySelector('.scene-file-actions button[data-scene-file-command="open"]');
+        const save = document.querySelector('.scene-file-actions button:last-child');
+        return { openEnabled: !!open && !open.disabled, saveDisabled: !!save && save.disabled };
+    })()`);
+    assert.deepEqual(toolbar, { openEnabled: true, saveDisabled: true },
+        'The standalone viewer should show an enabled Open button and disabled Save button');
     await page.evaluate(`(() => {
         window.sceneLoadStarts = 0;
         const viewer = document.querySelector('.scene-viewer');
@@ -189,9 +196,8 @@ try {
                 .filter(item => item.name.includes('/_content/BugViewer/js/webgpu-canvas.js')).at(-1);
             if (!entry) return false;
             const renderer = await import(entry.name);
-            await renderer.beginSceneMeasurement();
-            const frame = await renderer.finishSceneMeasurement();
-            return frame.meshCount === ${fixture.meshes.length}
+            const frame = renderer.getBenchmarkEnvironment();
+            return !frame.presentationFramePending && frame.meshCount === ${fixture.meshes.length}
                 && (frame.lineCount > 0) === ${fixture.paths.length > 0};
         })()`));
         await page.evaluate(`(async () => {
@@ -202,8 +208,7 @@ try {
             await renderer.updateDisplayOptions({ sampleCount: ${requestedSamples} });
             if (renderer.getBenchmarkEnvironment().sampleCount !== ${requestedSamples})
                 throw new Error('Renderer did not apply the requested sample count');
-            await renderer.beginSceneMeasurement();
-            await renderer.finishSceneMeasurement();
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         })()`);
         await delay(200);
         const error = await page.evaluate("document.querySelector('.scene-file-error, .webgpu-error-overlay')?.textContent || ''");
@@ -247,6 +252,8 @@ try {
         })()`);
     }
     const front = await screenshot(files[0]);
+    assert.equal(await page.evaluate("document.querySelector('.scene-file-actions button:last-child').disabled"), false,
+        'Save must become available after a scene is opened');
     const behind = await screenshot(files[1]);
     console.log('Front:', front, 'Behind:', behind);
     assert.ok(front.red > 10 && behind.red > 10, 'Expected visible red paths in both scenes');

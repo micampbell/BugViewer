@@ -2227,7 +2227,8 @@ export function downloadBenchmarkReport(json) {
 }
 export function getBenchmarkEnvironment() {
     return { ...benchmarkEnvironment, width: canvas?.width, height: canvas?.height,
-        sampleCount, colorFormat, depthFormat };
+        sampleCount, colorFormat, depthFormat, meshCount: meshes.length, lineCount: lines.length,
+        presentationFramePending: presentationSubmission !== null };
 }
 let benchmarkPipelineStart = 0;
 let frameWaiters = [];

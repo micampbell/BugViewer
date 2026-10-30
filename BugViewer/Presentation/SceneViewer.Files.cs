@@ -12,6 +12,8 @@ public partial class SceneViewer
     [Parameter] public bool EnableFileShortcuts { get; set; } = true;
     /// <summary>Enables the browser open button and shortcut; programmatic loading remains available.</summary>
     [Parameter] public bool EnableOpenScene { get; set; } = true;
+    /// <summary>Displays open and save controls above the viewer.</summary>
+    [Parameter] public bool ShowFileActions { get; set; }
     /// <summary>Maximum browser input file size in bytes. Defaults to 1 GiB.</summary>
     [Parameter] public long MaxSceneFileSize { get; set; } = 1024L * 1024 * 1024;
     /// <summary>Suggested Save As filename for a supplied request.</summary>

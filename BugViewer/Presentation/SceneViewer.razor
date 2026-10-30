@@ -33,19 +33,37 @@
         <p class="scene-file-error" role="alert">@fileError</p>
     }
 
-    @if (CurrentRequest.Kind == PresentationKind.TwoDimensional)
+    @if (ShowFileActions)
     {
-        <div class="plot-file-actions" aria-label="Scene file actions">
+        <div class="scene-file-actions" aria-label="Scene file actions">
             @if (EnableOpenScene)
             {
-                <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
-                    <FluentIcon Value="@(new FileIcons.FolderOpen())" />
-                </FluentButton>
+                <button type="button" disabled="@isBusy" data-scene-file-command="open">
+                    <FluentIcon Value="@(new FileIcons.FolderOpen())" /> Open scene
+                </button>
             }
-            <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
-                <FluentIcon Value="@(new FileIcons.Save())" />
-            </FluentButton>
+            <button type="button" disabled="@(isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync">
+                <FluentIcon Value="@(new FileIcons.Save())" /> Save as
+            </button>
         </div>
+    }
+
+    @if (CurrentRequest.Kind == PresentationKind.TwoDimensional)
+    {
+        @if (!ShowFileActions)
+        {
+            <div class="plot-file-actions" aria-label="Scene file actions">
+                @if (EnableOpenScene)
+                {
+                    <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
+                        <FluentIcon Value="@(new FileIcons.FolderOpen())" />
+                    </FluentButton>
+                }
+                <FluentButton IconOnly="true" Disabled="@(isBusy || ActiveScenes.Count == 0)" OnClick="BeginSaveAsAsync" Title="Save scene as (Ctrl+Alt+S)" aria-label="Save scene as">
+                    <FluentIcon Value="@(new FileIcons.Save())" />
+                </FluentButton>
+            </div>
+        }
         <PlotViewer @key="generation" @ref="plotViewer" ViewerId="ViewerId" IsActive="IsActive"
                     Scenes="ActiveScenes" OnClose="OnClose" OnReady="OnReady" />
     }

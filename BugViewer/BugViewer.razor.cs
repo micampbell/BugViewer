@@ -1120,7 +1120,7 @@ namespace BugViewer
                     return;
 
                 _lifecycleState = ViewerLifecycleState.Initializing;
-                _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", $"./_content/BugViewer/js/webgpu-canvas.js?v={DateTime.UtcNow.Ticks}");
                 _dotNetRef = DotNetObjectReference.Create(this);
                 if (_viewCube is null)
                     throw new InvalidOperationException("The view cube did not render before WebGPU initialization.");

@@ -263,6 +263,23 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     await ((EventCallback<int>)plotAttributes[nameof(PlotViewer.OnClose)]).InvokeAsync(42);
     await ((EventCallback)plotAttributes[nameof(PlotViewer.OnReady)]).InvokeAsync();
     Assert(closedId == 42 && readyCount == 1, "2D viewer callbacks were not forwarded.");
+    await controls.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
+    {
+        [nameof(SceneViewer.ShowFileActions)] = true
+    }));
+    var fileActions = controls.Markup();
+    Assert(fileActions.Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-file-actions"))
+        && !fileActions.Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "plot-file-actions")),
+        "The optional file toolbar should replace the default 2D controls.");
+    await controls.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
+    {
+        [nameof(SceneViewer.Scenes)] = new[] { restored }
+    }));
+    Assert(controls.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-file-actions")),
+        "The optional file toolbar should be available for 3D scenes.");
     var plot = new TestPlotViewer(); await renderer.AttachAsync(plot);
     await plot.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
     {
