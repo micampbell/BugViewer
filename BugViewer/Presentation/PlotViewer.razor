@@ -23,7 +23,16 @@
     }
     @if (StepCount > 1)
     {
-        <div class="step-controls"><button @onclick="PreviousStep">Prev</button><input type="range" min="0" max="@(StepCount - 1)" @bind="step" @bind:after="RenderCurrentAsync" /><span>@(step + 1) / @StepCount</span><button @onclick="NextStep">Next</button></div>
+        <div class="step-controls">
+            <button type="button" class="step-icon-button" title="Previous step" aria-label="Previous step" @onclick="PreviousStep">
+                <FluentIcon Value="@(new Icons.Regular.Size20.Previous())" />
+            </button>
+            <input type="range" min="0" max="@(StepCount - 1)" @bind="step" @bind:after="RenderCurrentAsync" />
+            <span>@(step + 1) / @StepCount</span>
+            <button type="button" class="step-icon-button" title="Next step" aria-label="Next step" @onclick="NextStep">
+                <FluentIcon Value="@(new Icons.Regular.Size20.Next())" />
+            </button>
+        </div>
     }
     <div class="plot-viewer" @ref="plotElement"></div>
 </section>

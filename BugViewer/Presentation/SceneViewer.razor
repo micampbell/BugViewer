@@ -1,4 +1,5 @@
 @using FileIcons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24
+@using PlaybackIcons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20
 @using Microsoft.FluentUI.AspNetCore.Components
 @namespace BugViewer
 @implements IAsyncDisposable
@@ -100,7 +101,9 @@
     @if (StepCount > 1)
     {
         <div class="step-controls">
-            <button @onclick="PreviousStepAsync">Prev</button>
+            <button type="button" class="step-icon-button" title="Previous step" aria-label="Previous step" @onclick="PreviousStepAsync">
+                <FluentIcon Value="@(new PlaybackIcons.Previous())" />
+            </button>
             <input type="range" min="0" max="@(StepCount - 1)" @bind="step"
                    @bind:event="oninput" @bind:after="RenderSceneAsync" />
             <span class="step-counter">
@@ -119,10 +122,21 @@
                 }
                 <span>/ @StepCount</span>
             </span>
-            <button @onclick="NextStepAsync">Next</button>
-            <button @onclick="ToggleAutoplayAsync">@(IsAutoplaying ? "Pause" : "Play")</button>
+            <button type="button" class="step-icon-button" title="Next step" aria-label="Next step" @onclick="NextStepAsync">
+                <FluentIcon Value="@(new PlaybackIcons.Next())" />
+            </button>
+            <button type="button" class="step-icon-button" title="@(IsAutoplaying ? "Pause" : "Play")" aria-label="@(IsAutoplaying ? "Pause" : "Play")" @onclick="ToggleAutoplayAsync">
+                @if (IsAutoplaying)
+                {
+                    <FluentIcon Value="@(new PlaybackIcons.Pause())" />
+                }
+                else
+                {
+                    <FluentIcon Value="@(new PlaybackIcons.Play())" />
+                }
+            </button>
             <label class="step-speed-control">
-                Speed
+                <FluentIcon Value="@(new FileIcons.TopSpeed())" />
                 <select @bind="autoplayDelayMilliseconds">
                     <option value="33">30 fps</option>
                     <option value="100">10 fps</option>
@@ -132,7 +146,7 @@
                 </select>
             </label>
             <label class="step-speed-control">
-                Step stride
+                <FluentIcon Value="@(new PlaybackIcons.ArrowStepOver())" />
                 <input type="number" min="1" max="@Math.Max(1, StepCount - 1)"
                        @bind="stepStride" />
             </label>

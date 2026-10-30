@@ -148,13 +148,34 @@ try {
     assert.equal(saved.scene.steps[1].paths.length, 4, 'Final group did not retain visible history');
     assert.equal(saved.scene.steps[0].meshes[0].vertices[0][0], 0, 'Latest group transform was not saved');
     await openFile(saved.filename, "document.querySelector('.step-controls')?.textContent.includes('/ 2') && document.querySelector('.step-current')?.textContent.trim() === '1'");
-    await page.evaluate("[...document.querySelectorAll('.step-controls button')].find(button => button.textContent.trim() === 'Next').click()");
+    assert.equal(await page.evaluate(`['Previous step', 'Next step', 'Play'].every(label =>
+        document.querySelector('.step-controls button[aria-label="' + label + '"] svg'))`), true,
+    '3D playback buttons must expose named Fluent icons');
+    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Next step\"]').click()");
     await waitFor('second saved step', () => page.evaluate("document.querySelector('.step-current')?.textContent.trim() === '2'"));
+    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Previous step\"]').click()");
+    await waitFor('previous saved step', () => page.evaluate("document.querySelector('.step-current')?.textContent.trim() === '1'"));
+    await page.evaluate(`(() => {
+        const speed = document.querySelector('.step-speed-control select');
+        speed.value = '3000';
+        speed.dispatchEvent(new Event('change', { bubbles: true }));
+        document.querySelector('.step-controls button[aria-label="Play"]').click();
+    })()`);
+    await waitFor('pause icon', () => page.evaluate("!!document.querySelector('.step-controls button[aria-label=\"Pause\"] svg')"));
+    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Pause\"]').click()");
+    await waitFor('play icon', () => page.evaluate("!!document.querySelector('.step-controls button[aria-label=\"Play\"] svg')"));
     assert.equal(await page.evaluate("document.querySelector('.webgpu-error-overlay')?.textContent || ''"), '');
     console.log('PASS: opened a stepped 3D scene, saved a grouped range, and reopened both saved steps.');
 
     await openFile(path.join(root, 'samples/LoadAndShowScene/wwwroot/scenes/plots.bugscene.json'),
         "!!document.querySelector('.plot-viewer') && document.querySelector('.plot-viewer').parentElement.querySelector('.step-controls')?.textContent.includes('/ 2')");
+    assert.equal(await page.evaluate(`['Previous step', 'Next step'].every(label =>
+        document.querySelector('.step-controls button[aria-label="' + label + '"] svg'))`), true,
+    '2D playback buttons must expose named Fluent icons');
+    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Next step\"]').click()");
+    await waitFor('second plot step', () => page.evaluate("document.querySelector('.step-controls')?.textContent.includes('2 / 2')"));
+    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Previous step\"]').click()");
+    await waitFor('first plot step', () => page.evaluate("document.querySelector('.step-controls')?.textContent.includes('1 / 2')"));
     const plot = await saveRange('plot-check.bugscene.json', 1, 2, 2);
     assert.equal(plot.scene.steps.length, 1);
     assert.equal(plot.scene.steps[0].plot.traces[0].name, 'overlay only');

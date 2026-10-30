@@ -28,6 +28,7 @@
 .rotated-icon-button svg { transform: rotate(45deg); }
 .plot-viewer { flex: 1 1 auto; width: 100%; min-height: 18rem; }
 .step-controls { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
+.step-icon-button { display: inline-flex; align-items: center; justify-content: center; padding: 2px; }
 .step-controls input[type="range"] { flex: 1; }
 .step-controls input[type="number"] { width: 5rem; }
 .step-counter { display: inline-flex; align-items: center; gap: .25rem; white-space: nowrap; }
