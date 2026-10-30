@@ -32,6 +32,58 @@ function notifyDotNet(method, ...args) {
 }
 
 // WGSL Shaders (moved to top for clarity)
+const OIT_SHADER = `
+  struct TransparencyOutput {
+    @location(0) accumulation: vec4f,
+    @location(1) revealage: vec4f
+  }
+  fn transparencyOutput(color: vec4f, position: vec4f) -> TransparencyOutput {
+    let alpha = clamp(color.a, 0.0, 1.0);
+    let perspective = abs(camera.projection[2][3]) > 0.5;
+    let distance = select(
+      abs((position.z - camera.projection[3][2]) / camera.projection[2][2]),
+      abs(camera.projection[3][2] / (position.z + camera.projection[2][2])),
+      perspective);
+    let weight = clamp(10.0 / (0.01 + distance * distance), 0.0001, 8.0);
+    var out: TransparencyOutput;
+    out.accumulation = vec4f(clamp(color.rgb, vec3f(0.0), vec3f(1.0)) * alpha, alpha) * weight;
+    out.revealage = vec4f(alpha);
+    return out;
+  }
+`;
+
+const OIT_TARGETS = [
+    { format: 'rgba16float', blend: {
+        color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+        alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' }
+    } },
+    { format: 'r16float', blend: {
+        color: { srcFactor: 'zero', dstFactor: 'one-minus-src', operation: 'add' },
+        alpha: { srcFactor: 'zero', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+    } }
+];
+
+function compositeShader(multisampled) {
+    const textureType = multisampled ? 'texture_multisampled_2d<f32>' : 'texture_2d<f32>';
+    const sample = multisampled ? 'i32(sampleIndex)' : '0';
+    return `
+      @group(0) @binding(0) var accumulation: ${textureType};
+      @group(0) @binding(1) var revealage: ${textureType};
+      @vertex fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
+        let positions = array<vec2f, 3>(vec2f(-1, -1), vec2f(3, -1), vec2f(-1, 3));
+        return vec4f(positions[index], 0, 1);
+      }
+      @fragment fn fragmentMain(@builtin(position) position: vec4f,
+          @builtin(sample_index) sampleIndex: u32) -> @location(0) vec4f {
+        let pixel = vec2i(position.xy);
+        let sum = textureLoad(accumulation, pixel, ${sample});
+        let reveal = textureLoad(revealage, pixel, ${sample}).r;
+        if (sum.a <= 0.000001) { discard; }
+        return vec4f(sum.rgb / sum.a, clamp(1.0 - reveal, 0.0, 1.0));
+      }
+    `;
+}
+
 const GRID_SHADER = `
   fn PristineGrid(uv: vec2f, lineWidth: vec2f) -> f32 {
       let uvDDXY = vec4f(dpdx(uv), dpdy(uv));
@@ -55,7 +107,21 @@ const GRID_SHADER = `
   struct GridArgs { lineColor: vec4f, baseColor: vec4f, lineWidth: vec2f, spacing: f32 }
   @group(1) @binding(0) var<uniform> gridArgs: GridArgs;
   @vertex fn vertexMain(in: VertexIn) -> VertexOut { var out: VertexOut; out.pos = camera.projection * camera.view * vec4f(in.pos, 1.0); out.uv = in.uv - vec2f(50.0, 50.0); return out; }
-  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f { var grid = PristineGrid(in.uv * gridArgs.spacing, gridArgs.lineWidth); return mix(gridArgs.baseColor, gridArgs.lineColor, grid); }
+  ${OIT_SHADER}
+  fn gridColor(in: VertexOut) -> vec4f {
+    let grid = PristineGrid(in.uv * gridArgs.spacing, gridArgs.lineWidth);
+    return mix(gridArgs.baseColor, gridArgs.lineColor, grid);
+  }
+  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
+    let color = gridColor(in);
+    if (color.a < 1.0) { discard; }
+    return color;
+  }
+  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
+    let color = gridColor(in);
+    if (color.a <= 0.0 || color.a >= 1.0) { discard; }
+    return transparencyOutput(color, in.pos);
+  }
 `;
 
 const BACKGROUND_GRADIENT_SHADER = `
@@ -145,7 +211,7 @@ const MESH_SHADER = `
     return out;
   }
 
-  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+  fn meshColor(in: VertexOut) -> vec4f {
     var normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
     if (dot(in.primitiveSurfaceNormal, in.primitiveSurfaceNormal) > 1e-12) {
       normal = normalize(in.primitiveSurfaceNormal);
@@ -168,6 +234,17 @@ const MESH_SHADER = `
     let finalColor = meshUniforms.color.rgb * (light.ambient + diffuse + headlampDiffuse)
       + vec3f(1.0) * (specular + headlampSpecular);
     return vec4f(finalColor, meshUniforms.color.a);
+  }
+  ${OIT_SHADER}
+  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
+    let color = meshColor(in);
+    if (color.a < 1.0) { discard; }
+    return color;
+  }
+  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
+    let color = meshColor(in);
+    if (color.a <= 0.0 || color.a >= 1.0) { discard; }
+    return transparencyOutput(color, in.pos);
   }
 `;
 
@@ -204,7 +281,7 @@ const MESH_SHADER_VERTEX_COLOR = `
     out.primitiveSurfaceNormal = in.primitiveSurfaceNormal;
     return out;
   }
-  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+  fn meshColor(in: VertexOut) -> vec4f {
     var normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
     if (dot(in.primitiveSurfaceNormal, in.primitiveSurfaceNormal) > 1e-12) {
       normal = normalize(in.primitiveSurfaceNormal);
@@ -225,6 +302,17 @@ const MESH_SHADER_VERTEX_COLOR = `
     let finalColor = in.color.rgb * (light.ambient + diffuse + headlampDiffuse)
       + vec3f(1.0) * (specular + headlampSpecular);
     return vec4f(finalColor, in.color.a);
+  }
+  ${OIT_SHADER}
+  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
+    let color = meshColor(in);
+    if (color.a < 1.0) { discard; }
+    return color;
+  }
+  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
+    let color = meshColor(in);
+    if (color.a <= 0.0 || color.a >= 1.0) { discard; }
+    return transparencyOutput(color, in.pos);
   }
 `;
 
@@ -266,7 +354,7 @@ const BILLBOARD_LINE_SHADER = `
     out.fade = in.fade;
     return out;
   }
-  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+  fn lineColor(in: VertexOut) -> vec4f {
     var alpha = in.color.a;
     if (in.fade > 0.0) {
       let dist = abs(in.uvY);
@@ -274,6 +362,17 @@ const BILLBOARD_LINE_SHADER = `
       alpha = alpha * t;
     }
     return vec4f(in.color.rgb, alpha);
+  }
+  ${OIT_SHADER}
+  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
+    let color = lineColor(in);
+    if (color.a < 1.0) { discard; }
+    return color;
+  }
+  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
+    let color = lineColor(in);
+    if (color.a <= 0.0 || color.a >= 1.0) { discard; }
+    return transparencyOutput(color, in.clipPos);
   }
 `;
 
@@ -341,7 +440,7 @@ const INSTANCED_BILLBOARD_LINE_SHADER = `
     out.fade = input.fade;
     return out;
   }
-  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+  fn lineColor(in: VertexOut) -> vec4f {
     var alpha = in.color.a;
     if (in.fade > 0.0) {
       let dist = abs(in.uvY);
@@ -349,6 +448,19 @@ const INSTANCED_BILLBOARD_LINE_SHADER = `
       alpha = alpha * t;
     }
     return vec4f(in.color.rgb, alpha);
+  }
+
+  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
+    let color = lineColor(in);
+    if (color.a < 1.0) { discard; }
+    return color;
+  }
+
+  ${OIT_SHADER}
+  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
+    let color = lineColor(in);
+    if (color.a <= 0.0 || color.a >= 1.0) { discard; }
+    return transparencyOutput(color, in.clipPos);
   }
 `;
 
@@ -378,10 +490,16 @@ const BILLBOARD_SHADER = `
     out.uv = in.uv;
     return out;
   }
-  @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
     let color = textureSample(texture0, sampler0, in.uv);
-    if (color.a < 0.1) { discard; }
+    if (color.a < 1.0) { discard; }
     return color;
+  }
+  ${OIT_SHADER}
+  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
+    let color = textureSample(texture0, sampler0, in.uv);
+    if (color.a < 0.1 || color.a >= 1.0) { discard; }
+    return transparencyOutput(color, in.pos);
   }
 `;
 
@@ -413,6 +531,7 @@ let frameUniformBuffer = null;
 let frameBindGroupLayout = null;
 let frameBindGroup = null;
 let instancedLinePipeline = null;
+let opaqueInstancedLinePipeline = null;
 
 // Background-gradient resources. Colors are packed as four vec4f values,
 // followed by four polar-angle stops and the current camera/view span.
@@ -422,13 +541,21 @@ const backgroundGradientColors = new Float32Array(backgroundGradientUniformArray
 const backgroundGradientAngles = new Float32Array(backgroundGradientUniformArray, 16 * Float32Array.BYTES_PER_ELEMENT, 4);
 const backgroundGradientCamera = new Float32Array(backgroundGradientUniformArray, 20 * Float32Array.BYTES_PER_ELEMENT, 2);
 let backgroundGradientUniformBuffer = null;
+let backgroundGradientBindGroupLayout = null;
 let backgroundGradientBindGroup = null;
 let backgroundGradientPipeline = null;
 
 // Render targets
 let msaaColorTexture = null;
 let depthTexture = null;
+let accumulationTexture = null;
+let revealageTexture = null;
+let transparencyPassDescriptor = null;
+let compositeBindGroup = null;
+let compositeBindGroupLayout = null;
+let compositePipeline = null;
 let colorAttachment = null;
+let canvasColorView = null;
 let renderPassDescriptor = null;
 
 // Lighting resources
@@ -446,6 +573,7 @@ let lightBindGroup = null;
 
 // Grid resources
 let gridPipeline = null;
+let transparentGridPipeline = null;
 let gridVertexBuffer = null;
 let gridIndexBuffer = null;
 let gridUniformBuffer = null;
@@ -461,8 +589,6 @@ const gridSpacingUniform = new Float32Array(gridUniformArray, 40, 1);
 let gridSize = 20.0;
 let gridSpacing = 1.0;
 let zIsUp = false;
-let gridDepthWriteEnabled = false;  // New variable to control depth writing
-let gridIsTransparent = false;
 
 // Coordinate axes
 let coordinateThickness = 1.0;
@@ -573,10 +699,18 @@ async function initWebGPU() {
     if (adapter.features.has('texture-compression-etc2')) requiredFeatures.push('texture-compression-etc2');
 
     device = await adapter.requestDevice({ requiredFeatures });
+    const initializedDevice = device;
+    device.addEventListener('uncapturederror', event => {
+        if (isDisposing || device !== initializedDevice) return;
+        renderingPaused = true;
+        const error = new Error(`WebGPU error: ${event.error.message}`);
+        rejectFrameWaiters(error);
+        rejectPresentationSubmission(error);
+        notifyDotNet('OnWebGpuError', error.message);
+    });
     clearMeshPipelineCache();
     clearPresentationResources(presentationMeshes);
     clearPresentationResources(presentationLines);
-    const initializedDevice = device;
     initializedDevice.lost.then(info => {
         if (isDisposing || device !== initializedDevice) return;
         renderingPaused = true;
@@ -651,6 +785,7 @@ async function initWebGPU() {
     });
 
     await initBackgroundGradient();
+    await initTransparencyComposite();
     await initGrid();
     await initInstancedLinePipeline();
     await initCoordinateAxes();
@@ -662,8 +797,7 @@ async function initInstancedLinePipeline() {
         code: INSTANCED_BILLBOARD_LINE_SHADER
     });
 
-    instancedLinePipeline = await device.createRenderPipelineAsync({
-        label: 'Instanced Line Pipeline',
+    const descriptor = {
         layout: device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout] }),
         vertex: {
             module,
@@ -682,14 +816,8 @@ async function initInstancedLinePipeline() {
         },
         fragment: {
             module,
-            entryPoint: 'fragmentMain',
-            targets: [{
-                format: `${colorFormat}-srgb`,
-                blend: {
-                    color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                }
-            }]
+            entryPoint: 'transparentFragment',
+            targets: OIT_TARGETS
         },
         depthStencil: {
             format: depthFormat,
@@ -698,26 +826,72 @@ async function initInstancedLinePipeline() {
         },
         multisample: { count: sampleCount },
         primitive: { topology: 'triangle-list', cullMode: 'none' }
+    };
+    instancedLinePipeline = await device.createRenderPipelineAsync({
+        ...descriptor,
+        label: 'Transparent Instanced Line Pipeline'
+    });
+    opaqueInstancedLinePipeline = await device.createRenderPipelineAsync({
+        ...descriptor,
+        label: 'Opaque Instanced Line Pipeline',
+        fragment: { ...descriptor.fragment, entryPoint: 'opaqueFragment',
+            targets: [{ format: `${colorFormat}-srgb` }] },
+        depthStencil: { ...descriptor.depthStencil, depthWriteEnabled: true }
+    });
+}
+
+async function initTransparencyComposite() {
+    compositeBindGroupLayout = device.createBindGroupLayout({
+        label: 'Transparency Composite BGL',
+        entries: [0, 1].map(binding => ({
+            binding, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: 'unfilterable-float', multisampled: sampleCount > 1 }
+        }))
+    });
+    const module = device.createShaderModule({ label: 'Transparency Composite Shader',
+        code: compositeShader(sampleCount > 1) });
+    compositePipeline = await device.createRenderPipelineAsync({
+        label: 'Transparency Composite Pipeline',
+        layout: device.createPipelineLayout({ bindGroupLayouts: [compositeBindGroupLayout] }),
+        vertex: { module, entryPoint: 'vertexMain' },
+        fragment: { module, entryPoint: 'fragmentMain', targets: [{
+            format: `${colorFormat}-srgb`,
+            blend: {
+                color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+                alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+            }
+        }] },
+        multisample: { count: sampleCount },
+        primitive: { topology: 'triangle-list' }
+    });
+}
+
+function createOpaquePipeline(descriptor) {
+    return device.createRenderPipelineAsync({
+        ...descriptor,
+        fragment: { ...descriptor.fragment, entryPoint: 'opaqueFragment',
+            targets: [{ format: `${colorFormat}-srgb` }] },
+        depthStencil: { ...descriptor.depthStencil, depthWriteEnabled: true }
     });
 }
 
 async function initBackgroundGradient() {
-    backgroundGradientUniformBuffer = device.createBuffer({
-        label: 'Background Gradient Uniform Buffer',
-        size: BACKGROUND_GRADIENT_BUFFER_SIZE,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-    });
-
-    const bindGroupLayout = device.createBindGroupLayout({
-        label: 'Background Gradient BGL',
-        entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }]
-    });
-
-    backgroundGradientBindGroup = device.createBindGroup({
-        label: 'Background Gradient BG',
-        layout: bindGroupLayout,
-        entries: [{ binding: 0, resource: { buffer: backgroundGradientUniformBuffer } }]
-    });
+    if (!backgroundGradientUniformBuffer) {
+        backgroundGradientUniformBuffer = device.createBuffer({
+            label: 'Background Gradient Uniform Buffer',
+            size: BACKGROUND_GRADIENT_BUFFER_SIZE,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        backgroundGradientBindGroupLayout = device.createBindGroupLayout({
+            label: 'Background Gradient BGL',
+            entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }]
+        });
+        backgroundGradientBindGroup = device.createBindGroup({
+            label: 'Background Gradient BG',
+            layout: backgroundGradientBindGroupLayout,
+            entries: [{ binding: 0, resource: { buffer: backgroundGradientUniformBuffer } }]
+        });
+    }
 
     const module = device.createShaderModule({
         label: 'Background Gradient Shader',
@@ -726,7 +900,7 @@ async function initBackgroundGradient() {
 
     backgroundGradientPipeline = await device.createRenderPipelineAsync({
         label: 'Background Gradient Pipeline',
-        layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+        layout: device.createPipelineLayout({ bindGroupLayouts: [backgroundGradientBindGroupLayout] }),
         vertex: { module, entryPoint: 'vertexMain' },
         fragment: {
             module,
@@ -750,16 +924,18 @@ async function initBackgroundGradient() {
 
 async function initGrid() {
     // Create grid pipeline
-    const bindGroupLayout = device.createBindGroupLayout({
-        label: 'Grid BGL',
-        entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }]
-    });
+    if (!gridBindGroupLayout) {
+        gridBindGroupLayout = device.createBindGroupLayout({
+            label: 'Grid BGL',
+            entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }]
+        });
+    }
 
     const module = device.createShaderModule({ label: 'Grid Shader', code: GRID_SHADER });
 
-    gridPipeline = await device.createRenderPipelineAsync({
+    const descriptor = {
         label: 'Grid Pipeline',
-        layout: device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout, bindGroupLayout] }),
+        layout: device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout, gridBindGroupLayout] }),
         vertex: {
             module,
             entryPoint: 'vertexMain',
@@ -773,21 +949,21 @@ async function initGrid() {
         },
         fragment: {
             module,
-            entryPoint: 'fragmentMain',
-            targets: [{
-                format: `${colorFormat}-srgb`,
-                blend: {
-                    color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                }
-            }]
+            entryPoint: 'opaqueFragment',
+            targets: [{ format: `${colorFormat}-srgb` }]
         },
         depthStencil: {
             format: depthFormat,
-            depthWriteEnabled: !gridIsTransparent,
+            depthWriteEnabled: true,
             depthCompare: 'less-equal'
         },
         multisample: { count: sampleCount }
+    };
+    gridPipeline = await device.createRenderPipelineAsync(descriptor);
+    transparentGridPipeline = await device.createRenderPipelineAsync({
+        ...descriptor, label: 'Transparent Grid Pipeline',
+        fragment: { ...descriptor.fragment, entryPoint: 'transparentFragment', targets: OIT_TARGETS },
+        depthStencil: { ...descriptor.depthStencil, depthWriteEnabled: false }
     });
 
     // Create grid uniform buffer
@@ -802,7 +978,7 @@ async function initGrid() {
     if (!gridBindGroup) {
         gridBindGroup = device.createBindGroup({
             label: 'Grid BG',
-            layout: bindGroupLayout,
+            layout: gridBindGroupLayout,
             entries: [{ binding: 0, resource: { buffer: gridUniformBuffer } }]
         });
     }
@@ -834,20 +1010,14 @@ async function initCoordinateAxes() {
         { arrayStride: 4, attributes: [{ shaderLocation: 5, offset: 0, format: 'float32' }] }
     ];
 
-    const pipeline = await device.createRenderPipelineAsync({
+    const descriptor = {
         label: 'Coordinate Axes Pipeline',
         layout: device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout] }),
         vertex: { module: shaderModule, entryPoint: 'vertexMain', buffers: vertexBufferLayout },
         fragment: {
             module: shaderModule,
-            entryPoint: 'fragmentMain',
-            targets: [{
-                format: `${colorFormat}-srgb`,
-                blend: {
-                    color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                }
-            }]
+            entryPoint: 'transparentFragment',
+            targets: OIT_TARGETS
         },
         depthStencil: {
             format: depthFormat,
@@ -856,7 +1026,9 @@ async function initCoordinateAxes() {
         },
         multisample: { count: sampleCount },
         primitive: { topology: 'triangle-list', cullMode: 'none' }
-    });
+    };
+    const pipeline = await device.createRenderPipelineAsync(descriptor);
+    const opaquePipeline = await createOpaquePipeline(descriptor);
 
     coordinateAxes = {
         posBuffer,
@@ -867,7 +1039,9 @@ async function initCoordinateAxes() {
         fadeBuffer,
         indexBuffer,
         indexCount: axisData.indices.length,
-        pipeline
+        pipelineDescriptor: descriptor,
+        pipeline,
+        opaquePipeline
     };
 }
 
@@ -992,7 +1166,7 @@ function renderFrame() {
     if (!renderPass) return; // Skip frame if render targets aren't ready
 
     const encoder = device.createCommandEncoder();
-    const pass = encoder.beginRenderPass(renderPass);
+    let pass = encoder.beginRenderPass(renderPass);
 
     // Draw the full-screen, polar-angle-aware gradient before scene geometry.
     // It does not write depth, leaving the cleared depth texture available for
@@ -1009,7 +1183,7 @@ function renderFrame() {
     // ========================================================================
 
     // Draw opaque meshes
-    for (const mesh of meshes.filter(m => m.visible && !m.isTransparent)) {
+    for (const mesh of meshes.filter(m => m.visible && m.hasOpaque)) {
         if (!mesh.pipeline || !mesh.vertexBuffer || !mesh.indexBuffer) continue;
 
         pass.setPipeline(mesh.pipeline);
@@ -1032,8 +1206,15 @@ function renderFrame() {
         pass.drawIndexed(mesh.indexCount);
     }
 
-    // Draw grid if it's opaque
-    if (gridPipeline && !gridIsTransparent) {
+    for (const line of lines) {
+        if (!opaqueInstancedLinePipeline || !line.instanceBuffer || !line.hasOpaque) continue;
+        pass.setPipeline(opaqueInstancedLinePipeline);
+        pass.setBindGroup(0, frameBindGroup);
+        pass.setVertexBuffer(0, line.instanceBuffer);
+        pass.draw(42, line.instanceCount);
+    }
+
+    if (gridPipeline) {
         pass.setPipeline(gridPipeline);
         pass.setBindGroup(0, frameBindGroup);
         pass.setBindGroup(1, gridBindGroup);
@@ -1042,112 +1223,88 @@ function renderFrame() {
         pass.drawIndexed(6);
     }
 
-    // ========================================================================
-    // 2. Transparent Pass: Draw all transparent objects, sorted back-to-front.
-    // Depth test is enabled, but depth write is disabled.
-    // ========================================================================
-
-    const transparentDrawables = [];
-
-    // Add transparent grid
-    if (gridPipeline && gridIsTransparent) {
-        transparentDrawables.push({
-            // The grid is centered at the origin; use the same view-space Z as other drawables.
-            depth: viewMatrix[14],
-            draw: () => {
-                pass.setPipeline(gridPipeline);
-                pass.setBindGroup(0, frameBindGroup);
-                pass.setBindGroup(1, gridBindGroup);
-                pass.setVertexBuffer(0, gridVertexBuffer);
-                pass.setIndexBuffer(gridIndexBuffer, 'uint32');
-                pass.drawIndexed(6);
-            }
-        });
-    }
-
-    // Add coordinate axes
     if (coordinateThickness && coordinateAxes) {
-        transparentDrawables.push({
-            depth: viewMatrix[14],
-            draw: () => {
-                pass.setPipeline(coordinateAxes.pipeline);
-                pass.setBindGroup(0, frameBindGroup);
-                pass.setVertexBuffer(0, coordinateAxes.posBuffer);
-                pass.setVertexBuffer(1, coordinateAxes.colorBuffer);
-                pass.setVertexBuffer(2, coordinateAxes.thicknessBuffer);
-                pass.setVertexBuffer(3, coordinateAxes.uvBuffer);
-                pass.setVertexBuffer(4, coordinateAxes.endPosBuffer);
-                pass.setVertexBuffer(5, coordinateAxes.fadeBuffer);
-                pass.setIndexBuffer(coordinateAxes.indexBuffer, 'uint16');
-                pass.drawIndexed(coordinateAxes.indexCount);
-            }
-        });
+        drawCoordinateAxes(pass, coordinateAxes.opaquePipeline);
     }
+    for (const billboard of textBillboards) {
+        if (billboard.opaquePipeline && billboard.vertexBuffer && billboard.indexBuffer)
+            drawBillboard(pass, billboard, billboard.opaquePipeline);
+    }
+    pass.end();
 
-    // Add transparent meshes
+    pass = encoder.beginRenderPass(transparencyPassDescriptor);
+    if (transparentGridPipeline) {
+        pass.setPipeline(transparentGridPipeline);
+        pass.setBindGroup(0, frameBindGroup);
+        pass.setBindGroup(1, gridBindGroup);
+        pass.setVertexBuffer(0, gridVertexBuffer);
+        pass.setIndexBuffer(gridIndexBuffer, 'uint32');
+        pass.drawIndexed(6);
+    }
+    if (coordinateThickness && coordinateAxes)
+        drawCoordinateAxes(pass, coordinateAxes.pipeline);
     for (const mesh of meshes.filter(m => m.visible && m.isTransparent)) {
-        if (!mesh.pipeline || !mesh.vertexBuffer || !mesh.indexBuffer) continue;
-        const viewSpacePos = transformPoint(mesh.center, viewMatrix);
-        transparentDrawables.push({
-            depth: viewSpacePos[2],
-            draw: () => {
-                pass.setPipeline(mesh.pipeline);
-                pass.setBindGroup(0, frameBindGroup);
-                if (mesh.singleColor && mesh.bindGroup) pass.setBindGroup(1, mesh.bindGroup);
-                pass.setVertexBuffer(0, mesh.vertexBuffer);
-                if (!mesh.singleColor && mesh.colorBuffer) pass.setVertexBuffer(1, mesh.colorBuffer);
-                pass.setVertexBuffer(mesh.singleColor ? 1 : 2, mesh.primitiveSurfaceNormalBuffer);
-                if (!mesh.singleColor) pass.setBindGroup(1, lightBindGroup);
-                pass.setIndexBuffer(mesh.indexBuffer, mesh.indexFormat);
-                pass.drawIndexed(mesh.indexCount);
-            }
-        });
+        if (!mesh.transparentPipeline || !mesh.vertexBuffer || !mesh.indexBuffer) continue;
+        pass.setPipeline(mesh.transparentPipeline);
+        pass.setBindGroup(0, frameBindGroup);
+        if (mesh.singleColor && mesh.bindGroup) pass.setBindGroup(1, mesh.bindGroup);
+        pass.setVertexBuffer(0, mesh.vertexBuffer);
+        if (!mesh.singleColor && mesh.colorBuffer) pass.setVertexBuffer(1, mesh.colorBuffer);
+        pass.setVertexBuffer(mesh.singleColor ? 1 : 2, mesh.primitiveSurfaceNormalBuffer);
+        if (!mesh.singleColor) pass.setBindGroup(1, lightBindGroup);
+        pass.setIndexBuffer(mesh.indexBuffer, mesh.indexFormat);
+        pass.drawIndexed(mesh.indexCount);
     }
-
-    // Add lines
     for (const line of lines) {
-        if (!instancedLinePipeline || !line.instanceBuffer || line.instanceCount === 0) continue;
-        const viewSpacePos = transformPoint(line.center, viewMatrix);
-        transparentDrawables.push({
-            depth: viewSpacePos[2],
-            draw: () => {
-                pass.setPipeline(instancedLinePipeline);
-                pass.setBindGroup(0, frameBindGroup);
-                pass.setVertexBuffer(0, line.instanceBuffer);
-                pass.draw(42, line.instanceCount);
-            }
-        });
+        if (!instancedLinePipeline || !line.instanceBuffer || line.instanceCount === 0 || !line.hasTransparent) continue;
+        pass.setPipeline(instancedLinePipeline);
+        pass.setBindGroup(0, frameBindGroup);
+        pass.setVertexBuffer(0, line.instanceBuffer);
+        pass.draw(42, line.instanceCount);
     }
-
-    // Add text billboards
     for (const billboard of textBillboards) {
         if (!billboard.pipeline || !billboard.vertexBuffer || !billboard.indexBuffer) continue;
-        const viewSpacePos = transformPoint(billboard.position, viewMatrix);
-        transparentDrawables.push({
-            depth: viewSpacePos[2],
-            draw: () => {
-                pass.setPipeline(billboard.pipeline);
-                pass.setBindGroup(0, frameBindGroup);
-                pass.setBindGroup(1, billboard.bindGroup);
-                pass.setVertexBuffer(0, billboard.vertexBuffer);
-                pass.setIndexBuffer(billboard.indexBuffer, 'uint16');
-                pass.drawIndexed(billboard.indexCount);
-            }
-        });
+        drawBillboard(pass, billboard, billboard.pipeline);
     }
-
-    // View-space Z is negative in front of the camera; farther objects have smaller Z.
-    transparentDrawables.sort((a, b) => a.depth - b.depth);
-
-    // Execute draw calls
-    for (const drawable of transparentDrawables) {
-        drawable.draw();
-    }
-
+    pass.end();
+    pass = encoder.beginRenderPass({
+        colorAttachments: [{
+            view: colorAttachment.view,
+            resolveTarget: sampleCount > 1 ? canvasColorView : undefined,
+            loadOp: 'load',
+            storeOp: 'store'
+        }]
+    });
+    pass.setPipeline(compositePipeline);
+    pass.setBindGroup(0, compositeBindGroup);
+    pass.draw(3);
     pass.end();
     device.queue.submit([encoder.finish()]);
     resolvePresentationSubmission(performance.now() - submissionStart);
     resolveFrameWaiters();
+}
+
+function drawCoordinateAxes(pass, pipeline) {
+    if (!pipeline) return;
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, frameBindGroup);
+    pass.setVertexBuffer(0, coordinateAxes.posBuffer);
+    pass.setVertexBuffer(1, coordinateAxes.colorBuffer);
+    pass.setVertexBuffer(2, coordinateAxes.thicknessBuffer);
+    pass.setVertexBuffer(3, coordinateAxes.uvBuffer);
+    pass.setVertexBuffer(4, coordinateAxes.endPosBuffer);
+    pass.setVertexBuffer(5, coordinateAxes.fadeBuffer);
+    pass.setIndexBuffer(coordinateAxes.indexBuffer, 'uint16');
+    pass.drawIndexed(coordinateAxes.indexCount);
+}
+
+function drawBillboard(pass, billboard, pipeline) {
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, frameBindGroup);
+    pass.setBindGroup(1, billboard.bindGroup);
+    pass.setVertexBuffer(0, billboard.vertexBuffer);
+    pass.setIndexBuffer(billboard.indexBuffer, 'uint16');
+    pass.drawIndexed(billboard.indexCount);
 }
 
 function getRenderPassDescriptor() {
@@ -1161,12 +1318,8 @@ function getRenderPassDescriptor() {
         }
     }
 
-    const colorView = context.getCurrentTexture().createView({ format: `${colorFormat}-srgb` });
-    if (sampleCount > 1) {
-        colorAttachment.resolveTarget = colorView;
-    } else {
-        colorAttachment.view = colorView;
-    }
+    canvasColorView = context.getCurrentTexture().createView({ format: `${colorFormat}-srgb` });
+    if (sampleCount === 1) colorAttachment.view = canvasColorView;
     return renderPassDescriptor;
 }
 
@@ -1232,12 +1385,28 @@ function allocateRenderTargets(width, height) {
         usage: GPUTextureUsage.RENDER_ATTACHMENT
     });
 
+    accumulationTexture?.destroy();
+    revealageTexture?.destroy();
+    accumulationTexture = device.createTexture({
+        label: 'Transparency accumulation', size, sampleCount, format: 'rgba16float',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+    });
+    revealageTexture = device.createTexture({
+        label: 'Transparency revealage', size, sampleCount, format: 'r16float',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+    });
+    const accumulationView = accumulationTexture.createView();
+    const revealageView = revealageTexture.createView();
+    compositeBindGroup = device.createBindGroup({
+        layout: compositeBindGroupLayout,
+        entries: [{ binding: 0, resource: accumulationView }, { binding: 1, resource: revealageView }]
+    });
+
     colorAttachment = {
         view: sampleCount > 1 ? msaaColorTexture.createView() : undefined,
-        resolveTarget: undefined,
         clearValue: { r: 0, g: 0, b: 0, a: 1.0 },
         loadOp: 'clear',
-        storeOp: sampleCount > 1 ? 'discard' : 'store'
+        storeOp: 'store'
     };
 
     renderPassDescriptor = {
@@ -1246,7 +1415,16 @@ function allocateRenderTargets(width, height) {
             view: depthTexture.createView(),
             depthClearValue: 1.0,
             depthLoadOp: 'clear',
-            depthStoreOp: 'discard'
+            depthStoreOp: 'store'
+        }
+    };
+    transparencyPassDescriptor = {
+        colorAttachments: [
+            { view: accumulationView, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' },
+            { view: revealageView, clearValue: [1, 1, 1, 1], loadOp: 'clear', storeOp: 'store' }
+        ],
+        depthStencilAttachment: {
+            view: depthTexture.createView(), depthLoadOp: 'load', depthStoreOp: 'discard'
         }
     };
 }
@@ -1281,15 +1459,50 @@ export function updateDisplayOptions(options) {
     return enqueueGpuOperation(() => updateDisplayOptionsCore(options));
 }
 
+async function changeSampleCount(nextSampleCount) {
+    const previousPaused = renderingPaused;
+    renderingPaused = true;
+    sampleCount = nextSampleCount;
+    await initBackgroundGradient();
+    await initTransparencyComposite();
+    await initGrid();
+    await initInstancedLinePipeline();
+    if (coordinateAxes) {
+        const descriptor = { ...coordinateAxes.pipelineDescriptor, multisample: { count: sampleCount } };
+        coordinateAxes.pipeline = await device.createRenderPipelineAsync(descriptor);
+        coordinateAxes.opaquePipeline = await createOpaquePipeline(descriptor);
+        coordinateAxes.pipelineDescriptor = descriptor;
+    }
+    const allMeshes = new Set([...meshes, ...[...presentationMeshes.values()].map(entry => entry.resource)]);
+    for (const mesh of allMeshes) {
+        if (!mesh.vertexBuffer) continue;
+        const primary = await getMeshPipeline(mesh.singleColor, mesh.isTransparent && !mesh.hasOpaque);
+        mesh.pipeline = primary.pipeline;
+        mesh.transparentPipeline = mesh.isTransparent
+            ? (mesh.hasOpaque ? (await getMeshPipeline(mesh.singleColor, true)).pipeline : primary.pipeline)
+            : null;
+    }
+    for (const billboard of textBillboards) {
+        const descriptor = { ...billboard.pipelineDescriptor, multisample: { count: sampleCount } };
+        billboard.pipeline = await device.createRenderPipelineAsync(descriptor);
+        billboard.opaquePipeline = await createOpaquePipeline(descriptor);
+        billboard.pipelineDescriptor = descriptor;
+    }
+    if (canvas.width > 0 && canvas.height > 0) allocateRenderTargets(canvas.width, canvas.height);
+    renderingPaused = previousPaused;
+}
+
 async function updateDisplayOptionsCore(options) {
     let gridChanged = false;
-    let needsGridPipelineRecreation = false;
     viewCubeController.updateOptions(options.viewCubeSizeRatio, options.viewCubeOpacity);
     if (zIsUp !== options.zIsUp) {
         zIsUp = options.zIsUp;
         gridChanged = true;
     }
-    if (typeof options.sampleCount === 'number') sampleCount = options.sampleCount;
+    if (typeof options.sampleCount === 'number' && sampleCount !== options.sampleCount) {
+        if (device) await changeSampleCount(options.sampleCount);
+        else sampleCount = options.sampleCount;
+    }
 
     // Handle coordinate axes visibility
     if (typeof options.coordinateThickness === 'number' && coordinateThickness !== options.coordinateThickness) {
@@ -1324,11 +1537,6 @@ async function updateDisplayOptionsCore(options) {
 
     // Update grid uniforms
     if (options.baseColor) {
-        const newIsTransparent = options.baseColor[3] < 1.0;
-        if (newIsTransparent !== gridIsTransparent) {
-            gridIsTransparent = newIsTransparent;
-            needsGridPipelineRecreation = true;
-        }
         gridBaseColor.set(options.baseColor);
     }
     if (options.lineColor) gridLineColor.set(options.lineColor);
@@ -1361,9 +1569,7 @@ async function updateDisplayOptionsCore(options) {
     }
 
     if (device) {
-        if (needsGridPipelineRecreation) {
-            await initGrid(); // This recreates pipeline and geometry
-        } else if (gridChanged) {
+        if (gridChanged) {
             createGridGeometry();
             updateGridUniforms();
         } else if (gridUniformBuffer) {
@@ -1463,14 +1669,8 @@ function getMeshPipeline(singleColor, isTransparent) {
         vertex: { module: shaderModule, entryPoint: 'vertexMain', buffers: vertexBufferLayout },
         fragment: {
             module: shaderModule,
-            entryPoint: 'fragmentMain',
-            targets: [{
-                format: `${colorFormat}-srgb`,
-                blend: {
-                    color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                }
-            }]
+            entryPoint: isTransparent ? 'transparentFragment' : 'opaqueFragment',
+            targets: isTransparent ? OIT_TARGETS : [{ format: `${colorFormat}-srgb` }]
         },
         depthStencil: {
             format: depthFormat,
@@ -1489,6 +1689,25 @@ function getMeshPipeline(singleColor, isTransparent) {
         });
     }
     return result;
+}
+
+function classifyMeshColors(colors) {
+    let hasOpaque = false;
+    let isTransparent = false;
+    for (let i = 3; i < colors.length; i += 4) {
+        if (colors[i] >= 1.0) hasOpaque = true;
+        else if (colors[i] > 0) isTransparent = true;
+    }
+    return { hasOpaque, isTransparent };
+}
+
+async function meshPipelinesForColors(singleColor, colors) {
+    const { hasOpaque, isTransparent } = classifyMeshColors(colors);
+    const primary = await getMeshPipeline(singleColor, isTransparent && !hasOpaque);
+    const transparentPipeline = isTransparent
+        ? (hasOpaque ? (await getMeshPipeline(singleColor, true)).pipeline : primary.pipeline)
+        : null;
+    return { ...primary, transparentPipeline, hasOpaque, isTransparent };
 }
 
 export function addMesh(meshData) {
@@ -1524,28 +1743,10 @@ async function addMeshCore(meshData) {
         const primitiveSurfaceNormalBuffer = createMeshBuffer(activePrimitiveSurfaceNormals,
             GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
 
-        // Calculate bounding box and center for sorting
-        let min = [Infinity, Infinity, Infinity];
-        let max = [-Infinity, -Infinity, -Infinity];
-        for (let i = 0; i < vertices.length; i += 3) {
-            min[0] = Math.min(min[0], vertices[i]);
-            min[1] = Math.min(min[1], vertices[i + 1]);
-            min[2] = Math.min(min[2], vertices[i + 2]);
-            max[0] = Math.max(max[0], vertices[i]);
-            max[1] = Math.max(max[1], vertices[i + 1]);
-            max[2] = Math.max(max[2], vertices[i + 2]);
-        }
-        const center = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
-
-        let isTransparent = singleColor && colors.length >= 4 && colors[3] < 1.0;
-        if (!singleColor) {
-            for (let i = 3; i < colors.length; i += 4) {
-                if (colors[i] < 1.0) { isTransparent = true; break; }
-            }
-        }
         const colorBuffer = createMeshBuffer(colors,
             (singleColor ? GPUBufferUsage.UNIFORM : GPUBufferUsage.VERTEX) | GPUBufferUsage.COPY_DST);
-        const { pipeline, bindGroupLayout } = await getMeshPipeline(singleColor, isTransparent);
+        const { pipeline, bindGroupLayout, transparentPipeline, hasOpaque, isTransparent } =
+            await meshPipelinesForColors(singleColor, colors);
         if (device !== meshDevice || isDisposing) throw new Error('WebGPU mesh upload was interrupted.');
         const bindGroup = singleColor ? meshDevice.createBindGroup({
             label: `Mesh ${id} BG`,
@@ -1558,7 +1759,6 @@ async function addMeshCore(meshData) {
 
         meshes.push({
             id,
-            center, // Store center for sorting
             vertexBuffer,
             colorBuffer,
             primitiveSurfaceNormalBuffer,
@@ -1569,9 +1769,11 @@ async function addMeshCore(meshData) {
             bindGroup,
             singleColor,
             isTransparent,
+            hasOpaque,
             visible: meshFacesVisible,
             indexCount: indices.length,
-            pipeline
+            pipeline,
+            transparentPipeline
         });
         committed = true;
     } finally {
@@ -1652,15 +1854,16 @@ export function changeMeshColor(colorChangeData) {
     return enqueueGpuOperation(() => changeMeshColorCore(colorChangeData));
 }
 
-function changeMeshColorCore(colorChangeData) {
+async function changeMeshColorCore(colorChangeData) {
     const gpuDevice = requireDevice('changing a mesh color');
     const { index, color } = colorChangeData;
     const mesh = meshes[index];
     if (mesh && mesh.singleColor && mesh.colorBuffer) {
+        const next = await meshPipelinesForColors(true, color);
+        if (device !== gpuDevice || isDisposing) throw new Error('WebGPU mesh color update was interrupted.');
         gpuDevice.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(color));
-        if (color.length >= 4) {
-            mesh.isTransparent = color[3] < 1.0;
-        }
+        Object.assign(mesh, { pipeline: next.pipeline, transparentPipeline: next.transparentPipeline,
+            hasOpaque: next.hasOpaque, isTransparent: next.isTransparent });
     }
 }
 
@@ -1668,7 +1871,7 @@ export function changeMeshColors(colorChangeData) {
     return enqueueGpuOperation(() => changeMeshColorsCore(colorChangeData));
 }
 
-function changeMeshColorsCore(colorChangeData) {
+async function changeMeshColorsCore(colorChangeData) {
     const gpuDevice = requireDevice('changing per-triangle mesh colors');
     const { meshId, colors } = colorChangeData;
     const mesh = meshes.find(candidate => candidate.id === meshId);
@@ -1676,14 +1879,11 @@ function changeMeshColorsCore(colorChangeData) {
     if (mesh.singleColor || !mesh.colorBuffer)
         throw new Error(`Mesh '${meshId}' was not created with per-triangle coloring.`);
 
+    const next = await meshPipelinesForColors(false, colors);
+    if (device !== gpuDevice || isDisposing) throw new Error('WebGPU mesh color update was interrupted.');
     gpuDevice.queue.writeBuffer(mesh.colorBuffer, 0, new Float32Array(colors));
-    mesh.isTransparent = false;
-    for (let i = 3; i < colors.length; i += 4) {
-        if (colors[i] < 1.0) {
-            mesh.isTransparent = true;
-            break;
-        }
-    }
+    Object.assign(mesh, { pipeline: next.pipeline, transparentPipeline: next.transparentPipeline,
+        hasOpaque: next.hasOpaque, isTransparent: next.isTransparent });
 }
 
 export function clearAllMeshes() {
@@ -1711,13 +1911,23 @@ async function addLinesCore(lineData) {
     const instanceCount = segments.length / 12;
     if (instanceCount === 0) return;
 
+    let hasOpaque = false;
+    let hasTransparent = false;
+    for (let i = 0; i < segments.length; i += 12) {
+        const alpha = segments[i + 9];
+        if (alpha >= 1) hasOpaque = true;
+        if (alpha > 0 && (alpha < 1 || segments[i + 11] > 0)) hasTransparent = true;
+        if (hasOpaque && hasTransparent) break;
+    }
     const instanceBuffer = createBuffer(segments, GPUBufferUsage.VERTEX);
 
     lines.push({
         id,
         center,
         instanceBuffer,
-        instanceCount
+        instanceCount,
+        hasOpaque,
+        hasTransparent
     });
 }
 
@@ -1863,7 +2073,7 @@ async function addTextBillboardCore(billboardData) {
 
     const shaderModule = device.createShaderModule({ code: BILLBOARD_SHADER });
 
-    const pipeline = await device.createRenderPipelineAsync({
+    const descriptor = {
         layout: device.createPipelineLayout({ bindGroupLayouts: [frameBindGroupLayout, bindGroupLayout] }),
         vertex: {
             module: shaderModule,
@@ -1881,14 +2091,8 @@ async function addTextBillboardCore(billboardData) {
         },
         fragment: {
             module: shaderModule,
-            entryPoint: 'fragmentMain',
-            targets: [{
-                format: `${colorFormat}-srgb`,
-                blend: {
-                    color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                }
-            }]
+            entryPoint: 'transparentFragment',
+            targets: OIT_TARGETS
         },
         depthStencil: {
             format: depthFormat,
@@ -1896,7 +2100,9 @@ async function addTextBillboardCore(billboardData) {
             depthCompare: 'less-equal'
         },
         multisample: { count: sampleCount }
-    });
+    };
+    const pipeline = await device.createRenderPipelineAsync(descriptor);
+    const opaquePipeline = await createOpaquePipeline(descriptor);
 
     textBillboards.push({
         id,
@@ -1907,7 +2113,9 @@ async function addTextBillboardCore(billboardData) {
         texture,
         sampler,
         indexCount: 6,
-        pipeline
+        pipelineDescriptor: descriptor,
+        pipeline,
+        opaquePipeline
     });
 }
 
@@ -1958,16 +2166,6 @@ function startFrameTimer() {
 // ============================================================================
 // Utility Functions
 // ============================================================================
-
-function transformPoint(point, matrix) {
-    const x = point[0], y = point[1], z = point[2];
-    const w = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15] || 1.0;
-    return [
-        (matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12]) / w,
-        (matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13]) / w,
-        (matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14]) / w
-    ];
-}
 
 function createBuffer(data, usage, ArrayType = Float32Array, operation = 'creating a GPU buffer') {
     const gpuDevice = requireDevice(operation);
@@ -2376,6 +2574,8 @@ function disposeWebGPUCanvasCore() {
         frameUniformBuffer?.destroy();
         msaaColorTexture?.destroy();
         depthTexture?.destroy();
+        accumulationTexture?.destroy();
+        revealageTexture?.destroy();
 
         coordinateAxes = null;
         gridVertexBuffer = null;
@@ -2384,7 +2584,9 @@ function disposeWebGPUCanvasCore() {
         gridBindGroup = null;
         gridBindGroupLayout = null;
         gridPipeline = null;
+        transparentGridPipeline = null;
         backgroundGradientUniformBuffer = null;
+        backgroundGradientBindGroupLayout = null;
         backgroundGradientBindGroup = null;
         backgroundGradientPipeline = null;
         lightUniformBuffer = null;
@@ -2395,9 +2597,17 @@ function disposeWebGPUCanvasCore() {
         frameBindGroupLayout = null;
         msaaColorTexture = null;
         depthTexture = null;
+        accumulationTexture = null;
+        revealageTexture = null;
+        transparencyPassDescriptor = null;
+        compositeBindGroup = null;
+        compositeBindGroupLayout = null;
+        compositePipeline = null;
         colorAttachment = null;
+        canvasColorView = null;
         renderPassDescriptor = null;
         instancedLinePipeline = null;
+        opaqueInstancedLinePipeline = null;
         renderingPaused = true;
         context?.unconfigure?.();
         device?.destroy();

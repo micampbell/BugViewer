@@ -125,6 +125,16 @@ and measured results are in [docs/performance.md](docs/performance.md).
 Plotly ships with the
 library and loads only when displaying a 2D request.
 
+Opaque fragments write depth before translucent objects are drawn. Translucent
+meshes, paths (including faded edges), labels, grid, and axes use weighted blended
+order-independent transparency, so crossing geometry no longer depends on
+object-center draw order. This method approximates rather than exactly reproduces
+depth-sorted blending; overlapping colors can differ from exact results, and
+very deep stacks can exceed the precision or range of the accumulation buffers.
+It requires the WebGPU accumulation and revealage render targets; there is
+currently no sorted-rendering fallback if those resources cannot be created.
+The viewer reports WebGPU failures rather than silently switching modes.
+
 TVGL's `WebGPUPresenter` now produces this shared contract. Its derived `PresenterRequest`
 keeps blocking/hold settings and callbacks in the presenter, and source-face references
 stay in a presenter-side table. Those runtime details are excluded from the file. Reloaded
@@ -137,6 +147,11 @@ including downloadable single 3D, stepped 3D, and 2D examples:
 ```powershell
 dotnet run --project samples/LoadAndShowScene
 ```
+
+For VS Code debugging, select **LoadAndShowScene (Blazor WebAssembly)** in Run and Debug.
+The standalone WebAssembly app runs in a browser via its development server; do not
+launch its output DLL as a .NET console application. Stop any existing sample server
+before debugging if it is already using port 5220.
 
 Open the displayed localhost URL in a WebGPU-capable browser. Choose **Open Scene** to browse
 for a `.bugscene.json` file, then **Save As** to name and download it with the current settings and view.

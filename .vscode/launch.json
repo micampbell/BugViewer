@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "LoadAndShowScene (Blazor WebAssembly)",
+            "type": "blazorwasm",
+            "request": "launch",
+            "cwd": "${workspaceFolder}\\samples\\LoadAndShowScene",
+            "projectPath": "${workspaceFolder}\\samples\\LoadAndShowScene\\LoadAndShowScene.csproj",
+            "url": "http://localhost:5220",
+            "browser": "chrome"
+        }
+    ]
+}

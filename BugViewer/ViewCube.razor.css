@@ -122,6 +122,13 @@
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     cursor: pointer;
     pointer-events: auto;
+    animation: view-cube-reset-fade 5s ease-in-out forwards;
+}
+
+.view-cube-reset:hover:not(:active),
+.view-cube-reset:focus-visible {
+    animation: none;
+    opacity: 1;
 }
 
 .view-cube-reset:hover,
@@ -129,4 +136,14 @@
     background: var(--neutral-layer-floating, #ffffff);
     outline: 2px solid var(--focus-stroke-outer, #000000);
     outline-offset: 1px;
+}
+
+@keyframes view-cube-reset-fade {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0.001;
+    }
 }

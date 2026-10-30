@@ -1,0 +1,4 @@
+{
+    // The WebAssembly SDK's ReadWasmProps task factory requires worker processes.
+    "dotnet.build.useMultithreadedMSBuild": false
+}

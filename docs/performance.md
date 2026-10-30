@@ -38,6 +38,22 @@ GPU/driver, build mode, and simultaneous workloads must be recorded separately.
 Use a visible, unobscured browser for interactive desktop acceptance; isolated
 headless browser runs are useful runtime checks but are reported as such.
 
+Weighted blended transparency adds an `rgba16float` accumulation target and an
+`r16float` revealage target, together approximately 10 bytes per pixel per MSAA
+sample before alignment and other GPU allocations. At 4x MSAA this is about
+18.3 MiB at 800 x 600 or 79 MiB at 1920 x 1080. The renderer also performs
+transparent accumulation and compositing passes. It does not currently have a
+sorted-transparency fallback if these targets cannot be created.
+
+An exploratory headless Chrome comparison on an Intel adapter used 50,000
+translucent line segments and 20,000 translucent triangles at 800 x 600 and 4x
+MSAA. Ten GPU-completion measurements gave approximately 18.5 ms median for
+the committed pre-change renderer and 16.45 ms for weighted transparency.
+These measurements include frame scheduling, use a small sample, and do not
+isolate GPU execution; they are not evidence of a performance improvement.
+Repeat with representative scenes and visible interactive workloads before
+drawing performance conclusions.
+
 The default input allowance is 1 GiB and can be changed with `MaxSceneFileSize`.
 Loading streams the JSON with progress and cancellation, then validates once before
 replacing the current presentation. Specialized readers for coordinate/index triples,
