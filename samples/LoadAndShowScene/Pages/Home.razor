@@ -4,5 +4,13 @@
 <PageTitle>Load and show a scene</PageTitle>
 
 <main class="scene-page">
+    @if (updateAvailable)
+    {
+        <div class="update-banner" role="status">An update is ready. <button @onclick="ApplyUpdateAsync">Reload to update</button></div>
+    }
+    @if (launchError is not null)
+    {
+        <div class="scene-error" role="alert">@launchError</div>
+    }
     <SceneViewer @ref="presentation" EnableSaveScene="false" MaxSceneFileSize="@(1024L * 1024 * 1024)" />
 </main>

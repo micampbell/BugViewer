@@ -30,19 +30,6 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Publish WebAssembly site
         run: dotnet publish samples/LoadAndShowScene/LoadAndShowScene.csproj -c Release -o "$RUNNER_TEMP/bugviewer-site"
-      - name: Set the Pages base path
-        env:
-          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: |
-          node -e '
-            const fs = require("node:fs");
-            const file = process.env.RUNNER_TEMP + "/bugviewer-site/wwwroot/index.html";
-            const html = fs.readFileSync(file, "utf8");
-            const original = "<base href=\"/\" />";
-            if (html.split(original).length !== 2) throw new Error("Expected one root base tag in published index.html");
-            const base = (process.env.PAGES_BASE_PATH || "") + "/";
-            fs.writeFileSync(file, html.replace(original, `<base href="${base}" />`));
-          '
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ runner.temp }}/bugviewer-site/wwwroot

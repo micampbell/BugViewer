@@ -19,7 +19,7 @@ public partial class SceneViewer
     /// <summary>Maximum browser input file size in bytes. Defaults to 1 GiB.</summary>
     [Parameter] public long MaxSceneFileSize { get; set; } = 1024L * 1024 * 1024;
     /// <summary>Suggested Save As filename for a supplied request.</summary>
-    [Parameter] public string FileName { get; set; } = "scene.bugscene.json";
+    [Parameter] public string FileName { get; set; } = "scene.bugscene";
 
     [Parameter] public bool ShowHeader { get; set; } = false;
 
@@ -56,7 +56,20 @@ public partial class SceneViewer
         prefetchCancellation?.Cancel();
     }
 
-    private async Task OpenSceneFileAsync(InputFileChangeEventArgs args)
+    private Task OpenSceneFileAsync(InputFileChangeEventArgs args) =>
+        OpenSceneStreamAsync(args.File.Name, args.File.Size,
+            token => Task.FromResult(args.File.OpenReadStream(MaxSceneFileSize, token)));
+
+    /// <summary>Opens a browser-provided stream using the same progress and validation as the Open control.</summary>
+    public async Task OpenBrowserSceneAsync(string name, long size, IJSStreamReference file)
+    {
+        // A launch can arrive while an Open or Save operation is in progress.
+        while (isBusy && !disposed) await Task.Delay(100, lifetime.Token);
+        if (!disposed)
+            await OpenSceneStreamAsync(name, size, token => file.OpenReadStreamAsync(MaxSceneFileSize, token).AsTask());
+    }
+
+    private async Task OpenSceneStreamAsync(string name, long size, Func<CancellationToken, Task<Stream>> openStream)
     {
         if (isBusy || disposed) return;
         isBusy = true;
@@ -69,12 +82,12 @@ public partial class SceneViewer
         {
             await RefreshFileOperationAsync();
             loading.Token.ThrowIfCancellationRequested();
-            if (args.File.Size > MaxSceneFileSize)
-                throw new IOException($"The file is {args.File.Size / 1048576.0:N1} MiB; this viewer allows {MaxSceneFileSize / 1048576.0:N1} MiB. Increase MaxSceneFileSize in the host to open larger scenes.");
-            await using var stream = args.File.OpenReadStream(MaxSceneFileSize, loading.Token);
+            if (size < 0 || size > MaxSceneFileSize)
+                throw new IOException($"The file is {size / 1048576.0:N1} MiB; this viewer allows {MaxSceneFileSize / 1048576.0:N1} MiB. Increase MaxSceneFileSize in the host to open larger scenes.");
+            await using var stream = await openStream(loading.Token);
             using var progress = new SceneReadProgressStream(stream, bytes => InvokeAsync(() =>
             {
-                loadPercent = (int)Math.Min(100, bytes * 100 / Math.Max(1, args.File.Size));
+                loadPercent = (int)Math.Min(100, bytes * 100 / Math.Max(1, size));
                 StateHasChanged();
             }));
             var scene = await SceneRequest.LoadAsync(progress, loading.Token);
@@ -84,7 +97,7 @@ public partial class SceneViewer
             fileOperationStatus = "Displaying scene…";
             await RefreshFileOperationAsync();
             await SetValidatedSceneAsync(scene);
-            openedFileName = args.File.Name;
+            openedFileName = name;
         }
         catch (OperationCanceledException) when (disposed || loading.IsCancellationRequested) { }
         catch (Exception exception) when (IsFileException(exception))
@@ -149,7 +162,7 @@ public partial class SceneViewer
         }
         if (!name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
             && !name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase))
-            name += ".bugscene.json";
+            name += ".bugscene";
         await files.CloseSaveAsAsync(saveAsDialog);
         await DownloadSceneAsync(name, start, end, stride);
     }

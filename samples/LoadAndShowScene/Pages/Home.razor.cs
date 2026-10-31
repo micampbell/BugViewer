@@ -18,10 +18,46 @@ public partial class Home : IAsyncDisposable
     private string phase = "interactive";
     private string checkStatus = "Open a stepped scene to begin.";
     private ReportInterop? report;
+    private BrowserAppInterop? browserApp;
+    private DotNetObjectReference<Home>? selfReference;
+    private bool updateAvailable;
+    private string? launchError;
     private record Measurement(string Phase, ScenePlaybackMetrics Timing);
     private record PlaybackReport(DateTimeOffset recordedAt, List<Measurement> measurements);
     [JsonSerializable(typeof(PlaybackReport))]
     private partial class PlaybackReportContext : JsonSerializerContext;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        selfReference = DotNetObjectReference.Create(this);
+        browserApp = new BrowserAppInterop(JS);
+        await browserApp.InitializeAsync(selfReference);
+    }
+
+    [JSInvokable]
+    public async Task OpenLaunchedFileAsync(string name, long size, IJSStreamReference file)
+    {
+        try
+        {
+            await InvokeAsync(() => { launchError = null; StateHasChanged(); });
+            if (presentation is not null)
+                await presentation.OpenBrowserSceneAsync(name, size, file);
+        }
+        finally { await file.DisposeAsync(); }
+    }
+
+    [JSInvokable]
+    public Task NotifyUpdateAvailableAsync() => InvokeAsync(() => { updateAvailable = true; StateHasChanged(); });
+
+    [JSInvokable]
+    public Task ReportLaunchErrorAsync(string message) => InvokeAsync(() =>
+    {
+        launchError = $"Could not open the launched file: {message}";
+        StateHasChanged();
+    });
+
+    private Task ApplyUpdateAsync() => browserApp?.ApplyUpdateAsync() ?? Task.CompletedTask;
 
     private void StepRendered(ScenePlaybackMetrics timing)
     {
@@ -79,7 +115,29 @@ public partial class Home : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         checkCancellation?.Cancel();
+        if (browserApp is not null) await browserApp.DisposeAsync();
+        selfReference?.Dispose();
         if (report is not null) await report.DisposeAsync();
+    }
+
+    private sealed class BrowserAppInterop(IJSRuntime js) : IAsyncDisposable
+    {
+        private IJSObjectReference? module;
+        internal async Task InitializeAsync(DotNetObjectReference<Home> reference)
+        {
+            module = await js.InvokeAsync<IJSObjectReference>("import", "./Pages/Home.razor.js");
+            await module.InvokeVoidAsync("initializeApp", reference);
+        }
+        internal async Task ApplyUpdateAsync()
+        {
+            if (module is not null) await module.InvokeVoidAsync("applyUpdate");
+        }
+        public async ValueTask DisposeAsync()
+        {
+            if (module is null) return;
+            try { await module.InvokeVoidAsync("disposeApp"); await module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
     }
 
     private sealed class ReportInterop(IJSRuntime js) : IAsyncDisposable

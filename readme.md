@@ -51,12 +51,12 @@ Use `SceneViewer` to display either kind of request:
 
 ```csharp
 // Save or replace the contents of a SceneViewer.
-await viewer.SaveSceneAsync("part.bugscene.json");
-await viewer.LoadSceneAsync("part.bugscene.json");
+await viewer.SaveSceneAsync("part.bugscene");
+await viewer.LoadSceneAsync("part.bugscene");
 
 // Persist a request directly, without creating a viewer.
-request.Save("part.bugscene.json");
-var restored = SceneRequest.Load("part.bugscene.json");
+request.Save("part.bugscene");
+var restored = SceneRequest.Load("part.bugscene");
 await viewer.LoadSceneAsync(restored);
 
 // Keep the source request with the current step, camera, and display settings.
@@ -86,7 +86,7 @@ The viewer header displays `ViewerId`, an active indicator when `IsActive` is tr
 scene title and heading (also the subtitle for 3D). Supplying `OnClose` shows a close button
 that passes `ViewerId` to the host; `OnReady` is forwarded for both 3D and 2D rendering.
 Save As prompts for a filename before downloading; Cancel or Escape leaves the scene unchanged.
-Names without a `.json` or `.bugscene` extension receive `.bugscene.json` automatically.
+Names without a `.json` or `.bugscene` extension receive `.bugscene` automatically.
 For a stepped scene, Save As also accepts a 1-based inclusive start and end and a positive stride.
 The default selects all steps with stride 1. Each saved 3D step combines the elements visible or
 introduced in its consecutive stride-sized group, retaining the latest version of an object; visible
@@ -154,7 +154,7 @@ launch its output DLL as a .NET console application. Stop any existing sample se
 before debugging if it is already using port 5220.
 
 Open the displayed localhost URL in a WebGPU-capable browser. Use the Settings gear's
-**Open scene** control or Ctrl+Alt+O to browse for a `.bugscene.json` file. In a 2D scene,
+**Open scene** control or Ctrl+Alt+O to browse for a `.bugscene` or existing `.json` file. In a 2D scene,
 the Open control appears above the plot. Scenes with no saved camera are automatically framed.
 Loading replaces the current request.
 
@@ -163,9 +163,29 @@ Loading replaces the current request.
 The sample is a static Blazor WebAssembly site: it loads scene files selected by the
 user into the browser and saves through a browser download. The sample does not need
 a server API for scene processing. The site assets must still be downloaded, and
-there is currently no service worker or offline-install support. A WebGPU-capable
+the published viewer includes a service worker for offline use after the application assets have been cached. A WebGPU-capable
 browser and a secure context (HTTPS, or localhost for development) are required.
 Browser memory can limit the practical file size below the configured 1 GiB limit.
+
+In desktop Edge or Chrome, install the deployed viewer as an app and allow it to handle
+`.bugscene` files. If needed, choose BugViewer as the Windows default app for that extension.
+Double-clicking a `.bugscene` file then launches the viewer and loads it locally. Each file
+is requested in a separate app window where the browser supports multiple-client launches.
+Existing `.json` scenes can still be opened through the viewer or renamed to `.bugscene`;
+the JSON contents do not change. File handling is browser- and platform-dependent, and
+ordinary browser Open remains available. Offline use requires an initial online visit and
+successful caching of the published app. An update prompt appears when a new version is
+ready; reload when convenient to activate it.
+
+On Windows, [Install-BugViewer.cmd](scripts/Install-BugViewer.cmd) and
+[Install-BugViewer.ps1](scripts/Install-BugViewer.ps1) provide a guided setup.
+Download both files into the same folder and double-click the `.cmd` file after the
+updated site is deployed. It opens the viewer in Edge, then opens Windows Default apps;
+follow the browser prompts to install the PWA and allow file handling, and select
+BugViewer for `.bugscene` in Windows if needed. To use Chrome, run
+`powershell -ExecutionPolicy Bypass -File .\Install-BugViewer.ps1 -Browser Chrome`.
+The script checks that the deployed manifest advertises the handler, but it cannot
+complete the browser permission or Windows default-app choice on the user's behalf.
 
 To prepare a GitHub Pages deployment:
 
@@ -175,7 +195,7 @@ To prepare a GitHub Pages deployment:
 2. Push the workflow and app changes to the default branch. In **Actions**, select
    **Deploy scene viewer to GitHub Pages** and run it manually. The workflow does not
    deploy automatically on push.
-3. Open the URL reported by the deployment. The workflow uses the Pages base path,
+3. Open the URL reported by the deployment. The application uses a relative base path,
    so both a repository subpath and a root/custom-domain site are supported.
 
 The deployed page provides **Open scene** in Settings and the Ctrl+Alt+O shortcut.

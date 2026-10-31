@@ -418,6 +418,16 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     await Open(plots, "plots.json");
     Assert(HasRange(), "A stepped 2D scene did not show step range controls.");
     await Open(restored, "original.bugscene.json");
+    var launchedBytes = Encoding.UTF8.GetBytes(Json(restored));
+    await loader.OpenBrowserSceneAsync("launched.bugscene", launchedBytes.Length, new MemoryJsStream(launchedBytes));
+    Assert(Json(await loader.GetSceneAsync()) == Json(restored), "Launched browser stream lost scene data.");
+    await loader.ShowSaveAsAsync();
+    Assert((string)typeof(SceneViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "launched.bugscene",
+        "Launched browser stream lost its filename.");
+    await FileCommand("CancelSaveAsAsync");
+    await loader.OpenBrowserSceneAsync("bad.bugscene", 3, new MemoryJsStream(Encoding.UTF8.GetBytes("bad")));
+    Assert(Json(await loader.GetSceneAsync()) == Json(restored), "An invalid launched scene replaced the active scene.");
+    await Open(restored, "original.bugscene.json");
     await loader.ShowSaveAsAsync();
     Assert((string)typeof(SceneViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene.json",
         "Save As did not suggest the opened filename.");
@@ -447,9 +457,16 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     typeof(SceneViewer).GetField("saveAsName", flags)!.SetValue(loader, "renamed scene");
     await FileCommand("ConfirmSaveAsAsync");
     var download = fileRuntime.Downloads.Single();
-    Assert(download.Name == "renamed scene.bugscene.json", "Save As ignored the chosen name or scene extension.");
+    Assert(download.Name == "renamed scene.bugscene", "Save As ignored the chosen name or scene extension.");
     using var downloaded = new MemoryStream(download.Data);
     Assert(Json(SceneRequest.Load(downloaded)) == Json(restored), "Save As lost the complete stepped request.");
+    foreach (var explicitName in new[] { "part.bugscene", "legacy.json", "part.with.dots.bugscene" })
+    {
+        await loader.ShowSaveAsAsync();
+        typeof(SceneViewer).GetField("saveAsName", flags)!.SetValue(loader, explicitName);
+        await FileCommand("ConfirmSaveAsAsync");
+        Assert(fileRuntime.Downloads.Last().Name == explicitName, "Save As changed an explicit scene extension.");
+    }
     await loader.ShowSaveAsAsync();
     typeof(SceneViewer).GetField("saveStartStep", flags)!.SetValue(loader, "3");
     typeof(SceneViewer).GetField("saveEndStep", flags)!.SetValue(loader, "4");
@@ -587,6 +604,17 @@ sealed class MemoryBrowserFile(string name, byte[] bytes, long? size = null) : I
         if (Size > maxAllowedSize) throw new IOException("File exceeds the input limit.");
         return new MemoryStream(bytes, writable: false);
     }
+}
+sealed class MemoryJsStream(byte[] bytes) : IJSStreamReference
+{
+    public long Length => bytes.LongLength;
+    public ValueTask<Stream> OpenReadStreamAsync(long maxAllowedSize = 512000, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Length > maxAllowedSize) throw new IOException("File exceeds the input limit.");
+        return ValueTask.FromResult<Stream>(new MemoryStream(bytes, writable: false));
+    }
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 sealed class TestViewer : global::BugViewer.BugViewer
 {

@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "BugViewer Scene Viewer",
+  "short_name": "BugViewer",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "launch_handler": { "client_mode": "navigate-new" },
+  "background_color": "#ffffff",
+  "theme_color": "#03173d",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/json": [".bugscene"] }, "launch_type": "multiple-clients" }
+  ]
+}
