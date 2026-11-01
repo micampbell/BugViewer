@@ -85,8 +85,11 @@ the Camera accordion, visible even when the accordion is collapsed. In 2D, the i
 The viewer header displays `ViewerId`, an active indicator when `IsActive` is true, and the
 scene title and heading (also the subtitle for 3D). Supplying `OnClose` shows a close button
 that passes `ViewerId` to the host; `OnReady` is forwarded for both 3D and 2D rendering.
-Save As prompts for a filename before downloading; Cancel or Escape leaves the scene unchanged.
-Names without a `.json` or `.bugscene` extension receive `.bugscene` automatically.
+Save As prompts for a filename and step range. In browsers supporting the File System Access
+API, Save then opens the system file picker so you can choose the destination and filename.
+The file must end in `.bugscene`; an existing `.json` suggestion is changed to `.bugscene`.
+Canceling either dialog leaves the scene unchanged. Browsers without the picker use their
+normal download behavior, which may save directly to the downloads folder.
 For a stepped scene, Save As also accepts a 1-based inclusive start and end and a positive stride.
 The default selects all steps with stride 1. Each saved 3D step combines the elements visible or
 introduced in its consecutive stride-sized group, retaining the latest version of an object; visible

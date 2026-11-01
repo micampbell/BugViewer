@@ -24,8 +24,9 @@ class SceneFileControls {
     #openButton;
     #saveButton;
     #events = new AbortController();
+    #picking = false;
 
-    constructor(container, input, openButton, saveButton) {
+    constructor(container, input, openButton, saveButton, dotNet) {
         this.#container = container;
         this.#input = input;
         this.#openButton = openButton;
@@ -44,6 +45,56 @@ class SceneFileControls {
             // Reset before opening so choosing the same file again raises a change event.
             input.value = '';
             input.click();
+        }, { ...options, capture: true });
+        container.addEventListener('submit', event => {
+            const form = event.target;
+            if (!form.matches?.('[data-scene-save-form]')) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            const name = form.querySelector('[data-save-name]')?.value.trim() ?? '';
+            const count = Number(form.dataset.stepCount);
+            const start = form.querySelector('[data-save-start]')?.value ?? '1';
+            const end = form.querySelector('[data-save-end]')?.value ?? '1';
+            const stride = form.querySelector('[data-save-stride]')?.value ?? '1';
+            const validNumber = value => /^[+-]?\d+$/.test(value.trim()) && Number.isSafeInteger(Number(value));
+            const invalid = !name || /[<>:"/\\|?*\x00-\x1f\x7f-\x9f]/.test(name) || name.endsWith('.') ||
+                (count > 0 && (![start, end, stride].every(validNumber) || Number(start) < 1 ||
+                    Number(end) < Number(start) || Number(end) > count || Number(stride) < 1 || Number(stride) > 2147483647));
+            if (this.#picking) return;
+            // .NET owns validation and the fallback download; no native picker is shown for invalid input.
+            if (invalid || typeof window.showSaveFilePicker !== 'function') {
+                dotNet.invokeMethodAsync('ConfirmPickedSceneSaveAsync', name, start, end, stride, null)
+                    .catch(error => console.error('Could not start scene save:', error));
+                return;
+            }
+            this.#picking = true;
+            const suggestedName = sceneFileName(name);
+            // Invoke synchronously from the submit gesture, including for Blazor Server.
+            let picker;
+            try {
+                picker = window.showSaveFilePicker({ suggestedName, id: 'bugviewer-scene',
+                    types: [{ description: 'BugViewer scene', accept: { 'application/json': ['.bugscene'] } }],
+                    excludeAcceptAllOption: true });
+            } catch (error) {
+                this.#picking = false;
+                dotNet.invokeMethodAsync('ReportSceneSaveError', error.message || String(error))
+                    .catch(callbackError => console.error('Could not report save error:', callbackError));
+                return;
+            }
+            picker.then(async handle => {
+                    if (!handle.name.toLowerCase().endsWith('.bugscene')) {
+                        await dotNet.invokeMethodAsync('ReportSceneSaveError', 'Choose a file name ending in .bugscene.');
+                        return;
+                    }
+                    await dotNet.invokeMethodAsync('ConfirmPickedSceneSaveAsync', handle.name, start, end, stride,
+                        DotNet.createJSObjectReference(handle));
+                })
+                .catch(async error => {
+                    if (error.name === 'AbortError') return;
+                    try { await dotNet.invokeMethodAsync('ReportSceneSaveError', error.message || String(error)); }
+                    catch (callbackError) { console.error('Could not report save error:', callbackError); }
+                })
+                .finally(() => { this.#picking = false; });
         }, { ...options, capture: true });
     }
 
@@ -64,8 +115,14 @@ class SceneFileControls {
     }
 }
 
-export function initialize(container, input, openButton, saveButton) {
-    return new SceneFileControls(container, input, openButton, saveButton);
+export function initialize(container, input, openButton, saveButton, dotNet) {
+    return new SceneFileControls(container, input, openButton, saveButton, dotNet);
+}
+
+function sceneFileName(name) {
+    if (name.toLowerCase().endsWith('.bugscene')) return name;
+    if (name.toLowerCase().endsWith('.json')) name = name.slice(0, -5);
+    return name.toLowerCase().endsWith('.bugscene') ? name : name + '.bugscene';
 }
 
 export function showSaveAs(dialog, input) {
@@ -88,5 +145,16 @@ export async function downloadScene(name, stream) {
     } finally {
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+}
+
+export async function writeSceneFile(handle, stream) {
+    const writable = await handle.createWritable();
+    try {
+        await writable.write(await stream.arrayBuffer());
+        await writable.close();
+    } catch (error) {
+        try { await writable.abort(); } catch { /* Preserve the original error. */ }
+        throw error;
     }
 }

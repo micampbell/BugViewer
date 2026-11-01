@@ -124,7 +124,7 @@ public partial class SceneViewer
     private Task BeginSaveAsAsync()
     {
         if (isBusy || disposed || files is null || ActiveScenes.Count == 0) return Task.CompletedTask;
-        saveAsName = openedFileName ?? FileName;
+        saveAsName = SceneFileName(openedFileName ?? FileName);
         saveStartStep = "1";
         saveEndStep = Math.Max(1, StepCount).ToString();
         saveStepStride = "1";
@@ -138,7 +138,49 @@ public partial class SceneViewer
 
     private Task CancelSaveAsAsync() => files is null ? Task.CompletedTask : files.CloseSaveAsAsync(saveAsDialog);
 
-    private async Task ConfirmSaveAsAsync()
+    private Task ConfirmSaveAsAsync() => ConfirmSaveAsCoreAsync(null);
+
+    /// <summary>Completes a save after the browser's file picker returns a destination.</summary>
+    [JSInvokable]
+    public async Task ConfirmPickedSceneSaveAsync(string name, string start, string end, string stride, IJSObjectReference? handle)
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                saveAsName = name;
+                saveStartStep = start;
+                saveEndStep = end;
+                saveStepStride = stride;
+                if (handle is not null && !name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase))
+                {
+                    saveAsError = "Choose a file name ending in .bugscene.";
+                    StateHasChanged();
+                    return;
+                }
+                await ConfirmSaveAsCoreAsync(handle);
+                if (!disposed) StateHasChanged();
+            });
+        }
+        finally { if (handle is not null) await handle.DisposeAsync(); }
+    }
+
+    /// <summary>Displays an error from the browser's save picker.</summary>
+    [JSInvokable]
+    public Task ReportSceneSaveError(string message) => InvokeAsync(() =>
+    {
+        saveAsError = message;
+        StateHasChanged();
+    });
+
+    private static string SceneFileName(string name)
+    {
+        if (name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase)) return name;
+        if (name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) name = name[..^5];
+        return name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase) ? name : name + ".bugscene";
+    }
+
+    private async Task ConfirmSaveAsCoreAsync(IJSObjectReference? handle)
     {
         if (isBusy || disposed || files is null) return;
         var name = saveAsName.Trim();
@@ -160,14 +202,15 @@ public partial class SceneViewer
             saveAsError = $"Enter a start and end between 1 and {StepCount}, with the start no greater than the end, and a positive stride.";
             return;
         }
-        if (!name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-            && !name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase))
-            name += ".bugscene";
+        name = SceneFileName(name);
         await files.CloseSaveAsAsync(saveAsDialog);
-        await DownloadSceneAsync(name, start, end, stride);
+        await SaveSceneCoreAsync(name, start, end, stride, handle);
     }
 
-    private async Task DownloadSceneAsync(string name, int start, int end, int stride)
+    private Task DownloadSceneAsync(string name, int start, int end, int stride) =>
+        SaveSceneCoreAsync(name, start, end, stride, null);
+
+    private async Task SaveSceneCoreAsync(string name, int start, int end, int stride, IJSObjectReference? handle)
     {
         if (isBusy || disposed || files is null || ActiveScenes.Count == 0) return;
         isBusy = true;
@@ -192,9 +235,10 @@ public partial class SceneViewer
             saving.Token.ThrowIfCancellationRequested();
             stream.Position = 0;
             fileOperationCanCancel = false;
-            fileOperationStatus = "Handing download to browser…";
+            fileOperationStatus = handle is null ? "Handing download to browser…" : "Saving file…";
             await RefreshFileOperationAsync();
-            await files.DownloadAsync(name, stream);
+            if (handle is null) await files.DownloadAsync(name, stream);
+            else await files.WriteFileAsync(handle, stream);
             openedFileName = name;
         }
         catch (OperationCanceledException) when (disposed || saving.IsCancellationRequested) { }

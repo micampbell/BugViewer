@@ -184,16 +184,16 @@
     </div>
     }
     <dialog @ref="saveAsDialog" class="scene-save-dialog" aria-labelledby="@saveAsTitleId">
-        <form @onsubmit="ConfirmSaveAsAsync" @onsubmit:preventDefault>
+        <form data-scene-save-form data-step-count="@StepCount">
             <h2 id="@saveAsTitleId">Save scene as</h2>
-            <label>File name <input @ref="saveAsInput" type="text" @bind="saveAsName" @bind:event="oninput" maxlength="240" /></label>
+            <label>File name <input data-save-name @ref="saveAsInput" type="text" @bind="saveAsName" @bind:event="oninput" maxlength="240" /></label>
             @if (StepCount > 0)
             {
                 <fieldset class="scene-save-range">
                     <legend>Steps to save (1–@StepCount)</legend>
-                    <label>Start step <input type="text" inputmode="numeric" @bind="saveStartStep" @bind:event="oninput" /></label>
-                    <label>End step <input type="text" inputmode="numeric" @bind="saveEndStep" @bind:event="oninput" /></label>
-                    <label>Stride <input type="text" inputmode="numeric" @bind="saveStepStride" @bind:event="oninput" /></label>
+                    <label>Start step <input data-save-start type="text" inputmode="numeric" @bind="saveStartStep" @bind:event="oninput" /></label>
+                    <label>End step <input data-save-end type="text" inputmode="numeric" @bind="saveEndStep" @bind:event="oninput" /></label>
+                    <label>Stride <input data-save-stride type="text" inputmode="numeric" @bind="saveStepStride" @bind:event="oninput" /></label>
                 </fieldset>
                 <p>Each saved step combines up to the specified number of steps and includes the current view.</p>
             }

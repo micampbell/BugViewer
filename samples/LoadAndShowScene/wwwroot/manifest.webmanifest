@@ -9,10 +9,18 @@
   "background_color": "#ffffff",
   "theme_color": "#03173d",
   "icons": [
-    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
-    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" }
+    { "src": "bugviewer-icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "bugviewer-icon-512.png", "type": "image/png", "sizes": "512x512" }
   ],
   "file_handlers": [
-    { "action": "./", "accept": { "application/json": [".bugscene"] }, "launch_type": "multiple-clients" }
+    {
+      "action": "./",
+      "accept": { "application/json": [".bugscene"] },
+      "launch_type": "multiple-clients",
+      "icons": [
+        { "src": "bugviewer-icon-192.png", "type": "image/png", "sizes": "192x192" },
+        { "src": "bugviewer-icon-512.png", "type": "image/png", "sizes": "512x512" }
+      ]
+    }
   ]
 }

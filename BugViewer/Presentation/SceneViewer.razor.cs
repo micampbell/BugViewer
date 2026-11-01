@@ -118,7 +118,7 @@ public partial class SceneViewer
     {
         if (files is null && fileInput?.Element is { } input)
         {
-            files = new SceneFileInterop(JS);
+            files = new SceneFileInterop(JS, this);
             await files.InitializeAsync(container, input, openButton, saveButton);
         }
         if (showSaveAsAfterRender && files is not null)

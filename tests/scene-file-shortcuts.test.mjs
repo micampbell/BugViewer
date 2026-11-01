@@ -25,17 +25,18 @@ class Element extends EventTarget {
 async function harness() {
     const document = new Element();
     document.body = new Element(document);
-    const context = vm.createContext({ document, AbortController });
+    const window = {};
+    const context = vm.createContext({ document, window, AbortController, DotNet: { createJSObjectReference: value => value }, console });
     const source = await readFile(new URL('../BugViewer/Presentation/SceneViewer.razor.js', import.meta.url), 'utf8');
     const module = new vm.SourceTextModule(source, { context });
     await module.link(() => { throw new Error('Unexpected import'); });
     await module.evaluate();
-    function viewer() {
+    function viewer(dotNet = {}) {
         const root = new Element(document.body);
         root.dataset.sceneShortcuts = 'true';
         const input = new Element(root), open = new Element(root), save = new Element(root);
         open.dataset.sceneFileCommand = 'open';
-        const binding = module.namespace.initialize(root, input, open, save);
+        const binding = module.namespace.initialize(root, input, open, save, dotNet);
         return { root, input, open, save, binding };
     }
     function key(key, overrides = {}) {
@@ -45,7 +46,7 @@ async function harness() {
         document.dispatchEvent(event);
         return event;
     }
-    return { viewer, key, document, api: module.namespace };
+    return { viewer, key, document, window, api: module.namespace };
 }
 
 test('open executes inside the key event, save targets the scene, and repeats are suppressed', async () => {
@@ -150,4 +151,92 @@ test('a save-only viewer leaves the open shortcut untouched', async () => {
     assert.equal(h.key('s').defaultPrevented, true);
     assert.equal(v.save.clicks, 1);
     v.binding.dispose();
+});
+
+test('native save picker opens synchronously, restricts the extension and passes the selected file', async () => {
+    const h = await harness(), calls = [];
+    const v = h.viewer({ invokeMethodAsync: async (...args) => calls.push(args) });
+    let options;
+    h.window.showSaveFilePicker = args => { options = args; return Promise.resolve({ name: 'picked.bugscene' }); };
+    const values = { '[data-save-name]': 'old.bugscene.json', '[data-save-start]': '1',
+        '[data-save-end]': '4', '[data-save-stride]': '2' };
+    const form = { dataset: { stepCount: '4' }, matches: () => true,
+        querySelector: selector => ({ value: values[selector] }) };
+    const event = new Event('submit', { cancelable: true });
+    Object.defineProperty(event, 'target', { value: form });
+    v.root.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(options.suggestedName, 'old.bugscene');
+    assert.equal(options.excludeAcceptAllOption, true);
+    assert.deepEqual(Array.from(options.types[0].accept['application/json']), ['.bugscene']);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(calls[0][0], 'ConfirmPickedSceneSaveAsync');
+    assert.deepEqual(calls[0].slice(1, 5), ['picked.bugscene', '1', '4', '2']);
+    v.binding.dispose();
+});
+
+test('invalid ranges do not open a native picker, and a differently named file is not written', async () => {
+    const h = await harness(), calls = [];
+    const v = h.viewer({ invokeMethodAsync: async (...args) => calls.push(args) });
+    let picks = 0;
+    h.window.showSaveFilePicker = () => { picks++; return Promise.resolve({ name: 'wrong.txt' }); };
+    const values = { '[data-save-name]': 'part', '[data-save-start]': '0',
+        '[data-save-end]': '2', '[data-save-stride]': '1' };
+    const form = { dataset: { stepCount: '2' }, matches: () => true,
+        querySelector: selector => ({ value: values[selector] }) };
+    function submit() {
+        const event = new Event('submit', { cancelable: true });
+        Object.defineProperty(event, 'target', { value: form });
+        v.root.dispatchEvent(event);
+        return event;
+    }
+    assert.equal(submit().defaultPrevented, true);
+    assert.equal(picks, 0);
+    assert.equal(calls[0][0], 'ConfirmPickedSceneSaveAsync');
+    calls.length = 0;
+    values['[data-save-start]'] = '1';
+    assert.equal(submit().defaultPrevented, true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(calls[0][0], 'ReportSceneSaveError');
+    assert.equal(calls.length, 1);
+    v.binding.dispose();
+});
+
+test('picker cancellation leaves the dialog alone and unavailable pickers use the download path', async () => {
+    const h = await harness(), calls = [];
+    const v = h.viewer({ invokeMethodAsync: async (...args) => calls.push(args) });
+    const form = { dataset: { stepCount: '0' }, matches: () => true,
+        querySelector: selector => selector === '[data-save-name]' ? { value: 'part.json' } : null };
+    const submit = () => {
+        const event = new Event('submit', { cancelable: true });
+        Object.defineProperty(event, 'target', { value: form });
+        v.root.dispatchEvent(event);
+        return event;
+    };
+    h.window.showSaveFilePicker = () => Promise.reject({ name: 'AbortError' });
+    assert.equal(submit().defaultPrevented, true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(calls.length, 0);
+    delete h.window.showSaveFilePicker;
+    assert.equal(submit().defaultPrevented, true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(calls[0][0], 'ConfirmPickedSceneSaveAsync');
+    assert.equal(calls[0][5], null);
+    v.binding.dispose();
+});
+
+test('writing a selected file closes on success and aborts on failure', async () => {
+    const h = await harness();
+    const data = new Uint8Array([1, 2, 3]);
+    const actions = [];
+    const handle = { createWritable: async () => ({
+        write: async value => { actions.push(value); },
+        close: async () => { actions.push('close'); },
+        abort: async () => { actions.push('abort'); }
+    }) };
+    await h.api.writeSceneFile(handle, { arrayBuffer: async () => data });
+    assert.deepEqual(actions, [data, 'close']);
+    actions.length = 0;
+    await assert.rejects(h.api.writeSceneFile(handle, { arrayBuffer: async () => { throw new Error('read failed'); } }));
+    assert.deepEqual(actions, ['abort']);
 });

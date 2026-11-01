@@ -3,16 +3,18 @@ using Microsoft.JSInterop;
 
 namespace BugViewer;
 
-internal sealed class SceneFileInterop(IJSRuntime js) : IAsyncDisposable
+internal sealed class SceneFileInterop(IJSRuntime js, SceneViewer viewer) : IAsyncDisposable
 {
     private const string ModulePath = "./_content/BugViewer/Presentation/SceneViewer.razor.js";
     private const string InitializeMethod = "initialize";
     private const string DownloadMethod = "downloadScene";
+    private const string WriteFileMethod = "writeSceneFile";
     private const string DisposeMethod = "dispose";
     private const string ShowSaveAsMethod = "showSaveAs";
     private const string CloseSaveAsMethod = "closeSaveAs";
     private IJSObjectReference? module, shortcuts;
     private Task? initialization;
+    private readonly DotNetObjectReference<SceneViewer> reference = DotNetObjectReference.Create(viewer);
 
     public Task InitializeAsync(ElementReference container, ElementReference input,
         ElementReference openButton, ElementReference saveButton) =>
@@ -22,7 +24,7 @@ internal sealed class SceneFileInterop(IJSRuntime js) : IAsyncDisposable
         ElementReference openButton, ElementReference saveButton)
     {
         module = await js.InvokeAsync<IJSObjectReference>("import", ModulePath);
-        shortcuts = await module.InvokeAsync<IJSObjectReference>(InitializeMethod, container, input, openButton, saveButton);
+        shortcuts = await module.InvokeAsync<IJSObjectReference>(InitializeMethod, container, input, openButton, saveButton, reference);
     }
 
     public async Task DownloadAsync(string name, Stream stream)
@@ -30,6 +32,13 @@ internal sealed class SceneFileInterop(IJSRuntime js) : IAsyncDisposable
         if (initialization is not null) await initialization;
         using var reference = new DotNetStreamReference(stream, leaveOpen: true);
         await module!.InvokeVoidAsync(DownloadMethod, name, reference);
+    }
+
+    public async Task WriteFileAsync(IJSObjectReference handle, Stream stream)
+    {
+        if (initialization is not null) await initialization;
+        using var streamReference = new DotNetStreamReference(stream, leaveOpen: true);
+        await module!.InvokeVoidAsync(WriteFileMethod, handle, streamReference);
     }
 
     public async Task ShowSaveAsAsync(ElementReference dialog, ElementReference input)
@@ -57,5 +66,6 @@ internal sealed class SceneFileInterop(IJSRuntime js) : IAsyncDisposable
             if (module is not null) await module.DisposeAsync();
         }
         catch (JSDisconnectedException) { }
+        finally { reference.Dispose(); }
     }
 }

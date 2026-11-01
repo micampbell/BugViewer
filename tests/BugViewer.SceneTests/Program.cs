@@ -375,7 +375,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
 
     var fileRuntime = new SceneFileRuntime();
     var interopType = typeof(SceneViewer).Assembly.GetType("BugViewer.SceneFileInterop")!;
-    var fileInterop = Activator.CreateInstance(interopType, fileRuntime)!;
+    var fileInterop = Activator.CreateInstance(interopType, fileRuntime, loader)!;
     await (Task)interopType.GetMethod("InitializeAsync")!.Invoke(fileInterop,
         [default(ElementReference), default(ElementReference), default(ElementReference), default(ElementReference)])!;
     typeof(SceneViewer).GetField("files", flags)!.SetValue(loader, fileInterop);
@@ -429,7 +429,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     Assert(Json(await loader.GetSceneAsync()) == Json(restored), "An invalid launched scene replaced the active scene.");
     await Open(restored, "original.bugscene.json");
     await loader.ShowSaveAsAsync();
-    Assert((string)typeof(SceneViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene.json",
+    Assert((string)typeof(SceneViewer).GetField("saveAsName", flags)!.GetValue(loader)! == "original.bugscene",
         "Save As did not suggest the opened filename.");
     Assert(HasRange() && (string)typeof(SceneViewer).GetField("saveStartStep", flags)!.GetValue(loader)! == "1"
         && (string)typeof(SceneViewer).GetField("saveEndStep", flags)!.GetValue(loader)! == "4"
@@ -460,13 +460,22 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     Assert(download.Name == "renamed scene.bugscene", "Save As ignored the chosen name or scene extension.");
     using var downloaded = new MemoryStream(download.Data);
     Assert(Json(SceneRequest.Load(downloaded)) == Json(restored), "Save As lost the complete stepped request.");
-    foreach (var explicitName in new[] { "part.bugscene", "legacy.json", "part.with.dots.bugscene" })
+    foreach (var (explicitName, expectedName) in new[] { ("part.bugscene", "part.bugscene"), ("legacy.json", "legacy.bugscene"), ("part.with.dots.bugscene", "part.with.dots.bugscene") })
     {
         await loader.ShowSaveAsAsync();
         typeof(SceneViewer).GetField("saveAsName", flags)!.SetValue(loader, explicitName);
         await FileCommand("ConfirmSaveAsAsync");
-        Assert(fileRuntime.Downloads.Last().Name == explicitName, "Save As changed an explicit scene extension.");
+        Assert(fileRuntime.Downloads.Last().Name == expectedName, "Save As did not use the .bugscene extension.");
     }
+    await loader.ShowSaveAsAsync();
+    await loader.ConfirmPickedSceneSaveAsync("picked.bugscene", "1", "4", "1", new RecordingModule());
+    Assert(fileRuntime.PickedFiles.Count == 1, "The selected destination was not written.");
+    using (var pickedStream = new MemoryStream(fileRuntime.PickedFiles[0]))
+        Assert(Json(SceneRequest.Load(pickedStream)) == Json(restored), "The selected destination lost the scene data.");
+    await loader.ShowSaveAsAsync();
+    await loader.ConfirmPickedSceneSaveAsync("wrong.json", "1", "4", "1", new RecordingModule());
+    Assert(fileRuntime.PickedFiles.Count == 1 && typeof(SceneViewer).GetField("saveAsError", flags)!.GetValue(loader) is string,
+        "A selected file without the scene extension was accepted.");
     await loader.ShowSaveAsAsync();
     typeof(SceneViewer).GetField("saveStartStep", flags)!.SetValue(loader, "3");
     typeof(SceneViewer).GetField("saveEndStep", flags)!.SetValue(loader, "4");
@@ -645,6 +654,7 @@ sealed class RecordingModule : IJSObjectReference
 sealed class SceneFileRuntime : IJSRuntime, IJSObjectReference
 {
     public List<(string Name, byte[] Data)> Downloads { get; } = [];
+    public List<byte[]> PickedFiles { get; } = [];
     public TaskCompletionSource? DownloadGate { get; set; }
     public TaskCompletionSource DownloadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public async ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
@@ -657,6 +667,12 @@ sealed class SceneFileRuntime : IJSRuntime, IJSObjectReference
             using var copy = new MemoryStream();
             await ((DotNetStreamReference)args![1]!).Stream.CopyToAsync(copy);
             Downloads.Add(((string)args[0]!, copy.ToArray()));
+        }
+        if (identifier == "writeSceneFile")
+        {
+            using var copy = new MemoryStream();
+            await ((DotNetStreamReference)args![1]!).Stream.CopyToAsync(copy);
+            PickedFiles.Add(copy.ToArray());
         }
         return default!;
     }
