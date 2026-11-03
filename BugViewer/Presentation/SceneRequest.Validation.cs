@@ -116,8 +116,9 @@ public partial record SceneRequest
         if (mesh.Triangles is null || mesh.Colors is null || !Enum.IsDefined(mesh.ColorMode)
             || mesh.PrimitiveSurfaceNormals.Count != 0 && mesh.PrimitiveSurfaceNormals.Count != mesh.Vertices.Count)
             throw new InvalidDataException($"Mesh '{mesh.Id}' has invalid normals, triangles, or colors.");
+        var vertexCount = (uint)mesh.Vertices.Count;
         foreach (var triangle in mesh.Triangles)
-            if (triangle is null || triangle.Length != 3 || triangle.Any(index => (uint)index >= mesh.Vertices.Count))
+            if (triangle is null || triangle.Length != 3 || (uint)triangle[0] >= vertexCount || (uint)triangle[1] >= vertexCount || (uint)triangle[2] >= vertexCount)
                 throw new InvalidDataException($"Mesh '{mesh.Id}' contains an invalid triangle index.");
         var colorCount = mesh.ColorMode == MeshColoring.PerVertex ? mesh.Vertices.Count : mesh.Triangles.Count;
         if (mesh.HasUniformColor ? mesh.Colors.Count > 1 : mesh.Colors.Count != colorCount)
@@ -126,8 +127,12 @@ public partial record SceneRequest
 
     private static void Coordinates(IEnumerable<float[]> coordinates)
     {
-        if (coordinates is null || coordinates.Any(point => point is null || point.Length != 3 || point.Any(value => !float.IsFinite(value))))
-            throw new InvalidDataException("Coordinates must contain three finite numbers.");
+        if (coordinates is null) throw new InvalidDataException("Coordinates must contain three finite numbers.");
+        foreach (var point in coordinates)
+        {
+            if (point is null || point.Length != 3 || !float.IsFinite(point[0]) || !float.IsFinite(point[1]) || !float.IsFinite(point[2]))
+                throw new InvalidDataException("Coordinates must contain three finite numbers.");
+        }
     }
 
     private static void Id(string id, HashSet<string> ids)

@@ -23,9 +23,33 @@ public partial class BugViewer
     }
     private sealed class DisplayLineCache
     {
-        internal bool Initialized;
-        internal bool Borders;
-        internal LineData? Lines;
+        internal LineData? Edges;
+        internal bool EdgesComputed;
+        internal LineData? Borders;
+        internal bool BordersComputed;
+    }
+
+    private LineData? GetMeshDisplayLines(MeshData mesh, bool bordersOnly)
+    {
+        var cached = presentationEdges.GetOrCreateValue(mesh);
+        if (bordersOnly)
+        {
+            if (!cached.BordersComputed)
+            {
+                cached.Borders = CreateMeshDisplayLines(mesh, bordersOnly: true, automaticThickness: true);
+                cached.BordersComputed = true;
+            }
+            return cached.Borders;
+        }
+        else
+        {
+            if (!cached.EdgesComputed)
+            {
+                cached.Edges = CreateMeshDisplayLines(mesh, bordersOnly: false, automaticThickness: true);
+                cached.EdgesComputed = true;
+            }
+            return cached.Edges;
+        }
     }
     private sealed record ResourceReference(string Key, string Id);
     private sealed class MissingPresentationResources
@@ -94,15 +118,11 @@ public partial class BugViewer
             meshDisplayLines.Clear();
             if (Options.ShowMeshEdges || Options.ShowMeshBorders && CanShowMeshBorders)
             {
+                var bordersOnly = !Options.ShowMeshEdges;
                 foreach (var mesh in meshes)
                 {
-                    var cached = presentationEdges.GetValue(mesh, _ => new DisplayLineCache());
-                    if (!cached.Initialized || cached.Borders != Options.ShowMeshBorders)
-                    {
-                        cached.Initialized = true; cached.Borders = Options.ShowMeshBorders;
-                        cached.Lines = CreateMeshDisplayLines(mesh, cached.Borders, automaticThickness: true);
-                    }
-                    if (cached.Lines is { } line)
+                    await Task.Yield();
+                    if (GetMeshDisplayLines(mesh, bordersOnly) is { } line)
                     {
                         meshDisplayLines.Add(line.Id, line); lines.Add(line);
                         objectSpheres[line] = presentationResources.GetOrCreateValue(line).Bounds

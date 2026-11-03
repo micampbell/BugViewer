@@ -1817,17 +1817,18 @@ namespace BugViewer
             var desired = new Dictionary<string, LineData>();
             foreach (var mesh in meshes)
             {
+                await Task.Yield();
                 if (Options.ShowMeshEdges)
                 {
-                    var lineData = CreateMeshDisplayLines(mesh, false);
+                    var lineData = GetMeshDisplayLines(mesh, bordersOnly: false);
                     if (lineData is not null)
-                        desired.Add($"__mesh-edges-{mesh.Id}", lineData);
+                        desired.Add(lineData.Id, lineData);
                 }
                 if (Options.ShowMeshBorders && CanShowMeshBorders)
                 {
-                    var lineData = CreateMeshDisplayLines(mesh, true);
+                    var lineData = GetMeshDisplayLines(mesh, bordersOnly: true);
                     if (lineData is not null)
-                        desired.Add($"__mesh-borders-{mesh.Id}", lineData);
+                        desired.Add(lineData.Id, lineData);
                 }
             }
 
@@ -1855,43 +1856,75 @@ namespace BugViewer
 
         private LineData? CreateMeshDisplayLines(MeshData mesh, bool bordersOnly, bool automaticThickness = false)
         {
-            var edgeCounts = new Dictionary<ulong, byte>(mesh.Indices.Count);
-            foreach (var (a, b, c) in mesh.Indices)
+            var faces = mesh.Indices switch
             {
-                CountEdge(a, b);
-                CountEdge(b, c);
-                CountEdge(c, a);
+                (int a, int b, int c)[] array => array.AsSpan(),
+                List<(int a, int b, int c)> list => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list),
+                _ => mesh.Indices.ToArray().AsSpan()
+            };
+            if (faces.Length == 0) return null;
+
+            var meshVertices = mesh.Vertices switch
+            {
+                Vector3[] array => array.AsSpan(),
+                List<Vector3> list => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list),
+                _ => mesh.Vertices.ToArray().AsSpan()
+            };
+
+            var edges = new ulong[faces.Length * 3];
+            int edgeIndex = 0;
+            for (int f = 0; f < faces.Length; f++)
+            {
+                var (a, b, c) = faces[f];
+                edges[edgeIndex++] = a < b ? ((ulong)(uint)a << 32) | (uint)b : ((ulong)(uint)b << 32) | (uint)a;
+                edges[edgeIndex++] = b < c ? ((ulong)(uint)b << 32) | (uint)c : ((ulong)(uint)c << 32) | (uint)b;
+                edges[edgeIndex++] = c < a ? ((ulong)(uint)c << 32) | (uint)a : ((ulong)(uint)a << 32) | (uint)c;
             }
+            Array.Sort(edges);
 
             // An internal edge is shared by exactly two triangles in this primitive mesh.
             // Open and non-manifold edges are both borders.
-            var vertices = new List<Vector3>();
-            foreach (var (key, count) in edgeCounts)
+            var vertices = new List<Vector3>(bordersOnly ? 256 : edges.Length * 2 / 3);
+            int i = 0;
+            while (i < edges.Length)
             {
+                ulong key = edges[i];
+                int count = 1;
+                while (i + 1 < edges.Length && edges[i + 1] == key)
+                {
+                    count++;
+                    i++;
+                }
+                i++;
+
                 if (bordersOnly && count == 2) continue;
-                vertices.Add(mesh.Vertices[(int)(key >> 32)]);
-                vertices.Add(mesh.Vertices[(int)(key & uint.MaxValue)]);
+
+                int v1 = (int)(key >> 32);
+                int v2 = (int)(key & uint.MaxValue);
+                vertices.Add(meshVertices[v1]);
+                vertices.Add(meshVertices[v2]);
             }
             if (vertices.Count == 0) return null;
+
             var thickness = automaticThickness ? LineData.AutomaticThickness : PathThickness;
+            var segmentCount = Math.Max(0, vertices.Count - 1);
+            var colors = new ColorRgba[segmentCount];
+            Array.Fill(colors, ColorRgba.Black);
+
+            var thicknesses = new float[segmentCount];
+            for (int s = 0; s < segmentCount; s += 2)
+                thicknesses[s] = thickness;
+
+            var fadeFactors = new float[segmentCount];
 
             return new LineData
             {
                 Id = bordersOnly ? $"__mesh-borders-{mesh.Id}" : $"__mesh-edges-{mesh.Id}",
                 Vertices = vertices,
-                Colors = Enumerable.Repeat(ColorRgba.Black, Math.Max(0, vertices.Count - 1)),
-                Thicknesses = Enumerable.Range(0, Math.Max(0, vertices.Count - 1))
-                    .Select(index => index % 2 == 0 ? thickness : 0f),
-                FadeFactors = Enumerable.Repeat(0f, Math.Max(0, vertices.Count - 1))
+                Colors = colors,
+                Thicknesses = thicknesses,
+                FadeFactors = fadeFactors
             };
-
-            void CountEdge(int first, int second)
-            {
-                var key = ((ulong)(uint)Math.Min(first, second) << 32) | (uint)Math.Max(first, second);
-                ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(edgeCounts, key, out _);
-                // Only exactly two is an internal edge; larger multiplicities are borders.
-                if (count < 3) count++;
-            }
         }
 
         /// <summary>

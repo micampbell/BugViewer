@@ -96,6 +96,6 @@ public partial record SceneRequest
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     IncludeFields = true, IgnoreReadOnlyProperties = true, UseStringEnumConverter = true,
     DefaultBufferSize = 262144,
-    Converters = [typeof(SceneFloat3Converter), typeof(SceneInt3Converter), typeof(SceneColorConverter), typeof(ScenePointConverter)])]
+    Converters = [typeof(SceneFloat3Converter), typeof(SceneFloat3ListConverter), typeof(SceneInt3Converter), typeof(SceneInt3ListConverter), typeof(SceneColorConverter), typeof(ScenePointConverter)])]
 [JsonSerializable(typeof(SceneRequest))]
 internal partial class SceneRequestJsonContext : JsonSerializerContext;

@@ -63,7 +63,8 @@ public partial class BugViewer
                 Camera ??= new OrbitCamera(Vector3.Zero, Options);
 
                 await ApplyMeshFaceDisplayCoreAsync(null);
-                await SynchronizeMeshDisplayLinesCoreAsync(null);
+                if (upload)
+                    await SynchronizeMeshDisplayLinesCoreAsync(null);
                 _suppressOptionsChanged = true;
                 Options.AutoResetCamera = snapshot.Options.AutoResetCamera;
                 Options.AutoUpdateGrid = snapshot.Options.AutoUpdateGrid;

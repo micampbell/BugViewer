@@ -22,7 +22,69 @@ internal sealed class SceneFloat3Converter : JsonConverter<float[]>
     }
     public override void Write(Utf8JsonWriter writer, float[] value, JsonSerializerOptions options)
     {
-        writer.WriteStartArray(); foreach (var item in value) writer.WriteNumberValue(item); writer.WriteEndArray();
+        Span<byte> buf = stackalloc byte[64];
+        int pos = 0;
+        buf[pos++] = (byte)'[';
+        System.Buffers.Text.Utf8Formatter.TryFormat(value[0], buf.Slice(pos), out int w1); pos += w1;
+        buf[pos++] = (byte)',';
+        System.Buffers.Text.Utf8Formatter.TryFormat(value[1], buf.Slice(pos), out int w2); pos += w2;
+        buf[pos++] = (byte)',';
+        System.Buffers.Text.Utf8Formatter.TryFormat(value[2], buf.Slice(pos), out int w3); pos += w3;
+        buf[pos++] = (byte)']';
+        writer.WriteRawValue(buf.Slice(0, pos), skipInputValidation: true);
+    }
+}
+
+internal sealed class SceneFloat3ListConverter : JsonConverter<List<float[]>>
+{
+    public override List<float[]> Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.StartArray) throw new JsonException("Expected an array of float3.");
+        var result = new List<float[]>();
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray) return result;
+            if (reader.TokenType != JsonTokenType.StartArray) throw new JsonException("Expected an XYZ coordinate array.");
+            var item = new float[3];
+            for (var i = 0; i < 3; i++)
+            {
+                if (!reader.Read() || reader.TokenType != JsonTokenType.Number) throw new JsonException("Coordinates must contain three numbers.");
+                item[i] = reader.GetSingle();
+            }
+            if (!reader.Read() || reader.TokenType != JsonTokenType.EndArray) throw new JsonException("Coordinates must contain three numbers.");
+            result.Add(item);
+        }
+        throw new JsonException("Incomplete float3 list.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<float[]> list, JsonSerializerOptions options)
+    {
+        writer.WriteStartArray();
+        if (list.Count > 0)
+        {
+            byte[] chunk = new byte[65536];
+            int pos = 0;
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (pos > chunk.Length - 80)
+                {
+                    writer.WriteRawValue(chunk.AsSpan(0, pos), skipInputValidation: true);
+                    pos = 0;
+                }
+                if (pos > 0) chunk[pos++] = (byte)',';
+                chunk[pos++] = (byte)'[';
+                var item = list[i];
+                System.Buffers.Text.Utf8Formatter.TryFormat(item[0], chunk.AsSpan(pos), out int w1); pos += w1;
+                chunk[pos++] = (byte)',';
+                System.Buffers.Text.Utf8Formatter.TryFormat(item[1], chunk.AsSpan(pos), out int w2); pos += w2;
+                chunk[pos++] = (byte)',';
+                System.Buffers.Text.Utf8Formatter.TryFormat(item[2], chunk.AsSpan(pos), out int w3); pos += w3;
+                chunk[pos++] = (byte)']';
+            }
+            if (pos > 0)
+                writer.WriteRawValue(chunk.AsSpan(0, pos), skipInputValidation: true);
+        }
+        writer.WriteEndArray();
     }
 }
 
@@ -42,7 +104,69 @@ internal sealed class SceneInt3Converter : JsonConverter<int[]>
     }
     public override void Write(Utf8JsonWriter writer, int[] value, JsonSerializerOptions options)
     {
-        writer.WriteStartArray(); foreach (var item in value) writer.WriteNumberValue(item); writer.WriteEndArray();
+        Span<byte> buf = stackalloc byte[48];
+        int pos = 0;
+        buf[pos++] = (byte)'[';
+        System.Buffers.Text.Utf8Formatter.TryFormat(value[0], buf.Slice(pos), out int w1); pos += w1;
+        buf[pos++] = (byte)',';
+        System.Buffers.Text.Utf8Formatter.TryFormat(value[1], buf.Slice(pos), out int w2); pos += w2;
+        buf[pos++] = (byte)',';
+        System.Buffers.Text.Utf8Formatter.TryFormat(value[2], buf.Slice(pos), out int w3); pos += w3;
+        buf[pos++] = (byte)']';
+        writer.WriteRawValue(buf.Slice(0, pos), skipInputValidation: true);
+    }
+}
+
+internal sealed class SceneInt3ListConverter : JsonConverter<List<int[]>>
+{
+    public override List<int[]> Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.StartArray) throw new JsonException("Expected an array of int3.");
+        var result = new List<int[]>();
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray) return result;
+            if (reader.TokenType != JsonTokenType.StartArray) throw new JsonException("Expected a triangle index array.");
+            var item = new int[3];
+            for (var i = 0; i < 3; i++)
+            {
+                if (!reader.Read() || reader.TokenType != JsonTokenType.Number) throw new JsonException("Triangles must contain three indices.");
+                item[i] = reader.GetInt32();
+            }
+            if (!reader.Read() || reader.TokenType != JsonTokenType.EndArray) throw new JsonException("Triangles must contain three indices.");
+            result.Add(item);
+        }
+        throw new JsonException("Incomplete int3 list.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<int[]> list, JsonSerializerOptions options)
+    {
+        writer.WriteStartArray();
+        if (list.Count > 0)
+        {
+            byte[] chunk = new byte[65536];
+            int pos = 0;
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (pos > chunk.Length - 50)
+                {
+                    writer.WriteRawValue(chunk.AsSpan(0, pos), skipInputValidation: true);
+                    pos = 0;
+                }
+                if (pos > 0) chunk[pos++] = (byte)',';
+                chunk[pos++] = (byte)'[';
+                var item = list[i];
+                System.Buffers.Text.Utf8Formatter.TryFormat(item[0], chunk.AsSpan(pos), out int w1); pos += w1;
+                chunk[pos++] = (byte)',';
+                System.Buffers.Text.Utf8Formatter.TryFormat(item[1], chunk.AsSpan(pos), out int w2); pos += w2;
+                chunk[pos++] = (byte)',';
+                System.Buffers.Text.Utf8Formatter.TryFormat(item[2], chunk.AsSpan(pos), out int w3); pos += w3;
+                chunk[pos++] = (byte)']';
+            }
+            if (pos > 0)
+                writer.WriteRawValue(chunk.AsSpan(0, pos), skipInputValidation: true);
+        }
+        writer.WriteEndArray();
     }
 }
 

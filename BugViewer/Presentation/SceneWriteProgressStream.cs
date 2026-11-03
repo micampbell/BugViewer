@@ -7,10 +7,10 @@ internal sealed class SceneWriteProgressStream(Stream inner) : Stream
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         await inner.WriteAsync(buffer, cancellationToken);
-        if (Environment.TickCount64 - yieldedAt >= 100)
+        if (Environment.TickCount64 - yieldedAt >= 200)
         {
             yieldedAt = Environment.TickCount64;
-            await Task.Delay(1, cancellationToken);
+            await Task.Yield();
         }
     }
 
