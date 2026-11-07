@@ -165,17 +165,17 @@ try {
     await page.send('Runtime.enable');
     await page.send('DOM.enable');
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 800, deviceScaleFactor: 1, mobile: false });
-    await waitFor('scene viewer', () => page.evaluate("!!document.querySelector('.scene-viewer input[type=file]')"));
+    await waitFor('scene viewer', () => page.evaluate("!!document.querySelector('.bugviewer-scene-viewer input[type=file]')"));
     const toolbar = await page.evaluate(`(() => {
-        const open = document.querySelector('.scene-file-actions button[data-scene-file-command="open"]');
-        const save = document.querySelector('.scene-file-actions button:last-child');
+        const open = document.querySelector('.bugviewer-scene-file-actions button[data-scene-file-command="open"]');
+        const save = document.querySelector('.bugviewer-scene-file-actions button:last-child');
         return { openEnabled: !!open && !open.disabled, saveDisabled: !!save && save.disabled };
     })()`);
     assert.deepEqual(toolbar, { openEnabled: true, saveDisabled: true },
         'The standalone viewer should show an enabled Open button and disabled Save button');
     await page.evaluate(`(() => {
         window.sceneLoadStarts = 0;
-        const viewer = document.querySelector('.scene-viewer');
+        const viewer = document.querySelector('.bugviewer-scene-viewer');
         new MutationObserver(records => {
             for (const record of records) {
                 if (record.attributeName === 'aria-busy' && record.oldValue === 'false')
@@ -187,10 +187,10 @@ try {
         const fixture = JSON.parse(await readFile(filename, 'utf8'));
         const previousStarts = await page.evaluate('window.sceneLoadStarts');
         const document = await page.send('DOM.getDocument', { depth: -1 });
-        const input = await page.send('DOM.querySelector', { nodeId: document.root.nodeId, selector: '.scene-viewer input[type=file]' });
+        const input = await page.send('DOM.querySelector', { nodeId: document.root.nodeId, selector: '.bugviewer-scene-viewer input[type=file]' });
         await page.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [filename] });
         await waitFor('file loading to start', () => page.evaluate(`window.sceneLoadStarts > ${previousStarts}`));
-        await waitFor('file loading to finish', () => page.evaluate("document.querySelector('.scene-viewer')?.getAttribute('aria-busy') === 'false'"));
+        await waitFor('file loading to finish', () => page.evaluate("document.querySelector('.bugviewer-scene-viewer')?.getAttribute('aria-busy') === 'false'"));
         await waitFor('scene geometry to be submitted', () => page.evaluate(`(async () => {
             const entry = performance.getEntriesByType('resource')
                 .filter(item => item.name.includes('/_content/BugViewer/js/webgpu-canvas.js')).at(-1);
@@ -211,7 +211,7 @@ try {
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         })()`);
         await delay(200);
-        const error = await page.evaluate("document.querySelector('.scene-file-error, .webgpu-error-overlay')?.textContent || ''");
+        const error = await page.evaluate("document.querySelector('.bugviewer-scene-file-error, .bugviewer-error-overlay')?.textContent || ''");
         assert.equal(error, '', error);
         const bounds = await page.evaluate("(() => { const r = document.querySelector('#webgpu-canvas').getBoundingClientRect(); return { x: Math.max(0, Math.floor(r.left)), y: Math.max(0, Math.floor(r.top)), width: Math.floor(r.width), height: Math.floor(r.height) }; })()");
         const image = await page.send('Page.captureScreenshot', { format: 'png' });
@@ -252,7 +252,7 @@ try {
         })()`);
     }
     const front = await screenshot(files[0]);
-    assert.equal(await page.evaluate("document.querySelector('.scene-file-actions button:last-child').disabled"), false,
+    assert.equal(await page.evaluate("document.querySelector('.bugviewer-scene-file-actions button:last-child').disabled"), false,
         'Save must become available after a scene is opened');
     const behind = await screenshot(files[1]);
     console.log('Front:', front, 'Behind:', behind);
@@ -404,7 +404,7 @@ try {
         })()`);
         console.log('Performance comparison:', JSON.stringify(performanceResult));
     }
-    assert.ok(!await page.evaluate("!!document.querySelector('.webgpu-error-overlay')"), 'WebGPU unavailable');
+    assert.ok(!await page.evaluate("!!document.querySelector('.bugviewer-error-overlay')"), 'WebGPU unavailable');
     console.log('PASS: front path stays red while the path behind the triangle is blended.');
     page.socket.close();
 } finally {

@@ -1,4 +1,4 @@
-﻿@using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24
+@using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.FluentUI.AspNetCore.Components
@@ -6,10 +6,8 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div @ref="_containerRef" tabindex="0" @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" @onblur="OnFocusLost" @onkeydown:stopPropagation="true" class="page-container" style="width:@Width; height:@Height; position:relative;" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
-    <canvas id="webgpu-canvas"
-            class="webgpu-canvas"
-            style="height:100%; width:100%;"
+<div @ref="_containerRef" tabindex="0" @onkeydown="OnKeyDown" @onkeyup="OnKeyUp" @onblur="OnFocusLost" @onkeydown:stopPropagation="true" class="bugviewer-root @Class" style="width:@Width; height:@Height; @Style" @onmousedown="() => _isMouseButtonDown = true" @onmouseup="() => _isMouseButtonDown = false" @onmouseleave="() => _isMouseButtonDown = false">
+    <canvas class="bugviewer-canvas"
             @ref="_canvasRef"
             @onpointerdown="OnPointerDown"
             @onpointerenter="OnPointerEnter"
@@ -21,7 +19,7 @@
     </canvas>
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <div class="webgpu-error-overlay" role="alert" aria-live="assertive">
+        <div class="bugviewer-error-overlay" role="alert" aria-live="assertive">
             <strong>WebGPU viewer unavailable</strong>
             <span>@_error</span>
             <span>Reload the page or reopen the viewer to try again.</span>
@@ -39,10 +37,9 @@
                  Orientation="@ToolsOrientation"
                  HorizontalAlignment="@ToolsHorizontal"
                  VerticalAlignment="@ToolsVertical"
-                 Class="@($"toolbar-buttons {(_isMouseButtonDown ? "mouse-down" : "")} {(IsAnyPopoverOpen ? "popover-open" : "")}")">
+                 Class="@($"bugviewer-toolbar {(_isMouseButtonDown ? "bugviewer-mouse-down" : "")} {(IsAnyPopoverOpen ? "bugviewer-popover-open" : "")}")">
         <div style="pointer-events:auto;">
-            <FluentButton Id="options"
-                          Appearance="ButtonAppearance.Default"
+            <FluentButton Appearance="ButtonAppearance.Default"
                           IconOnly="true"
                           Title="Open Options"
                           OnClick="@(() => ShowOptionsPanel())">
@@ -50,8 +47,7 @@
             </FluentButton>
         </div>
         <div style="pointer-events:auto;">
-            <FluentButton Id="help"
-                          Appearance="ButtonAppearance.Default"
+            <FluentButton Appearance="ButtonAppearance.Default"
                           IconOnly="true"
                           Title="Open Help"
                           OnClick="@(() => ShowHelpPanel())">
@@ -64,7 +60,7 @@
     {
         <div class="bugviewer-popover bugviewer-options-popover" @onpointerdown:stopPropagation @onpointermove:stopPropagation @onpointerup:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation @onwheel:stopPropagation @onkeydown:stopPropagation>
             <div class="bugviewer-popover-content">
-                <div part="body" style="max-height:70vh; overflow-y:auto;">
+                <div class="bugviewer-popover-body">
                     <FluentStack Orientation="Orientation.Vertical">
                         <FluentAccordion>
                             <FluentAccordionItem Header="Lighting">
@@ -109,6 +105,7 @@
                                         <FluentRadio Value="@MeshFaceDisplay.Surfaces" Disabled="@(!CanShowPrimitiveSurfaces)">Surfaces</FluentRadio>
                                         <FluentRadio Value="@MeshFaceDisplay.None">None</FluentRadio>
                                     </FluentRadioGroup>
+                                    <FluentSwitch @bind-Value="Options.ShowBackFaces" Label="Show back faces" />
                                     <span>Show Border of (B)</span>
                                     <FluentRadioGroup TValue="ShowEdgesAtOption" @bind-Value="Options.ShowEdgesAt"
                                                       Orientation="Orientation.Horizontal">
@@ -250,79 +247,3 @@
     }
 
 </div>
-
-<style>
-    .webgpu-error-overlay {
-        position: absolute;
-        inset: 0;
-        z-index: 1100;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: .5rem;
-        box-sizing: border-box;
-        padding: 2rem;
-        text-align: center;
-        color: var(--error-foreground-rest, #b10e1c);
-        background: color-mix(in srgb, var(--neutral-layer-1, #ffffff) 94%, transparent);
-    }
-
-    .toolbar-buttons {
-        animation: fadeToTransparent 5s ease-in-out forwards;
-    }
-
-    .bugviewer-popover {
-        position: absolute;
-        top: 4px;
-        z-index: 1000;
-        box-sizing: border-box;
-        pointer-events: auto;
-        border: 1px solid var(--neutral-stroke-rest, #d1d1d1);
-        border-radius: 4px;
-        background: var(--neutral-layer-floating, #ffffff);
-        color: var(--neutral-foreground-rest, #242424);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, .18);
-    }
-
-    .bugviewer-popover-content {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 1em;
-        font-family: var(--body-font, 'Segoe UI', sans-serif);
-        -webkit-font-smoothing: antialiased;
-        line-height: 27px;
-        overflow-wrap: break-word;
-        word-break: break-word;
-        hyphens: auto;
-    }
-
-    /* The default toolbar is horizontal at the top-left. Keep each panel in the
-           viewer's positioning context, immediately to the right of its own button. */
-    .bugviewer-options-popover {
-        left: 44px;
-        width: min(360px, calc(100% - 48px));
-    }
-
-    .bugviewer-help-popover {
-        left: 80px;
-        width: min(300px, calc(100% - 84px));
-    }
-
-    .toolbar-buttons:hover:not(.mouse-down),
-    .toolbar-buttons.popover-open {
-        animation: none;
-        opacity: 1 !important;
-    }
-
-    @@keyframes fadeToTransparent {
-        from {
-            opacity: 1;
-        }
-
-        to {
-            opacity: 0.001;
-        }
-    }
-</style>
-

@@ -165,6 +165,55 @@ const mesh = (id, singleColor = true, alpha = 1) => ({ id, vertices: [0,0,0, 1,0
 }
 {
     const { api, counters } = await harness();
+    const mixed = mesh('mixed', false);
+    await api.testing.initialize();
+    api.testing.canvas(640, 480);
+    mixed.colors[7] = .5;
+    await api.addMeshes([mesh('opaque'), mesh('transparent', true, .4), mixed]);
+    const items = api.testing.state().meshes;
+    const originalPipelines = items.map(item => [item.pipeline, item.transparentPipeline]);
+    const bufferCount = counters.buffers.length;
+    const retained = items.map(item => [item.vertexBuffer, item.colorBuffer, item.indexBuffer, item.bindGroup]);
+    assert.ok(items.every(item => item.pipeline.descriptor.primitive.cullMode === 'back'));
+    await api.updateDisplayOptions({ showBackFaces: true, zIsUp: false });
+    for (const item of items) {
+        assert.equal(item.pipeline.descriptor.primitive.cullMode, 'none');
+        if (item.transparentPipeline) assert.equal(item.transparentPipeline.descriptor.primitive.cullMode, 'none');
+    }
+    assert.deepEqual(Array.from(items, item => [item.hasOpaque, item.isTransparent]), [[true, false], [false, true], [true, true]]);
+    assert.equal(counters.buffers.length, bufferCount, 'Changing sidedness must reuse geometry buffers');
+    items.forEach((item, index) => assert.deepEqual(
+        [item.vertexBuffer, item.colorBuffer, item.indexBuffer, item.bindGroup], retained[index]));
+    const pipelineCount = counters.pipelines;
+    await api.updateDisplayOptions({ showBackFaces: false, zIsUp: false });
+    items.forEach((item, index) => {
+        assert.equal(item.pipeline, originalPipelines[index][0]);
+        assert.equal(item.transparentPipeline, originalPipelines[index][1]);
+    });
+    await api.updateDisplayOptions({ showBackFaces: true, zIsUp: false });
+    assert.equal(counters.pipelines, pipelineCount, 'Switching back must reuse cached pipelines');
+    await api.addMesh(mesh('added-after-toggle', false, .5));
+    assert.equal(items.at(-1).pipeline.descriptor.primitive.cullMode, 'none');
+    await api.setMeshFaceDisplay(true, true);
+    assert.ok(items.every(item => item.pipeline.descriptor.primitive.cullMode === 'none'));
+    await api.updateDisplayOptions({ sampleCount: 1, showBackFaces: true, zIsUp: false });
+    assert.ok(items.every(item => item.pipeline.descriptor.primitive.cullMode === 'none'
+        && item.pipeline.descriptor.multisample.count === 1));
+    await api.disposeWebGPU_Canvas();
+}
+{
+    const { api, fail } = await harness();
+    await api.addMesh(mesh('retained-on-failure'));
+    const item = api.testing.state().meshes[0], previous = item.pipeline;
+    fail();
+    await assert.rejects(api.updateDisplayOptions({ showBackFaces: true, zIsUp: false }), /pipeline failed/);
+    assert.equal(item.pipeline, previous, 'A failed switch must retain the drawable pipeline');
+    await api.updateDisplayOptions({ showBackFaces: true, zIsUp: false });
+    assert.equal(item.pipeline.descriptor.primitive.cullMode, 'none', 'A failed switch must be retryable');
+    await api.disposeWebGPU_Canvas();
+}
+{
+    const { api, counters } = await harness();
     api.testing.renderTarget();
     api.testing.transparentFixtures();
     const segment = (alpha, fade = 0) => [0,0,0, 1,0,0, 1,0,0,alpha, 1,fade];
@@ -370,13 +419,21 @@ async function activate(api, refs, budget = 1024) {
     await api.uploadPresentationChunk(fixtureB.metadata, 60, 0, fixtureB.bytes);
     await api.finishPresentationPrefetch(1024);
     assert.equal(api.testing.state().meshes[0], retainedA);
+    const beforeBackFaces = counters.buffers.length;
+    await api.updateDisplayOptions({ showBackFaces: true, zIsUp: false });
+    assert.equal(retainedA.pipeline.descriptor.primitive.cullMode, 'none');
+    assert.equal(counters.buffers.length, beforeBackFaces, 'Changing sidedness must not upload cached frames again');
     assert.equal((await api.preparePresentationFrame(b, [])).meshes.length, 0);
     await activate(api, b);
     const retainedB = api.testing.state().meshes[0];
+    assert.equal(retainedB.pipeline.descriptor.primitive.cullMode, 'none', 'Prefetched steps must use the current sidedness');
+    await api.updateDisplayOptions({ showBackFaces: false, zIsUp: false });
+    assert.equal(retainedB.pipeline.descriptor.primitive.cullMode, 'back');
     const bufferCount = counters.buffers.length;
     assert.equal((await api.preparePresentationFrame(a, [])).meshes.length, 0);
     await activate(api, a);
     assert.equal(api.testing.state().meshes[0], retainedA);
+    assert.equal(retainedA.pipeline.descriptor.primitive.cullMode, 'back', 'Inactive cached steps must use the current sidedness');
     assert.equal(counters.buffers.length, bufferCount, 'revisiting a cached step must allocate no GPU buffers');
     await activate(api, a, 0);
     assert.equal(retainedB.vertexBuffer.destroyed, true, 'inactive geometry must be evicted under budget pressure');

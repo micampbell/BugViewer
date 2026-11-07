@@ -1,0 +1,12 @@
+body { margin: 0; }
+.fixture { width: 760px; height: 500px; margin: 16px; border: 1px solid #888; }
+.custom-instance { --bugviewer-font-family: Arial, sans-serif; --bugviewer-font-size: 16px; --bugviewer-panel-background: #eaf4ff; --bugviewer-panel-foreground: #123456; --bugviewer-control-background: #f6faff; --bugviewer-control-gap: 10px; }
+
+/* Loaded after the component bundle, as a host application's CSS commonly is. */
+body.host-conflicts { font: 28px/2.6 monospace; color: purple; text-transform: uppercase; }
+.host-conflicts button { display: block; min-width: 180px; margin: 20px; padding: 18px 26px; font-size: 32px; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; border: 9px dashed hotpink; background: yellow; color: purple; }
+.host-conflicts input, .host-conflicts select { width: 280px; height: 80px; margin: 24px; padding: 18px; font-size: 30px; border: 8px solid orange; background: yellow; color: purple; }
+.host-conflicts label { display: block; margin: 18px; padding: 12px; font: 900 32px/3 monospace; letter-spacing: 4px; text-transform: uppercase; color: green; }
+.host-conflicts h2 { margin: 48px; padding: 24px; font: 900 42px/3 monospace; letter-spacing: 4px; text-transform: uppercase; color: fuchsia; }
+.host-conflicts .scene-viewer, .host-conflicts .page-container { padding: 60px; border: 20px solid red; }
+.host-conflicts .step-controls { display: block; padding: 40px; }

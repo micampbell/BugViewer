@@ -115,6 +115,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         ViewCubeSizeRatio = newOptions.ViewCubeSizeRatio;
         ShowEdgesAt = newOptions.ShowEdgesAt;
         ShowSurfacesAs = newOptions.ShowSurfacesAs;
+        ShowBackFaces = newOptions.ShowBackFaces;
         SampleCount = newOptions.SampleCount;
         IsProjectionCamera = newOptions.IsProjectionCamera;
         DoubleClickIsSelect = newOptions.DoubleClickIsSelect;
@@ -687,6 +688,24 @@ public class BugViewerOptions : INotifyPropertyChanged
         }
     }
 
+    private bool _showBackFaces;
+    /// <summary>
+    /// Shows and allows selection of mesh faces from either side. Defaults to false.
+    /// Face colors retain their original opacity.
+    /// </summary>
+    public bool ShowBackFaces
+    {
+        get => _showBackFaces;
+        set
+        {
+            if (_showBackFaces != value)
+            {
+                _showBackFaces = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     /// <summary>
     /// Specifies where mesh edges are displayed.
     /// </summary>
@@ -1054,6 +1073,7 @@ public class BugViewerOptions : INotifyPropertyChanged
         lineWidthX = (float)LineWidthX,
         lineWidthY = (float)LineWidthY,
         pathThicknessFactor = PathThicknessFactor,
+        showBackFaces = ShowBackFaces,
         sampleCount = SampleCount,
         viewCubeSizeRatio = ViewCubeSizeRatio,
         viewCubeOpacity = ViewCubeOpacity,

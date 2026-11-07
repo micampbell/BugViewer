@@ -3,15 +3,27 @@ let activeViewer;
 
 function handleKeyDown(event) {
     if (event.defaultPrevented || event.isComposing || event.shiftKey || event.metaKey
-        || !event.ctrlKey || !event.altKey || event.getModifierState?.('AltGraph')) return;
+        || event.getModifierState?.('AltGraph')) return;
     const key = event.key.toLowerCase();
-    if (key !== 'o' && key !== 's') return;
+    const fileShortcut = event.ctrlKey && event.altKey && (key === 'o' || key === 's');
+    const stepShortcut = !event.ctrlKey && !event.altKey && (key === 'j' || key === 'k' || key === 'l');
+    if (!fileShortcut && !stepShortcut) return;
 
     const containingViewer = [...viewers].find(viewer => viewer.contains(event.target));
-    // Leave shortcuts in editors outside the viewer to their owning application.
-    if (!containingViewer && event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+    // Plain-letter shortcuts must never interfere with typing, including inside the viewer.
+    const editor = event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+    if (editor && (stepShortcut || !containingViewer)) return;
     const viewer = containingViewer ?? activeViewer ?? (viewers.size === 1 ? [...viewers][0] : null);
-    if (!viewer?.enabled || (key === 'o' && !viewer.openEnabled) || (key === 's' && !viewer.saveEnabled)) return;
+    if (!viewer) return;
+    if (stepShortcut) {
+        const button = viewer.stepButton(key);
+        if (!button) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (key !== 'k' || !event.repeat) button.click();
+        return;
+    }
+    if (!viewer.enabled || (key === 'o' && !viewer.openEnabled) || (key === 's' && !viewer.saveEnabled)) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -102,6 +114,10 @@ class SceneFileControls {
     get enabled() { return this.#container.dataset.sceneShortcuts === 'true'; }
     get openEnabled() { return this.#container.dataset.sceneOpenEnabled !== 'false'; }
     get saveEnabled() { return this.#container.dataset.sceneSaveEnabled !== 'false'; }
+    stepButton(key) {
+        if (this.#container.querySelector('dialog[open]')) return null;
+        return this.#container.querySelector(`[data-scene-step-command="${key}"]`);
+    }
     command(key) {
         if (this.#container.querySelector('dialog[open]')) return;
         (key === 'o' ? this.#openButton : this.#saveButton).click();

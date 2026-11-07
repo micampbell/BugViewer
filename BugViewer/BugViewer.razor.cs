@@ -54,6 +54,12 @@ namespace BugViewer
         [Parameter]
         public string Height { get; set; } = "100vh";
 
+        /// <summary>Additional CSS classes on the viewer root for application layout and theming.</summary>
+        [Parameter] public string? Class { get; set; }
+
+        /// <summary>Inline styles on the viewer root. Use --bugviewer-* variables to customize its controls.</summary>
+        [Parameter] public string? Style { get; set; }
+
         /// <summary>Optional presentation actions displayed below the Camera accordion in the settings popover.</summary>
         [Parameter]
         public RenderFragment? CameraActions { get; set; }
@@ -205,6 +211,10 @@ namespace BugViewer
         /// </summary>
         [Parameter]
         public MeshFaceDisplay ShowSurfaceAs { get; set; } = MeshFaceDisplay.Triangles;
+
+        /// <summary>Shows and allows selection of mesh faces from either side when supplied.</summary>
+        [Parameter]
+        public bool? ShowBackFaces { get; set; }
 
         /// <summary>
         /// Specifies whether mesh edges are displayed. When true, edges of the mesh will be visible.
@@ -361,6 +371,7 @@ namespace BugViewer
             if (BaseTransparency.HasValue) Options.BaseTransparency = BaseTransparency.Value;
             if (DoubleClickIsSelect.HasValue) Options.DoubleClickIsSelect = DoubleClickIsSelect.Value;
             if (ShowViewCube.HasValue) Options.ShowViewCube = ShowViewCube.Value;
+            if (ShowBackFaces.HasValue) Options.ShowBackFaces = ShowBackFaces.Value;
             if (ViewCubeSizeRatio.HasValue) Options.ViewCubeSizeRatio = ViewCubeSizeRatio.Value;
             if (ViewCubeOpacity.HasValue) Options.ViewCubeOpacity = ViewCubeOpacity.Value;
             ApplyAxesParameterProxies();
@@ -823,13 +834,12 @@ namespace BugViewer
                 for (int index = 0; index < mesh.Indices.Count; index++)
                 {
                     var normal = data.Normals[index];
-                    if (Vector3.Dot(normal, dirVector) >= 0)
-                        continue; // ignore back faces
+                    var dot = Vector3.Dot(dirVector, normal);
+                    if (dot == 0 || (!Options.ShowBackFaces && dot >= 0))
+                        continue; // Parallel rays cannot hit; back faces follow the display setting.
                     var faceDistance = data.Distances[index];
                     var uBaryFactor = data.U[index];
                     var vBaryFactor = data.V[index];
-                    var dot = Vector3.Dot(dirVector, normal);
-
                     var anchorDistanceToPlane = faceDistance - Vector3.Dot(anchor, normal);
                     var thisDistance = anchorDistanceToPlane / dot;
                     if (thisDistance < 0 || thisDistance >= distance)

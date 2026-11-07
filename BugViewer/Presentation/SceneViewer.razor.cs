@@ -12,6 +12,10 @@ public partial class SceneViewer
     [Parameter] public int ViewerId { get; set; }
     /// <summary>Whether to show the active-view indicator.</summary>
     [Parameter] public bool IsActive { get; set; }
+    /// <summary>Additional CSS classes on the presentation root for application layout and theming.</summary>
+    [Parameter] public string? Class { get; set; }
+    /// <summary>Inline root styles, including --bugviewer-* theme variables.</summary>
+    [Parameter] public string? Style { get; set; }
     /// <summary>Requests held by the presenter. The last request supplies the active timeline.</summary>
     [Parameter] public IReadOnlyList<SceneRequest> Scenes { get; set; } = [];
     /// <summary>Optional close callback; providing it displays a close button.</summary>

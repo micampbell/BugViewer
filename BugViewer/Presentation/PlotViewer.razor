@@ -4,35 +4,45 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<section class="scene-viewer @(HideHeader ? "embedded" : null)">
+<section class="bugviewer-presentation bugviewer-plot-viewer @(HideHeader ? "bugviewer-embedded" : null) @Class" style="@Style">
     @if (!HideHeader)
     {
-    <header class="scene-viewer-header">
+    <header class="bugviewer-scene-viewer-header">
         <div>
-            <span class="scene-id">#@ViewerId</span>
-            @if (IsActive) { <span class="active-badge">Active</span> }
+            <span class="bugviewer-scene-id">#@ViewerId</span>
+            @if (IsActive) { <span class="bugviewer-active-badge">Active</span> }
             <h2>@Title</h2>
             @if (!string.IsNullOrWhiteSpace(Heading)) { <p>@Heading</p> }
         </div>
         @if (OnClose.HasDelegate)
         {
-            <FluentButton Class="rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Icons.Regular.Size20.Add())"
+            <FluentButton Class="bugviewer-rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Icons.Regular.Size20.Add())"
                           Title="Close viewer" aria-label="Close viewer" />
         }
     </header>
     }
     @if (StepCount > 1)
     {
-        <div class="step-controls">
-            <button type="button" class="step-icon-button" title="Previous step" aria-label="Previous step" @onclick="PreviousStep">
+        <div class="bugviewer-step-controls">
+            <button type="button" class="bugviewer-step-icon-button" data-scene-step-command="j" title="Previous step (J)" aria-label="Previous step" @onclick="PreviousStep">
                 <FluentIcon Value="@(new Icons.Regular.Size20.Previous())" />
             </button>
             <input type="range" min="0" max="@(StepCount - 1)" @bind="step" @bind:after="RenderCurrentAsync" />
             <span>@(step + 1) / @StepCount</span>
-            <button type="button" class="step-icon-button" title="Next step" aria-label="Next step" @onclick="NextStep">
+            <button type="button" class="bugviewer-step-icon-button" data-scene-step-command="l" title="Next step (L)" aria-label="Next step" @onclick="NextStep">
                 <FluentIcon Value="@(new Icons.Regular.Size20.Next())" />
+            </button>
+            <button type="button" class="bugviewer-step-icon-button" data-scene-step-command="k" title="@(autoplayCancellation is null ? "Play (K)" : "Pause (K)")" aria-label="@(autoplayCancellation is null ? "Play" : "Pause")" @onclick="ToggleAutoplayAsync">
+                @if (autoplayCancellation is null)
+                {
+                    <FluentIcon Value="@(new Icons.Regular.Size20.Play())" />
+                }
+                else
+                {
+                    <FluentIcon Value="@(new Icons.Regular.Size20.Pause())" />
+                }
             </button>
         </div>
     }
-    <div class="plot-viewer" @ref="plotElement"></div>
+    <div class="bugviewer-plot-canvas" @ref="plotElement"></div>
 </section>

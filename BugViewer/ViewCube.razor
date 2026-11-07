@@ -2,7 +2,7 @@
 @using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20
 
 <div @ref="_overlayElement"
-     class="view-cube-overlay"
+     class="bugviewer-view-cube-overlay"
      hidden="@(!Visible)"
      @onpointerdown="HandlePointerDownAsync"
      @onpointerdown:stopPropagation
@@ -17,7 +17,7 @@
      @onkeydown:stopPropagation
      @oncontextmenu:preventDefault>
     <button type="button"
-            class="view-cube-reset"
+            class="bugviewer-view-cube-reset"
             title="Reset Camera"
             aria-label="Reset Camera"
             @onpointerdown:stopPropagation
@@ -25,14 +25,14 @@
             @onclick:stopPropagation>
         <FluentIcon Value="@(new Icons.CameraSwitch())" />
     </button>
-    <div class="view-cube-stage">
-        <div @ref="_rotorElement" class="view-cube-rotor">
-            <button type="button" class="view-cube-face view-cube-face-positive-x" data-view-cube-normal="1,0,0" title="View +X" aria-label="View from positive X" @onclick="@(() => SelectDirectionAsync(CardinalDirection.PositiveX))" @onclick:stopPropagation><span>+X</span></button>
-            <button type="button" class="view-cube-face view-cube-face-negative-x" data-view-cube-normal="-1,0,0" title="View -X" aria-label="View from negative X" @onclick="@(() => SelectDirectionAsync(CardinalDirection.NegativeX))" @onclick:stopPropagation><span>-X</span></button>
-            <button type="button" class="view-cube-face view-cube-face-positive-y" data-view-cube-normal="0,1,0" title="View +Y" aria-label="View from positive Y" @onclick="@(() => SelectDirectionAsync(CardinalDirection.PositiveY))" @onclick:stopPropagation><span>+Y</span></button>
-            <button type="button" class="view-cube-face view-cube-face-negative-y" data-view-cube-normal="0,-1,0" title="View -Y" aria-label="View from negative Y" @onclick="@(() => SelectDirectionAsync(CardinalDirection.NegativeY))" @onclick:stopPropagation><span>-Y</span></button>
-            <button type="button" class="view-cube-face view-cube-face-positive-z" data-view-cube-normal="0,0,1" title="View +Z" aria-label="View from positive Z" @onclick="@(() => SelectDirectionAsync(CardinalDirection.PositiveZ))" @onclick:stopPropagation><span>+Z</span></button>
-            <button type="button" class="view-cube-face view-cube-face-negative-z" data-view-cube-normal="0,0,-1" title="View -Z" aria-label="View from negative Z" @onclick="@(() => SelectDirectionAsync(CardinalDirection.NegativeZ))" @onclick:stopPropagation><span>-Z</span></button>
+    <div class="bugviewer-view-cube-stage">
+        <div @ref="_rotorElement" class="bugviewer-view-cube-rotor">
+            <button type="button" class="bugviewer-view-cube-face bugviewer-view-cube-face-positive-x" data-view-cube-normal="1,0,0" title="View +X" aria-label="View from positive X" @onclick="@(() => SelectDirectionAsync(CardinalDirection.PositiveX))" @onclick:stopPropagation><span>+X</span></button>
+            <button type="button" class="bugviewer-view-cube-face bugviewer-view-cube-face-negative-x" data-view-cube-normal="-1,0,0" title="View -X" aria-label="View from negative X" @onclick="@(() => SelectDirectionAsync(CardinalDirection.NegativeX))" @onclick:stopPropagation><span>-X</span></button>
+            <button type="button" class="bugviewer-view-cube-face bugviewer-view-cube-face-positive-y" data-view-cube-normal="0,1,0" title="View +Y" aria-label="View from positive Y" @onclick="@(() => SelectDirectionAsync(CardinalDirection.PositiveY))" @onclick:stopPropagation><span>+Y</span></button>
+            <button type="button" class="bugviewer-view-cube-face bugviewer-view-cube-face-negative-y" data-view-cube-normal="0,-1,0" title="View -Y" aria-label="View from negative Y" @onclick="@(() => SelectDirectionAsync(CardinalDirection.NegativeY))" @onclick:stopPropagation><span>-Y</span></button>
+            <button type="button" class="bugviewer-view-cube-face bugviewer-view-cube-face-positive-z" data-view-cube-normal="0,0,1" title="View +Z" aria-label="View from positive Z" @onclick="@(() => SelectDirectionAsync(CardinalDirection.PositiveZ))" @onclick:stopPropagation><span>+Z</span></button>
+            <button type="button" class="bugviewer-view-cube-face bugviewer-view-cube-face-negative-z" data-view-cube-normal="0,0,-1" title="View -Z" aria-label="View from negative Z" @onclick="@(() => SelectDirectionAsync(CardinalDirection.NegativeZ))" @onclick:stopPropagation><span>-Z</span></button>
         </div>
     </div>
 </div>

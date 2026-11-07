@@ -5,14 +5,14 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<section @ref="container" class="scene-viewer" tabindex="0" aria-label="Scene viewer"
+<section @ref="container" class="bugviewer-presentation bugviewer-scene-viewer @Class" style="@Style" tabindex="0" aria-label="Scene viewer"
          data-scene-shortcuts="@(EnableFileShortcuts ? "true" : "false")" data-scene-open-enabled="@(EnableOpenScene ? "true" : "false")" data-scene-save-enabled="@(EnableSaveScene ? "true" : "false")" aria-busy="@isBusy.ToString().ToLowerInvariant()">
     <InputFile @ref="fileInput" OnChange="OpenSceneFileAsync" accept=".json,.bugscene" hidden disabled="@(isBusy || !EnableOpenScene)" />
     <button @ref="openButton" type="button" hidden disabled="@(isBusy || !EnableOpenScene)" data-scene-file-command="open"></button>
     <button @ref="saveButton" type="button" hidden disabled="@(!EnableSaveScene || isBusy || ActiveScenes.Count == 0)" @onclick="BeginSaveAsAsync"></button>
     @if (fileOperationStatus is not null)
     {
-        <div class="scene-file-progress" role="status">
+        <div class="bugviewer-scene-file-progress" role="status">
             <span>@fileOperationStatus</span>
             @if (loading is not null && fileOperationCanCancel)
             {
@@ -31,12 +31,12 @@
     }
     @if (fileError is not null)
     {
-        <p class="scene-file-error" role="alert">@fileError</p>
+        <p class="bugviewer-scene-file-error" role="alert">@fileError</p>
     }
 
     @if (ShowFileActions)
     {
-        <div class="scene-file-actions" aria-label="Scene file actions">
+        <div class="bugviewer-scene-file-actions" aria-label="Scene file actions">
             @if (EnableOpenScene)
             {
                 <button type="button" disabled="@isBusy" data-scene-file-command="open">
@@ -56,7 +56,7 @@
     {
         @if (!ShowFileActions)
         {
-            <div class="plot-file-actions" aria-label="Scene file actions">
+            <div class="bugviewer-plot-file-actions" aria-label="Scene file actions">
                 @if (EnableOpenScene)
                 {
                     <FluentButton IconOnly="true" Disabled="@isBusy" data-scene-file-command="open" Title="Open scene (Ctrl+Alt+O)" aria-label="Open scene">
@@ -71,51 +71,51 @@
                 }
             </div>
         }
-        <PlotViewer @key="generation" @ref="plotViewer" ViewerId="ViewerId" IsActive="IsActive"
+        <PlotViewer @key="generation" @ref="plotViewer" ViewerId="ViewerId" IsActive="IsActive" Class="bugviewer-embedded"
                     Scenes="ActiveScenes" OnClose="OnClose" OnReady="OnReady" />
     }
     else
     {
         @if (ShowHeader)
         {
-            <header class="scene-viewer-header">
+            <header class="bugviewer-scene-viewer-header">
                 <div>
-                    <span class="scene-id">#@ViewerId</span>
+                    <span class="bugviewer-scene-id">#@ViewerId</span>
                     @if (IsActive)
                     {
-                        <span class="active-badge">Active</span>                     
+                        <span class="bugviewer-active-badge">Active</span>
                     }
                     <h2>@(Current.Title.Length == 0 ? "3D Scene" : Current.Title)</h2>
                     @if (!string.IsNullOrWhiteSpace(Current.Heading))
                     {
                         <p>@Current.Heading
-                        </p>                     
+                        </p>
                     }
                     @if (!string.IsNullOrWhiteSpace(Current.Subtitle))
                     {
                         <p>@Current.Subtitle
-                        </p>                     
+                        </p>
                     }
                 </div>
                 @if (OnClose.HasDelegate)
                 {
-                    <FluentButton Class="rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.Add())"
+                    <FluentButton Class="bugviewer-rotated-icon-button" OnClick="CloseAsync" IconStart="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.Add())"
                     Title="Close viewer" aria-label="Close viewer" />
                 }
             </header>
         }
     @if (StepCount > 1)
     {
-        <div class="step-controls">
-            <button type="button" class="step-icon-button" title="Previous step" aria-label="Previous step" @onclick="PreviousStepAsync">
+        <div class="bugviewer-step-controls">
+            <button type="button" class="bugviewer-step-icon-button" data-scene-step-command="j" title="Previous step (J)" aria-label="Previous step" @onclick="PreviousStepAsync">
                 <FluentIcon Value="@(new PlaybackIcons.Previous())" />
             </button>
             <input type="range" min="0" max="@(StepCount - 1)" @bind="step"
                    @bind:event="oninput" @bind:after="RenderSceneAsync" />
-            <span class="step-counter">
+            <span class="bugviewer-step-counter">
                 @if (isEditingStep)
                 {
-                    <input @ref="stepInput" class="step-number-input" type="text" inputmode="numeric"
+                    <input @ref="stepInput" class="bugviewer-step-number-input" type="text" inputmode="numeric"
                            aria-label="Target step" title="Enter a step number; Enter applies, Escape cancels"
                            style="width: @(Math.Max(3, StepCount.ToString().Length) + 1)ch"
                            @bind="targetStep" @bind:event="oninput"
@@ -123,15 +123,15 @@
                 }
                 else
                 {
-                    <button @ref="stepButton" type="button" class="step-current" aria-label="Edit current step"
+                    <button @ref="stepButton" type="button" class="bugviewer-step-current" aria-label="Edit current step"
                             title="Click to jump to a step" @onclick="BeginStepEditAsync">@(step + 1)</button>
                 }
                 <span>/ @StepCount</span>
             </span>
-            <button type="button" class="step-icon-button" title="Next step" aria-label="Next step" @onclick="NextStepAsync">
+            <button type="button" class="bugviewer-step-icon-button" data-scene-step-command="l" title="Next step (L)" aria-label="Next step" @onclick="NextStepAsync">
                 <FluentIcon Value="@(new PlaybackIcons.Next())" />
             </button>
-            <button type="button" class="step-icon-button" title="@(IsAutoplaying ? "Pause" : "Play")" aria-label="@(IsAutoplaying ? "Pause" : "Play")" @onclick="ToggleAutoplayAsync">
+            <button type="button" class="bugviewer-step-icon-button" data-scene-step-command="k" title="@(IsAutoplaying ? "Pause (K)" : "Play (K)")" aria-label="@(IsAutoplaying ? "Pause" : "Play")" @onclick="ToggleAutoplayAsync">
                 @if (IsAutoplaying)
                 {
                     <FluentIcon Value="@(new PlaybackIcons.Pause())" />
@@ -141,7 +141,7 @@
                     <FluentIcon Value="@(new PlaybackIcons.Play())" />
                 }
             </button>
-            <label class="step-speed-control">
+            <label class="bugviewer-step-speed-control">
                 <FluentIcon Value="@(new FileIcons.TopSpeed())" />
                 <select @bind="autoplayDelayMilliseconds">
                     <option value="33">30 fps</option>
@@ -151,14 +151,14 @@
                     <option value="3000">1 frame / 3 sec</option>
                 </select>
             </label>
-            <label class="step-speed-control">
+            <label class="bugviewer-step-speed-control">
                 <FluentIcon Value="@(new PlaybackIcons.ArrowStepOver())" />
                 <input type="number" min="1" max="@Math.Max(1, StepCount - 1)"
                        @bind="stepStride" />
             </label>
         </div>
     }
-    <div class="scene-viewer-canvas">
+    <div class="bugviewer-scene-viewer-canvas">
         <BugViewer @key="generation" @ref="viewer" Height="100%" Width="100%" OnReady="OnViewerReadyAsync"
                    Options="initialOptions" HoverSelectionKeys="HoverSelectionKeys" OnHoverSelectionKeyChanged="OnHoverSelectionKeyChanged"
                    OnTriangleSelected="TriangleSelectedAsync"
@@ -183,13 +183,13 @@
         </BugViewer>
     </div>
     }
-    <dialog @ref="saveAsDialog" class="scene-save-dialog" aria-labelledby="@saveAsTitleId">
+    <dialog @ref="saveAsDialog" class="bugviewer-scene-save-dialog" aria-labelledby="@saveAsTitleId">
         <form data-scene-save-form data-step-count="@StepCount">
             <h2 id="@saveAsTitleId">Save scene as</h2>
             <label>File name <input data-save-name @ref="saveAsInput" type="text" @bind="saveAsName" @bind:event="oninput" maxlength="240" /></label>
             @if (StepCount > 0)
             {
-                <fieldset class="scene-save-range">
+                <fieldset class="bugviewer-scene-save-range">
                     <legend>Steps to save (1–@StepCount)</legend>
                     <label>Start step <input data-save-start type="text" inputmode="numeric" @bind="saveStartStep" @bind:event="oninput" /></label>
                     <label>End step <input data-save-end type="text" inputmode="numeric" @bind="saveEndStep" @bind:event="oninput" /></label>
@@ -201,8 +201,8 @@
             {
                 <p>The file includes the current view.</p>
             }
-            @if (saveAsError is not null) { <p class="scene-file-error" role="alert">@saveAsError</p> }
-            <div class="scene-save-actions">
+            @if (saveAsError is not null) { <p class="bugviewer-scene-file-error" role="alert">@saveAsError</p> }
+            <div class="bugviewer-scene-save-actions">
                 <button type="button" @onclick="CancelSaveAsAsync">Cancel</button>
                 <button type="submit">Save</button>
             </div>

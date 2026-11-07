@@ -14,7 +14,7 @@ using Microsoft.JSInterop;
 
 static void Assert(bool value, string message) { if (!value) throw new Exception(message); }
 static bool HasActiveBadge(RenderTreeFrame[] frames) => frames.Any(frame =>
-    frame.FrameType == RenderTreeFrameType.Markup && frame.MarkupContent.Contains("active-badge"));
+    frame.FrameType == RenderTreeFrameType.Markup && frame.MarkupContent.Contains("bugviewer-active-badge"));
 static EventCallback<MouseEventArgs> CloseHandler(RenderTreeFrame[] frames)
 {
     for (var index = 0; index < frames.Length; index++)
@@ -53,6 +53,12 @@ static void Reject(SceneRequest request)
     throw new Exception("Invalid request accepted.");
 }
 var options = BugViewerOptions.Default.Clone();
+Assert(!options.ShowBackFaces, "Back faces must remain hidden by default.");
+options.ShowBackFaces = true;
+Assert(options.Clone().ShowBackFaces, "Cloning options lost the back-face setting.");
+var javascriptOptions = options.ToJavascriptOptions();
+Assert(Equals(javascriptOptions.GetType().GetProperty("showBackFaces")!.GetValue(javascriptOptions), true),
+    "The back-face setting did not reach the JavaScript options.");
 options.ShowEdgesAt = ShowEdgesAtOption.ShowMeshEdges;
 options.GridSize = 73;
 options.ZIsUp = false;
@@ -87,6 +93,9 @@ var json = Json(request);
 var restored = RoundTrip(request);
 Assert(Json(restored) == json, "Full request did not round trip exactly.");
 Assert(restored.Camera == camera && restored.Options!.GridSize == 73, "View state was lost.");
+Assert(restored.Options!.ShowBackFaces, "Saved scene lost the back-face setting.");
+using (var legacyOptionsStream = new MemoryStream(Encoding.UTF8.GetBytes(json.Replace("\"showBackFaces\":true,", ""))))
+    Assert(!SceneRequest.Load(legacyOptionsStream).Options!.ShowBackFaces, "Older scenes must keep back faces hidden.");
 Assert(restored.PathBatches[0].Thicknesses.SequenceEqual(new[] {-1f,0f}), "Packed path breaks or automatic thickness were lost.");
 Assert(restored.Billboards[0].Anchor == new Vector3(2,3,4), "Billboard anchor was lost.");
 Assert(restored.StepGroups[0].Transforms![1] is null, "Null transform barrier was lost.");
@@ -229,6 +238,9 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         [nameof(SceneViewer.OnClose)] = onClose, [nameof(SceneViewer.OnReady)] = onReady
     }));
     var header = controls.Markup();
+    Assert(new[] { "j", "k", "l" }.All(key => header.Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+            && frame.AttributeName == "data-scene-step-command" && Equals(frame.AttributeValue, key))),
+        "3D step controls omitted keyboard command targets.");
     Assert(HasActiveBadge(header)
         && header.Any(frame => frame.FrameType == RenderTreeFrameType.Text && frame.TextContent == restored.Title)
         && header.Any(frame => frame.FrameType == RenderTreeFrameType.Text && frame.TextContent == restored.Heading)
@@ -269,16 +281,16 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     }));
     var fileActions = controls.Markup();
     Assert(fileActions.Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
-            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-file-actions"))
+            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "bugviewer-scene-file-actions"))
         && !fileActions.Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
-            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "plot-file-actions")),
+            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "bugviewer-plot-file-actions")),
         "The optional file toolbar should replace the default 2D controls.");
     await controls.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
     {
         [nameof(SceneViewer.Scenes)] = new[] { restored }
     }));
     Assert(controls.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
-            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-file-actions")),
+            && frame.AttributeName == "class" && Equals(frame.AttributeValue, "bugviewer-scene-file-actions")),
         "The optional file toolbar should be available for 3D scenes.");
     var plot = new TestPlotViewer(); await renderer.AttachAsync(plot);
     await plot.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
@@ -287,11 +299,24 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         [nameof(PlotViewer.Scenes)] = new[] { plots }, [nameof(PlotViewer.OnClose)] = onClose
     }));
     var plotHeader = plot.Markup();
+    Assert(new[] { "j", "k", "l" }.All(key => plotHeader.Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
+            && frame.AttributeName == "data-scene-step-command" && Equals(frame.AttributeValue, key))),
+        "2D step controls omitted keyboard command targets.");
     Assert(HasActiveBadge(plotHeader),
         "2D viewer did not show the active indicator.");
     closedId = -1;
     await CloseHandler(plotHeader).InvokeAsync(new MouseEventArgs());
     Assert(closedId == 42, "2D close button did not pass the viewer ID.");
+    var togglePlotPlayback = typeof(PlotViewer).GetMethod("ToggleAutoplayAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    var initialPlotStep = plot.Capture().InitialStep;
+    await (Task)togglePlotPlayback.Invoke(plot, null)!;
+    for (var attempt = 0; attempt < 40 && plot.Capture().InitialStep == initialPlotStep; attempt++)
+        await Task.Delay(50);
+    await (Task)togglePlotPlayback.Invoke(plot, null)!;
+    Assert(plot.Capture().InitialStep != initialPlotStep, "2D playback did not advance a step.");
+    var pausedPlotStep = plot.Capture().InitialStep;
+    await Task.Delay(400);
+    Assert(plot.Capture().InitialStep == pausedPlotStep, "2D playback continued after pause.");
 
     var gpu = new TestViewer(); await renderer.AttachAsync(gpu);
     var display = new TestSceneViewer(); await renderer.AttachAsync(display);
@@ -305,6 +330,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     Assert(readyCount == 2, "3D viewer did not report readiness.");
     Assert(gpu.GetCameraState() == restored.Camera, "Camera was not restored after scene upload.");
     Assert(gpu.Options.GridSize == 73, "Geometry upload overwrote the saved grid settings.");
+    Assert(gpu.Options.ShowBackFaces, "Applying saved options lost the back-face setting.");
     await display.SetStepAsync(3);
     var captured = await display.CaptureAsync();
     Assert(captured.InitialStep == 3 && captured.StepGroups[0].PathSource!.Count == 4,
@@ -355,7 +381,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
             await display.SetParametersAsync(ParameterView.FromDictionary(new Dictionary<string,object?>
                 { [nameof(SceneViewer.Scenes)] = new[] { candidate } }));
             var controlsVisible = display.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
-                && frame.AttributeName == "class" && Equals(frame.AttributeValue, "step-controls"));
+                && frame.AttributeName == "class" && Equals(frame.AttributeValue, "bugviewer-step-controls"));
             Assert(controlsVisible == (candidate.Steps.Count > 1 || candidate.StepGroups.Any(group => group.Count > 1)),
                 "Playback controls did not appear or disappear when switching scene types.");
         }
@@ -381,7 +407,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     typeof(SceneViewer).GetField("files", flags)!.SetValue(loader, fileInterop);
     Task FileCommand(string name) => (Task)typeof(SceneViewer).GetMethod(name, flags)!.Invoke(loader, null)!;
     bool HasProgress() => loader.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
-        && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-file-progress"));
+        && frame.AttributeName == "class" && Equals(frame.AttributeValue, "bugviewer-scene-file-progress"));
     var cancelOperation = typeof(SceneViewer).GetMethod("CancelFileOperation", flags)!;
     var canceledOpen = (Task)openFile.Invoke(loader, [new InputFileChangeEventArgs([new MemoryBrowserFile("cancel.json", Encoding.UTF8.GetBytes(Json(plots)))])])!;
     Assert(HasProgress() && (string)typeof(SceneViewer).GetField("fileOperationStatus", flags)!.GetValue(loader)! == "Opening scene…",
@@ -412,7 +438,7 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         "Download failure did not clear progress and report the error.");
     fileRuntime.DownloadGate = null;
     bool HasRange() => loader.Markup().Any(frame => frame.FrameType == RenderTreeFrameType.Attribute
-        && frame.AttributeName == "class" && Equals(frame.AttributeValue, "scene-save-range"));
+        && frame.AttributeName == "class" && Equals(frame.AttributeValue, "bugviewer-scene-save-range"));
     await Open(single, "single.json");
     Assert(!HasRange(), "A single scene showed step range controls.");
     await Open(plots, "plots.json");
@@ -517,6 +543,17 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     Assert((bool)typeof(global::BugViewer.BugViewer).GetMethod("DoesRayGoThroughTriangle", flags)!.Invoke(gpu, rayArguments)!
         && (string)rayArguments[2] == "second" && (int)rayArguments[3] == 0,
         "Cached picking data did not follow the visible mesh.");
+    var pick = typeof(global::BugViewer.BugViewer).GetMethod("DoesRayGoThroughTriangle", flags)!;
+    var backRay = new object[] { new Vector3(.2f, .2f, -5), Vector3.UnitZ, "", -1, 0f, Vector3.Zero };
+    Assert(!(bool)pick.Invoke(gpu, backRay)!, "Back-face picking must be disabled by default.");
+    gpu.Options.ShowBackFaces = true;
+    Assert((bool)pick.Invoke(gpu, backRay)! && (string)backRay[2] == "second",
+        "Visible back faces could not be selected.");
+    Assert((bool)pick.Invoke(gpu, rayArguments)!, "Enabling back faces broke front-face picking.");
+    var parallelRay = new object[] { new Vector3(-5, .2f, 0), Vector3.UnitX, "", -1, 0f, Vector3.Zero };
+    Assert(!(bool)pick.Invoke(gpu, parallelRay)!, "A parallel ray selected a face.");
+    gpu.Options.ShowBackFaces = false;
+    Assert(!(bool)pick.Invoke(gpu, backRay)!, "Disabling back faces left back-face picking enabled.");
     var sphere = typeof(global::BugViewer.BugViewer).GetField("BoundingSphere", flags)!.GetValue(gpu)!;
     var center = (Vector3)sphere.GetType().GetField("Center", flags)!.GetValue(sphere)!;
     var radiusSquared = (float)sphere.GetType().GetField("RadiusSquared", flags)!.GetValue(sphere)!;

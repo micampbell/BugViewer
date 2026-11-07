@@ -71,28 +71,28 @@ try {
         const response = await fetch(new URL('scenes/example.bugscene.json', document.baseURI));
         return new File([await response.blob()], 'example.bugscene', { type: 'application/json' });
     }}] })`);
-    await waitFor('launched scene', () => page.evaluate("document.querySelector('.step-controls')?.textContent.includes('/ 4')"));
-    assert.equal(await page.evaluate("document.querySelector('.scene-file-error')?.textContent || ''"), '');
+    await waitFor('launched scene', () => page.evaluate("document.querySelector('.bugviewer-step-controls')?.textContent.includes('/ 4')"));
+    assert.equal(await page.evaluate("document.querySelector('.bugviewer-scene-file-error')?.textContent || ''"), '');
     const manifest = await page.send('Page.getAppManifest');
     assert.equal(manifest.errors.length, 0, JSON.stringify(manifest.errors));
     const manifestData = JSON.parse(manifest.data);
     assert.deepEqual(manifestData.file_handlers[0].accept['application/json'], ['.bugscene']);
     await page.evaluate(`window.simulateFileLaunch({ files: [{ getFile: async () =>
         new File(['bad json'], 'bad.bugscene', { type: 'application/json' }) }] })`);
-    await waitFor('invalid scene error', () => page.evaluate("document.querySelector('.scene-file-error')?.textContent.includes('Could not open')"));
-    assert.ok(await page.evaluate("document.querySelector('.step-controls')?.textContent.includes('/ 4')"), 'Invalid launch replaced the existing scene');
+    await waitFor('invalid scene error', () => page.evaluate("document.querySelector('.bugviewer-scene-file-error')?.textContent.includes('Could not open')"));
+    assert.ok(await page.evaluate("document.querySelector('.bugviewer-step-controls')?.textContent.includes('/ 4')"), 'Invalid launch replaced the existing scene');
     await waitFor('offline worker installation', () => page.evaluate("navigator.serviceWorker.ready.then(r => !!r.active)"));
     await page.send('Page.reload');
     await waitFor('worker control', () => page.evaluate('!!navigator.serviceWorker.controller'));
     await page.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
     await page.send('Page.reload');
-    await waitFor('offline viewer', () => page.evaluate("!!document.querySelector('.scene-viewer input[type=file]')"));
+    await waitFor('offline viewer', () => page.evaluate("!!document.querySelector('.bugviewer-scene-viewer input[type=file]')"));
     assert.equal(await page.evaluate('document.baseURI'), base);
     await waitFor('offline launch consumer', () => page.evaluate('typeof window.simulateFileLaunch === "function"'));
     const offlineScene = await readFile(new URL('../samples/LoadAndShowScene/wwwroot/scenes/example.bugscene.json', import.meta.url), 'utf8');
     await page.evaluate(`window.simulateFileLaunch({ files: [{ getFile: async () =>
         new File([${JSON.stringify(offlineScene)}], 'offline.bugscene', { type: 'application/json' }) }] })`);
-    await waitFor('offline scene', () => page.evaluate("document.querySelector('.step-controls')?.textContent.includes('/ 4')"));
+    await waitFor('offline scene', () => page.evaluate("document.querySelector('.bugviewer-step-controls')?.textContent.includes('/ 4')"));
     if (process.env.BUGVIEWER_SCENE_FILE) {
         await page.evaluate("document.body.insertAdjacentHTML('beforeend', '<input id=launch-fixture type=file hidden>')");
         await page.send('DOM.enable');
@@ -101,10 +101,10 @@ try {
         await page.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [process.env.BUGVIEWER_SCENE_FILE] });
         await page.evaluate(`window.simulateFileLaunch({ files: [{ getFile: async () =>
             document.querySelector('#launch-fixture').files[0] }] })`);
-        await waitFor('large scene loading', () => page.evaluate("document.querySelector('.scene-viewer')?.getAttribute('aria-busy') === 'true'"));
-        await waitFor('large scene completion', () => page.evaluate("document.querySelector('.scene-viewer')?.getAttribute('aria-busy') === 'false'"), 180000);
-        assert.equal(await page.evaluate("document.querySelector('.scene-file-error')?.textContent || ''"), '');
-        assert.ok(await page.evaluate("!!document.querySelector('.step-controls')"), 'Large launched scene has no step controls');
+        await waitFor('large scene loading', () => page.evaluate("document.querySelector('.bugviewer-scene-viewer')?.getAttribute('aria-busy') === 'true'"));
+        await waitFor('large scene completion', () => page.evaluate("document.querySelector('.bugviewer-scene-viewer')?.getAttribute('aria-busy') === 'false'"), 180000);
+        assert.equal(await page.evaluate("document.querySelector('.bugviewer-scene-file-error')?.textContent || ''"), '');
+        assert.ok(await page.evaluate("!!document.querySelector('.bugviewer-step-controls')"), 'Large launched scene has no step controls');
         console.log('PASS: launched the supplied stepped scene from a local file while offline.');
     }
     console.log('PASS: simulated file launch streams a scene and the published subpath viewer starts offline.');

@@ -211,7 +211,7 @@ const MESH_SHADER = `
     return out;
   }
 
-  fn meshColor(in: VertexOut) -> vec4f {
+  fn meshColor(in: VertexOut, frontFacing: bool) -> vec4f {
     var normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
     if (dot(in.primitiveSurfaceNormal, in.primitiveSurfaceNormal) > 1e-12) {
       normal = normalize(in.primitiveSurfaceNormal);
@@ -219,6 +219,8 @@ const MESH_SHADER = `
     let lightDir = normalize(light.lightDir);
 
     let viewDir = normalize(camera.cameraPosition - in.worldPos);
+    // Illuminate the visible side of back faces for both derivative and surface normals.
+    if (!frontFacing && dot(normal, viewDir) < 0.0) { normal = -normal; }
     let halfDir = normalize(lightDir + viewDir);
 
     // Diffuse
@@ -236,13 +238,13 @@ const MESH_SHADER = `
     return vec4f(finalColor, meshUniforms.color.a);
   }
   ${OIT_SHADER}
-  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
-    let color = meshColor(in);
+  @fragment fn opaqueFragment(in: VertexOut, @builtin(front_facing) frontFacing: bool) -> @location(0) vec4f {
+    let color = meshColor(in, frontFacing);
     if (color.a < 1.0) { discard; }
     return color;
   }
-  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
-    let color = meshColor(in);
+  @fragment fn transparentFragment(in: VertexOut, @builtin(front_facing) frontFacing: bool) -> TransparencyOutput {
+    let color = meshColor(in, frontFacing);
     if (color.a <= 0.0 || color.a >= 1.0) { discard; }
     return transparencyOutput(color, in.pos);
   }
@@ -281,7 +283,7 @@ const MESH_SHADER_VERTEX_COLOR = `
     out.primitiveSurfaceNormal = in.primitiveSurfaceNormal;
     return out;
   }
-  fn meshColor(in: VertexOut) -> vec4f {
+  fn meshColor(in: VertexOut, frontFacing: bool) -> vec4f {
     var normal = normalize(cross(dpdx(in.worldPos), dpdy(in.worldPos)));
     if (dot(in.primitiveSurfaceNormal, in.primitiveSurfaceNormal) > 1e-12) {
       normal = normalize(in.primitiveSurfaceNormal);
@@ -289,6 +291,8 @@ const MESH_SHADER_VERTEX_COLOR = `
     let lightDir = normalize(light.lightDir);
 
     let viewDir = normalize(camera.cameraPosition - in.worldPos);
+    // Illuminate the visible side of back faces for both derivative and surface normals.
+    if (!frontFacing && dot(normal, viewDir) < 0.0) { normal = -normal; }
     let halfDir = normalize(lightDir + viewDir);
 
     let diffuse = light.directionalLightIntensity * max(dot(normal, lightDir), 0.0);
@@ -304,13 +308,13 @@ const MESH_SHADER_VERTEX_COLOR = `
     return vec4f(finalColor, in.color.a);
   }
   ${OIT_SHADER}
-  @fragment fn opaqueFragment(in: VertexOut) -> @location(0) vec4f {
-    let color = meshColor(in);
+  @fragment fn opaqueFragment(in: VertexOut, @builtin(front_facing) frontFacing: bool) -> @location(0) vec4f {
+    let color = meshColor(in, frontFacing);
     if (color.a < 1.0) { discard; }
     return color;
   }
-  @fragment fn transparentFragment(in: VertexOut) -> TransparencyOutput {
-    let color = meshColor(in);
+  @fragment fn transparentFragment(in: VertexOut, @builtin(front_facing) frontFacing: bool) -> TransparencyOutput {
+    let color = meshColor(in, frontFacing);
     if (color.a <= 0.0 || color.a >= 1.0) { discard; }
     return transparencyOutput(color, in.pos);
   }
@@ -633,6 +637,7 @@ const lines = [];
 const textBillboards = [];
 let meshFacesVisible = true;
 let usePrimitiveSurfaceNormals = false;
+let showBackFaces = false;
 
 // ============================================================================
 // Initialization
@@ -1473,15 +1478,7 @@ async function changeSampleCount(nextSampleCount) {
         coordinateAxes.opaquePipeline = await createOpaquePipeline(descriptor);
         coordinateAxes.pipelineDescriptor = descriptor;
     }
-    const allMeshes = new Set([...meshes, ...[...presentationMeshes.values()].map(entry => entry.resource)]);
-    for (const mesh of allMeshes) {
-        if (!mesh.vertexBuffer) continue;
-        const primary = await getMeshPipeline(mesh.singleColor, mesh.isTransparent && !mesh.hasOpaque);
-        mesh.pipeline = primary.pipeline;
-        mesh.transparentPipeline = mesh.isTransparent
-            ? (mesh.hasOpaque ? (await getMeshPipeline(mesh.singleColor, true)).pipeline : primary.pipeline)
-            : null;
-    }
+    await refreshMeshPipelines();
     for (const billboard of textBillboards) {
         const descriptor = { ...billboard.pipelineDescriptor, multisample: { count: sampleCount } };
         billboard.pipeline = await device.createRenderPipelineAsync(descriptor);
@@ -1494,14 +1491,25 @@ async function changeSampleCount(nextSampleCount) {
 
 async function updateDisplayOptionsCore(options) {
     let gridChanged = false;
+    const previousShowBackFaces = showBackFaces;
+    const backFacesChanged = typeof options.showBackFaces === 'boolean' && showBackFaces !== options.showBackFaces;
+    if (backFacesChanged) showBackFaces = options.showBackFaces;
     viewCubeController.updateOptions(options.viewCubeSizeRatio, options.viewCubeOpacity);
     if (zIsUp !== options.zIsUp) {
         zIsUp = options.zIsUp;
         gridChanged = true;
     }
-    if (typeof options.sampleCount === 'number' && sampleCount !== options.sampleCount) {
-        if (device) await changeSampleCount(options.sampleCount);
-        else sampleCount = options.sampleCount;
+    try {
+        if (typeof options.sampleCount === 'number' && sampleCount !== options.sampleCount) {
+            if (device) await changeSampleCount(options.sampleCount);
+            else sampleCount = options.sampleCount;
+        } else if (backFacesChanged && device) {
+            await refreshMeshPipelines();
+        }
+    } catch (error) {
+        // Retain the previous mode if pipeline creation fails so a later update can retry.
+        showBackFaces = previousShowBackFaces;
+        throw error;
     }
 
     // Handle coordinate axes visibility
@@ -1624,7 +1632,7 @@ function getMeshPipeline(singleColor, isTransparent) {
     const gpuDevice = requireDevice('creating a mesh pipeline');
     // All other descriptor fields are invariant. Index format is a draw-time
     // setting, and normals are a vertex attribute in both display modes.
-    const key = JSON.stringify([singleColor, isTransparent, colorFormat, depthFormat, sampleCount]);
+    const key = JSON.stringify([singleColor, isTransparent, colorFormat, depthFormat, sampleCount, showBackFaces]);
     if (meshPipelineCacheEnabled && meshPipelines.has(key)) return meshPipelines.get(key);
 
     let layout = meshPipelineCacheEnabled && meshLayouts.get(singleColor);
@@ -1678,7 +1686,7 @@ function getMeshPipeline(singleColor, isTransparent) {
             depthCompare: 'less-equal'
         },
         multisample: { count: sampleCount },
-        primitive: { topology: 'triangle-list', cullMode: 'back' }
+        primitive: { topology: 'triangle-list', cullMode: showBackFaces ? 'none' : 'back' }
     });
 
     const result = pipeline.then(value => ({ pipeline: value, bindGroupLayout }));
@@ -1689,6 +1697,23 @@ function getMeshPipeline(singleColor, isTransparent) {
         });
     }
     return result;
+}
+
+async function refreshMeshPipelines() {
+    // Include inactive and prefetched steps so revisiting them preserves the current setting.
+    const allMeshes = new Set([...meshes, ...[...presentationMeshes.values()].map(entry => entry.resource)]);
+    const updates = await Promise.all([...allMeshes].filter(mesh => mesh.vertexBuffer).map(async mesh => {
+        const primary = await getMeshPipeline(mesh.singleColor, mesh.isTransparent && !mesh.hasOpaque);
+        const transparentPipeline = mesh.isTransparent
+            ? (mesh.hasOpaque ? (await getMeshPipeline(mesh.singleColor, true)).pipeline : primary.pipeline)
+            : null;
+        return { mesh, pipeline: primary.pipeline, transparentPipeline };
+    }));
+    // Switch the whole scene without an await between resources; buffers and bind groups are retained.
+    for (const { mesh, pipeline, transparentPipeline } of updates) {
+        mesh.pipeline = pipeline;
+        mesh.transparentPipeline = transparentPipeline;
+    }
 }
 
 function classifyMeshColors(colors) {

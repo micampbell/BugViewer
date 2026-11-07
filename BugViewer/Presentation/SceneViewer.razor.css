@@ -1,38 +1,93 @@
-.scene-viewer { position: relative; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; background: white; }
-.scene-viewer:focus-visible { outline: 2px solid #1769aa; outline-offset: -2px; }
-.plot-file-actions { display: flex; gap: .25rem; }
-.scene-file-actions { display: flex; flex-wrap: wrap; gap: .5rem; padding: .5rem; }
-.scene-file-actions button { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .65rem; cursor: pointer; }
-.scene-file-actions button:disabled { cursor: default; }
-.scene-file-progress { position: absolute; z-index: 10; top: .75rem; left: 50%; transform: translateX(-50%); width: min(24rem, calc(100% - 1.5rem)); box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .75rem; background: white; border: 1px solid #999; border-radius: .5rem; box-shadow: 0 2px 8px rgb(0 0 0 / 20%); }
-.scene-file-progress > span:first-child { flex-basis: 100%; }
-.scene-file-progress progress { flex: 1 1 8rem; min-width: 0; }
-.scene-file-error { color: #b32121; }
-.scene-save-dialog { border: 1px solid #999; border-radius: .5rem; padding: 1.25rem; width: min(28rem, 90vw); }
-.scene-save-dialog::backdrop { background: rgb(0 0 0 / 35%); }
-.scene-save-dialog h2 { margin: 0 0 1rem; font-size: 1.2rem; }
-.scene-save-dialog label { display: flex; flex-direction: column; gap: .4rem; }
-.scene-save-dialog input { padding: .45rem; }
-.scene-save-range { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0 0; }
-.scene-save-range label { flex: 1 1 5rem; min-width: 0; }
-.scene-save-range input { width: 100%; box-sizing: border-box; }
-.scene-save-dialog p { font-size: .9rem; }
-.scene-save-actions { display: flex; justify-content: flex-end; gap: .5rem; }
-.scene-save-actions button { padding: .4rem .8rem; }
-.scene-viewer-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
-.scene-viewer-canvas { flex: 1 1 auto; min-height: 0; }
-.scene-viewer-header h2 { margin: .35rem 0; font-size: 1.1rem; }
-.scene-viewer-header p { margin: .2rem 0; color: #555; }
-.scene-id, .active-badge { display: inline-block; padding: .15rem .4rem; border-radius: .25rem; font-size: .8rem; font-weight: 600; }
-.scene-id { background: #e7e7ef; }.active-badge { margin-left: .4rem; color: white; background: #1769aa; }
-.rotated-icon-button svg { transform: rotate(45deg); }
-.plot-viewer { flex: 1 1 auto; width: 100%; min-height: 18rem; }
-.step-controls { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
-.step-icon-button { display: inline-flex; align-items: center; justify-content: center; padding: 2px; }
-.step-controls input[type="range"] { flex: 1; }
-.step-controls input[type="number"] { width: 5rem; }
-.step-counter { display: inline-flex; align-items: center; gap: .25rem; white-space: nowrap; }
-.step-current { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: text; }
-.step-current:hover, .step-current:focus-visible { text-decoration: underline; }
-.step-number-input { box-sizing: content-box; padding: 0 .15rem; font: inherit; text-align: right; }
-.step-speed-control { display: flex; gap: .35rem; align-items: center; white-space: nowrap; }
+/* Shared with PlotViewer through the private presentation CSS scope. */
+.bugviewer-presentation {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    font-family: var(--bugviewer-font-family, "Segoe UI", sans-serif);
+    font-size: var(--bugviewer-font-size, 14px);
+    font-weight: 400;
+    font-style: normal;
+    line-height: var(--bugviewer-line-height, 1.4);
+    letter-spacing: normal;
+    text-align: start;
+    text-transform: none;
+    color: var(--bugviewer-panel-foreground, var(--colorNeutralForeground1, #242424));
+    background: var(--bugviewer-panel-background, var(--colorNeutralBackground1, #fff));
+}
+
+.bugviewer-scene-viewer { height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; }
+.bugviewer-presentation:focus-visible { outline: 2px solid var(--bugviewer-accent, #1769aa); outline-offset: -2px; }
+
+/* These selectors only reach native elements rendered by the presentation components.
+   Fluent UI children keep their own component styles. */
+.bugviewer-presentation :where(button, input, select, textarea, label) {
+    box-sizing: border-box;
+    font: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    line-height: inherit;
+    float: none;
+}
+.bugviewer-presentation :where(button, input, select, textarea) {
+    border: 1px solid var(--bugviewer-control-border, var(--colorNeutralStroke1, #b8b8b8));
+    border-radius: 4px;
+    background: var(--bugviewer-control-background, var(--colorNeutralBackground1, #fff));
+    box-shadow: none;
+    text-align: start;
+}
+.bugviewer-presentation button { cursor: pointer; }
+.bugviewer-presentation button:disabled { cursor: default; opacity: .5; }
+.bugviewer-presentation [hidden] { display: none; }
+.bugviewer-presentation :where(button, input, select, textarea):focus-visible {
+    outline: 2px solid var(--bugviewer-accent, #1769aa);
+    outline-offset: 2px;
+}
+.bugviewer-presentation button:hover:not(:disabled) { background: var(--colorNeutralBackground1Hover, #f0f0f0); }
+
+.bugviewer-plot-file-actions { display: flex; gap: var(--bugviewer-control-gap, 6px); }
+.bugviewer-scene-file-actions { display: flex; flex-wrap: wrap; gap: var(--bugviewer-control-gap, 6px); padding: .5em; }
+.bugviewer-scene-file-actions button { display: inline-flex; align-items: center; gap: .35em; padding: .35em .65em; }
+.bugviewer-scene-file-progress { position: absolute; z-index: 10; top: .75em; left: 50%; transform: translateX(-50%); width: min(24em, calc(100% - 1.5em)); box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: .5em; padding: .75em; background: var(--bugviewer-panel-background, #fff); border: 1px solid var(--bugviewer-control-border, #999); border-radius: .5em; box-shadow: 0 2px 8px rgb(0 0 0 / 20%); }
+.bugviewer-scene-file-progress > span:first-child { flex-basis: 100%; }
+.bugviewer-scene-file-progress progress { flex: 1 1 8em; min-width: 0; }
+.bugviewer-scene-file-error { color: var(--colorPaletteRedForeground1, #b32121); }
+.bugviewer-scene-save-dialog { font: inherit; color: inherit; background: var(--bugviewer-panel-background, #fff); box-sizing: border-box; border: 1px solid var(--bugviewer-control-border, #999); border-radius: .5em; padding: 1.25em; width: min(28em, 90vw); margin: auto; }
+.bugviewer-scene-save-dialog::backdrop { background: rgb(0 0 0 / 35%); }
+.bugviewer-scene-save-dialog h2 { margin: 0 0 1em; padding: 0; font: inherit; font-size: 1.2em; font-weight: 600; color: inherit; text-transform: none; letter-spacing: normal; }
+.bugviewer-scene-save-dialog label { display: flex; flex-direction: column; gap: .4em; }
+.bugviewer-scene-save-dialog input { padding: .45em; }
+.bugviewer-scene-save-range { display: flex; flex-wrap: wrap; gap: .75em; margin: 1em 0 0; padding: .75em; min-width: 0; border: 1px solid var(--bugviewer-control-border, #b8b8b8); }
+.bugviewer-scene-save-range label { flex: 1 1 5em; min-width: 0; }
+.bugviewer-scene-save-range input { width: 100%; }
+.bugviewer-scene-save-dialog p { font-size: .9em; }
+.bugviewer-scene-save-actions { display: flex; justify-content: flex-end; gap: var(--bugviewer-control-gap, 6px); }
+.bugviewer-scene-save-actions button { padding: .4em .8em; }
+.bugviewer-scene-viewer-header { display: flex; justify-content: space-between; gap: 1em; align-items: start; }
+.bugviewer-scene-viewer-canvas { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.bugviewer-scene-viewer-header h2 { margin: .35em 0; padding: 0; font: inherit; font-weight: 600; font-size: 1.1em; color: inherit; text-transform: none; letter-spacing: normal; }
+.bugviewer-scene-viewer-header p { margin: .2em 0; padding: 0; color: inherit; }
+.bugviewer-scene-id, .bugviewer-active-badge { display: inline-block; padding: .15em .4em; border-radius: .25em; font-size: .8em; font-weight: 600; }
+.bugviewer-scene-id { background: var(--colorNeutralBackground3, #e7e7ef); }
+.bugviewer-active-badge { margin-left: .4em; color: white; background: var(--bugviewer-accent, #1769aa); }
+.bugviewer-presentation ::deep .bugviewer-rotated-icon-button svg { transform: rotate(45deg); }
+
+.bugviewer-step-controls { display: flex; flex-wrap: wrap; gap: var(--bugviewer-control-gap, 6px); align-items: center; margin: .5em 0; padding: 0; border: 0; }
+.bugviewer-step-controls .bugviewer-step-icon-button { display: inline-flex; flex: 0 0 var(--bugviewer-control-size, 32px); align-items: center; justify-content: center; width: var(--bugviewer-control-size, 32px); height: var(--bugviewer-control-size, 32px); padding: 2px; }
+.bugviewer-step-controls input[type="range"] { flex: 1 1 8em; width: 8em; height: var(--bugviewer-control-size, 32px); border: 0; padding: 0; background: transparent; accent-color: var(--bugviewer-accent, #1769aa); }
+.bugviewer-step-controls input[type="number"] { width: 5em; }
+.bugviewer-step-controls select, .bugviewer-step-controls input[type="number"] { height: var(--bugviewer-control-size, 32px); padding: 2px 6px; }
+.bugviewer-step-counter { display: inline-flex; align-items: center; gap: .25em; white-space: nowrap; }
+.bugviewer-step-controls .bugviewer-step-current { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: text; }
+.bugviewer-step-current:hover, .bugviewer-step-current:focus-visible { text-decoration: underline; }
+.bugviewer-step-controls .bugviewer-step-number-input { box-sizing: content-box; padding: 0 .15em; font: inherit; text-align: right; }
+.bugviewer-step-speed-control { display: inline-flex; flex: 0 0 auto; gap: .35em; align-items: center; white-space: nowrap; }

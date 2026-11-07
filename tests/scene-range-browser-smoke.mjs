@@ -83,12 +83,12 @@ try {
         if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error')
             console.error('Browser console:', message.params.args.map(item => item.value ?? item.description).join(' '));
     });
-    await waitFor('scene viewer', () => page.evaluate("!!document.querySelector('.scene-viewer input[type=file]')"));
+    await waitFor('scene viewer', () => page.evaluate("!!document.querySelector('.bugviewer-scene-viewer input[type=file]')"));
     await page.evaluate(`(() => {
         window.fileProgressEvents = [];
         window.cancelNextSave = false;
         const observer = new MutationObserver(() => {
-            const overlay = document.querySelector('.scene-file-progress');
+            const overlay = document.querySelector('.bugviewer-scene-file-progress');
             if (!overlay) return;
             const bar = overlay.querySelector('progress');
             const box = overlay.getBoundingClientRect();
@@ -98,23 +98,23 @@ try {
                 overlay.querySelector('button')?.click();
             }
         });
-        observer.observe(document.querySelector('.scene-viewer'), { childList: true, subtree: true, characterData: true });
+        observer.observe(document.querySelector('.bugviewer-scene-viewer'), { childList: true, subtree: true, characterData: true });
     })()`);
 
     async function openFile(filename, condition) {
         const document = await page.send('DOM.getDocument', { depth: -1 });
-        const input = await page.send('DOM.querySelector', { nodeId: document.root.nodeId, selector: '.scene-viewer input[type=file]' });
+        const input = await page.send('DOM.querySelector', { nodeId: document.root.nodeId, selector: '.bugviewer-scene-viewer input[type=file]' });
         assert.ok(input.nodeId, 'Scene file input not found');
         await page.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [filename] });
         await waitFor(`scene ${path.basename(filename)}`, () => page.evaluate(condition));
-        const error = await page.evaluate("document.querySelector('.scene-file-error')?.textContent || ''");
+        const error = await page.evaluate("document.querySelector('.bugviewer-scene-file-error')?.textContent || ''");
         assert.equal(error, '', `Scene open failed: ${error}`);
     }
 
     async function saveRange(name, start, end, stride) {
-        await waitFor('viewer to finish loading', () => page.evaluate("document.querySelector('.scene-viewer')?.getAttribute('aria-busy') === 'false'"));
-        await page.evaluate("document.querySelector('.scene-viewer > button:not([data-scene-file-command])').click()");
-        await waitFor('Save As dialog', () => page.evaluate("!!document.querySelector('dialog[open] .scene-save-range')"));
+        await waitFor('viewer to finish loading', () => page.evaluate("document.querySelector('.bugviewer-scene-viewer')?.getAttribute('aria-busy') === 'false'"));
+        await page.evaluate("document.querySelector('.bugviewer-scene-viewer > button:not([data-scene-file-command])').click()");
+        await waitFor('Save As dialog', () => page.evaluate("!!document.querySelector('dialog[open] .bugviewer-scene-save-range')"));
         const values = JSON.stringify([name, String(start), String(end), String(stride)]);
         await page.evaluate(`(() => { const dialog = document.querySelector('dialog[open]'); const inputs = dialog.querySelectorAll('input'); const values = ${values}; for (let i = 0; i < values.length; i++) { inputs[i].value = values[i]; inputs[i].dispatchEvent(new Event('input', { bubbles: true })); } })()`);
         await page.evaluate("document.querySelector('dialog[open] button[type=submit]').click()");
@@ -125,14 +125,14 @@ try {
     }
 
     await openFile(path.join(root, 'samples/LoadAndShowScene/wwwroot/scenes/example.bugscene.json'),
-        "document.querySelector('.step-controls')?.textContent.includes('/ 4')");
-    const gpuError = await page.evaluate("document.querySelector('.webgpu-error-overlay')?.textContent || ''");
+        "document.querySelector('.bugviewer-step-controls')?.textContent.includes('/ 4')");
+    const gpuError = await page.evaluate("document.querySelector('.bugviewer-error-overlay')?.textContent || ''");
     assert.equal(gpuError, '', `WebGPU unavailable: ${gpuError}`);
-    await waitFor('opening completion', () => page.evaluate("document.querySelector('.scene-viewer')?.getAttribute('aria-busy') === 'false'"));
-    await page.evaluate("document.querySelector('.scene-viewer > button:not([data-scene-file-command])').click()");
-    await waitFor('Save As dialog for cancellation', () => page.evaluate("!!document.querySelector('dialog[open] .scene-save-range')"));
+    await waitFor('opening completion', () => page.evaluate("document.querySelector('.bugviewer-scene-viewer')?.getAttribute('aria-busy') === 'false'"));
+    await page.evaluate("document.querySelector('.bugviewer-scene-viewer > button:not([data-scene-file-command])').click()");
+    await waitFor('Save As dialog for cancellation', () => page.evaluate("!!document.querySelector('dialog[open] .bugviewer-scene-save-range')"));
     await page.evaluate("window.cancelNextSave = true; document.querySelector('dialog[open] button[type=submit]').click()");
-    await waitFor('save cancellation', () => page.evaluate("window.fileProgressEvents.some(e => e.text.includes('Canceling')) && document.querySelector('.scene-viewer')?.getAttribute('aria-busy') === 'false'"));
+    await waitFor('save cancellation', () => page.evaluate("window.fileProgressEvents.some(e => e.text.includes('Canceling')) && document.querySelector('.bugviewer-scene-viewer')?.getAttribute('aria-busy') === 'false'"));
     assert.deepEqual(await readdir(downloads), [], 'Canceled save started a download');
     const saved = await saveRange('range-check.bugscene.json', 2, 4, 2);
     const progressEvents = await page.evaluate('window.fileProgressEvents');
@@ -147,39 +147,39 @@ try {
     assert.equal(saved.scene.steps[0].paths.length, 3, 'Visible history and grouped paths were not saved');
     assert.equal(saved.scene.steps[1].paths.length, 4, 'Final group did not retain visible history');
     assert.equal(saved.scene.steps[0].meshes[0].vertices[0][0], 0, 'Latest group transform was not saved');
-    await openFile(saved.filename, "document.querySelector('.step-controls')?.textContent.includes('/ 2') && document.querySelector('.step-current')?.textContent.trim() === '1'");
+    await openFile(saved.filename, "document.querySelector('.bugviewer-step-controls')?.textContent.includes('/ 2') && document.querySelector('.bugviewer-step-current')?.textContent.trim() === '1'");
     assert.equal(await page.evaluate(`['Previous step', 'Next step', 'Play'].every(label =>
-        document.querySelector('.step-controls button[aria-label="' + label + '"] svg'))`), true,
+        document.querySelector('.bugviewer-step-controls button[aria-label="' + label + '"] svg'))`), true,
     '3D playback buttons must expose named Fluent icons');
-    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Next step\"]').click()");
-    await waitFor('second saved step', () => page.evaluate("document.querySelector('.step-current')?.textContent.trim() === '2'"));
-    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Previous step\"]').click()");
-    await waitFor('previous saved step', () => page.evaluate("document.querySelector('.step-current')?.textContent.trim() === '1'"));
+    await page.evaluate("document.querySelector('.bugviewer-step-controls button[aria-label=\"Next step\"]').click()");
+    await waitFor('second saved step', () => page.evaluate("document.querySelector('.bugviewer-step-current')?.textContent.trim() === '2'"));
+    await page.evaluate("document.querySelector('.bugviewer-step-controls button[aria-label=\"Previous step\"]').click()");
+    await waitFor('previous saved step', () => page.evaluate("document.querySelector('.bugviewer-step-current')?.textContent.trim() === '1'"));
     await page.evaluate(`(() => {
-        const speed = document.querySelector('.step-speed-control select');
+        const speed = document.querySelector('.bugviewer-step-speed-control select');
         speed.value = '3000';
         speed.dispatchEvent(new Event('change', { bubbles: true }));
-        document.querySelector('.step-controls button[aria-label="Play"]').click();
+        document.querySelector('.bugviewer-step-controls button[aria-label="Play"]').click();
     })()`);
-    await waitFor('pause icon', () => page.evaluate("!!document.querySelector('.step-controls button[aria-label=\"Pause\"] svg')"));
-    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Pause\"]').click()");
-    await waitFor('play icon', () => page.evaluate("!!document.querySelector('.step-controls button[aria-label=\"Play\"] svg')"));
-    assert.equal(await page.evaluate("document.querySelector('.webgpu-error-overlay')?.textContent || ''"), '');
+    await waitFor('pause icon', () => page.evaluate("!!document.querySelector('.bugviewer-step-controls button[aria-label=\"Pause\"] svg')"));
+    await page.evaluate("document.querySelector('.bugviewer-step-controls button[aria-label=\"Pause\"]').click()");
+    await waitFor('play icon', () => page.evaluate("!!document.querySelector('.bugviewer-step-controls button[aria-label=\"Play\"] svg')"));
+    assert.equal(await page.evaluate("document.querySelector('.bugviewer-error-overlay')?.textContent || ''"), '');
     console.log('PASS: opened a stepped 3D scene, saved a grouped range, and reopened both saved steps.');
 
     await openFile(path.join(root, 'samples/LoadAndShowScene/wwwroot/scenes/plots.bugscene.json'),
-        "!!document.querySelector('.plot-viewer') && document.querySelector('.plot-viewer').parentElement.querySelector('.step-controls')?.textContent.includes('/ 2')");
+        "!!document.querySelector('.bugviewer-plot-viewer') && document.querySelector('.bugviewer-plot-viewer').parentElement.querySelector('.bugviewer-step-controls')?.textContent.includes('/ 2')");
     assert.equal(await page.evaluate(`['Previous step', 'Next step'].every(label =>
-        document.querySelector('.step-controls button[aria-label="' + label + '"] svg'))`), true,
+        document.querySelector('.bugviewer-step-controls button[aria-label="' + label + '"] svg'))`), true,
     '2D playback buttons must expose named Fluent icons');
-    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Next step\"]').click()");
-    await waitFor('second plot step', () => page.evaluate("document.querySelector('.step-controls')?.textContent.includes('2 / 2')"));
-    await page.evaluate("document.querySelector('.step-controls button[aria-label=\"Previous step\"]').click()");
-    await waitFor('first plot step', () => page.evaluate("document.querySelector('.step-controls')?.textContent.includes('1 / 2')"));
+    await page.evaluate("document.querySelector('.bugviewer-step-controls button[aria-label=\"Next step\"]').click()");
+    await waitFor('second plot step', () => page.evaluate("document.querySelector('.bugviewer-step-controls')?.textContent.includes('2 / 2')"));
+    await page.evaluate("document.querySelector('.bugviewer-step-controls button[aria-label=\"Previous step\"]').click()");
+    await waitFor('first plot step', () => page.evaluate("document.querySelector('.bugviewer-step-controls')?.textContent.includes('1 / 2')"));
     const plot = await saveRange('plot-check.bugscene.json', 1, 2, 2);
     assert.equal(plot.scene.steps.length, 1);
     assert.equal(plot.scene.steps[0].plot.traces[0].name, 'overlay only');
-    await openFile(plot.filename, "!!document.querySelector('.plot-viewer') && !document.querySelector('.plot-viewer').parentElement.querySelector('.step-controls') && document.querySelector('.plot-viewer').data?.[0]?.name === 'overlay only'");
+    await openFile(plot.filename, "!!document.querySelector('.bugviewer-plot-viewer') && !document.querySelector('.bugviewer-plot-viewer').parentElement.querySelector('.bugviewer-step-controls') && document.querySelector('.bugviewer-plot-viewer').data?.[0]?.name === 'overlay only'");
     console.log('PASS: saved and reopened the final plot of a grouped 2D range.');
     page.socket.close();
 } finally {

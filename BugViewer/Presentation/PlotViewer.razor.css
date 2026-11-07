@@ -1,15 +1,4 @@
-.scene-viewer { height: 75vh; min-height: 24rem; box-sizing: border-box; display: flex; flex-direction: column; margin: 0 0 1rem; padding: 1rem; background: white; border: 1px solid #d5d5dd; border-radius: .4rem; }
-.scene-viewer.embedded { flex: 1 1 auto; height: auto; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; }
-.scene-viewer-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
-.scene-viewer-canvas { flex: 1 1 auto; min-height: 0; }
-.scene-viewer-header h2 { margin: .35rem 0; font-size: 1.1rem; }
-.scene-viewer-header p { margin: .2rem 0; color: #555; }
-.scene-id, .active-badge { display: inline-block; padding: .15rem .4rem; border-radius: .25rem; font-size: .8rem; font-weight: 600; }
-.scene-id { background: #e7e7ef; }.active-badge { margin-left: .4rem; color: white; background: #1769aa; }
-.rotated-icon-button svg { transform: rotate(45deg); }
-.plot-viewer { flex: 1 1 auto; width: 100%; min-height: 18rem; }
-.step-controls { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
-.step-icon-button { display: inline-flex; align-items: center; justify-content: center; padding: 2px; }
-.step-controls input[type="range"] { flex: 1; }
-.step-controls input[type="number"] { width: 5rem; }
-.step-speed-control { display: flex; gap: .35rem; align-items: center; white-space: nowrap; }
+/* Native controls, typography, and headers share SceneViewer's private CSS scope. */
+.bugviewer-presentation.bugviewer-plot-viewer { height: 75vh; min-height: 24em; margin: 0 0 1em; padding: 1em; border: 1px solid var(--bugviewer-control-border, #d5d5dd); border-radius: .4em; }
+.bugviewer-plot-viewer.bugviewer-embedded { flex: 1 1 auto; height: auto; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; }
+.bugviewer-plot-canvas { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; }

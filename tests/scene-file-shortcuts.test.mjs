@@ -12,7 +12,11 @@ class Element extends EventTarget {
         return this.editable ? this : this.parent?.closest(selector);
     }
     getAttribute(name) { return this.attributes?.[name] ?? null; }
-    querySelector() { return this.dialog?.open ? this.dialog : null; }
+    querySelector(selector) {
+        if (selector === 'dialog[open]') return this.dialog?.open ? this.dialog : null;
+        const step = /^\[data-scene-step-command="([jkl])"\]$/.exec(selector);
+        return step ? this.stepButtons?.[step[1]] ?? null : null;
+    }
     click() {
         if (this.disabled) return;
         this.clicks++;
@@ -87,6 +91,48 @@ test('shortcuts follow focus or the last interacted viewer and leave outside edi
     assert.equal(h.key('o', { target: second.root }).defaultPrevented, false);
     second.open.click(); // Disabling keyboard shortcuts does not disable the button.
     assert.equal(second.input.clicks, 1);
+});
+
+test('step shortcuts target the active stepped viewer independently of file shortcuts', async () => {
+    const h = await harness(), first = h.viewer(), second = h.viewer();
+    const makeSteps = viewer => viewer.root.stepButtons = Object.fromEntries(
+        ['j', 'k', 'l'].map(key => [key, new Element(viewer.root)]));
+    makeSteps(first);
+    makeSteps(second);
+    first.root.dataset.sceneShortcuts = 'false';
+    assert.equal(h.key('j', { ctrlKey: false, altKey: false }).defaultPrevented, false);
+    first.root.dispatchEvent(new Event('focusin'));
+    for (const key of ['j', 'K', 'l'])
+        assert.equal(h.key(key, { ctrlKey: false, altKey: false }).defaultPrevented, true);
+    assert.deepEqual(Object.values(first.root.stepButtons).map(button => button.clicks), [1, 1, 1]);
+    h.key('j', { ctrlKey: false, altKey: false, repeat: true });
+    h.key('k', { ctrlKey: false, altKey: false, repeat: true });
+    assert.equal(first.root.stepButtons.j.clicks, 2);
+    assert.equal(first.root.stepButtons.k.clicks, 1);
+    second.root.dispatchEvent(new Event('pointerdown'));
+    h.key('l', { ctrlKey: false, altKey: false });
+    assert.equal(second.root.stepButtons.l.clicks, 1);
+    h.key('j', { ctrlKey: false, altKey: false, target: first.root });
+    assert.equal(first.root.stepButtons.j.clicks, 3);
+    delete second.root.stepButtons;
+    assert.equal(h.key('l', { ctrlKey: false, altKey: false }).defaultPrevented, false);
+    first.binding.dispose(); second.binding.dispose();
+});
+
+test('step shortcuts leave editors, modifiers and dialogs alone', async () => {
+    const h = await harness(), v = h.viewer();
+    v.root.stepButtons = { j: new Element(v.root), k: new Element(v.root), l: new Element(v.root) };
+    const editor = new Element(v.root); editor.editable = true;
+    for (const overrides of [
+        { target: editor }, { ctrlKey: true }, { altKey: true }, { metaKey: true },
+        { shiftKey: true }, { isComposing: true }, { getModifierState: name => name === 'AltGraph' }
+    ]) {
+        assert.equal(h.key('j', { ctrlKey: false, altKey: false, ...overrides }).defaultPrevented, false);
+    }
+    v.root.dialog = { open: true };
+    assert.equal(h.key('k', { ctrlKey: false, altKey: false }).defaultPrevented, false);
+    assert.deepEqual(Object.values(v.root.stepButtons).map(button => button.clicks), [0, 0, 0]);
+    v.binding.dispose();
 });
 
 test('unrelated modifiers are untouched, and disposal removes listeners and active state', async () => {

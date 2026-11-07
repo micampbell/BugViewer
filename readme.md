@@ -29,6 +29,60 @@ Just add the `BugViewer` Component to your Razor page.:
 
 The [./samples](./samples) folder contains some examples of how to setup the canvas.
 
+### Styling and host applications
+
+`BugViewer`, `SceneViewer`, and `PlotViewer` own their control styles. Include the host
+application's generated `{AssemblyName}.styles.css` link, as in the Blazor templates;
+it imports the library's scoped styles automatically. Do not copy BugViewer's control
+CSS into the host application. The settings, playback, and view-cube classes use the
+`bugviewer-` prefix to avoid collisions with application classes.
+
+All three components accept `Class` and `Style` on their root element. Use a wrapper
+or a custom root class to set layout and the supported theme variables:
+
+```razor
+<div class="inspection-viewer" style="height:600px">
+    <SceneViewer Scene="request" Class="my-viewer"
+                 Style="--bugviewer-panel-width:400px;" />
+</div>
+```
+
+```css
+.inspection-viewer {
+    --bugviewer-font-family: "Segoe UI", sans-serif;
+    --bugviewer-font-size: 14px;
+    --bugviewer-panel-background: #fff;
+    --bugviewer-panel-foreground: #242424;
+    --bugviewer-control-gap: 6px;
+}
+```
+
+| Variable | Default / purpose |
+| --- | --- |
+| `--bugviewer-font-family` | `"Segoe UI", sans-serif` |
+| `--bugviewer-font-size` | `14px` |
+| `--bugviewer-line-height` | `1.4` |
+| `--bugviewer-panel-background` | Fluent neutral background, falling back to white |
+| `--bugviewer-panel-foreground` | Fluent neutral foreground, falling back to `#242424` |
+| `--bugviewer-panel-width` | `360px` maximum settings width; constrained to the viewer |
+| `--bugviewer-control-background` | Fluent neutral background for native controls |
+| `--bugviewer-control-border` | Fluent neutral stroke for borders |
+| `--bugviewer-control-size` | `32px` playback button and input height |
+| `--bugviewer-control-gap` | `6px` spacing between playback/file controls |
+| `--bugviewer-accent` | `#1769aa` for focus, active badges, and native range controls |
+
+Variables inherit through nested viewers. They apply to BugViewer's panels and native
+controls; Fluent UI controls also retain their own design-token theme. The viewer maps
+its font variables to Fluent's base typography tokens. For a full Fluent palette change,
+use the host's Fluent UI theme rather than overriding Fluent's internal markup.
+
+Keep page sizing and borders on an application-owned wrapper or custom `Class`.
+Treat internal classes and generated CSS scope attributes as implementation details;
+avoid targeting them or using broad `!important` rules for customization. Scoped styles
+protect normal embedding; they do not create a Shadow DOM boundary. Internal classes
+previously named `.scene-viewer`, `.step-controls`, and `.page-container` have been
+renamed, so migrate application rules that targeted them to a wrapper or theme variables.
+
 ### Saving and loading scenes
 
 `BugViewer.SceneRequest` is the portable presentation contract. It stores 3D geometry,

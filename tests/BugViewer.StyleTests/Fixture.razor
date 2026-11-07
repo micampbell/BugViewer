@@ -1,0 +1,37 @@
+@page "/"
+
+<button id="host-button">Host button</button>
+<output id="ready-count" hidden data-count="@readyCount"></output>
+<section id="default-viewer" class="fixture">
+    <SceneViewer Scene="timeline" ShowHeader="true" ViewerId="1" IsActive="true" Class="default-instance" Style="height:100%;" OnReady="Ready" />
+</section>
+<section id="plot-viewer" class="fixture">
+    <SceneViewer Scene="plots" ShowHeader="true" ViewerId="2" Style="height:100%;" OnReady="Ready" />
+</section>
+<section id="themed-viewer" class="fixture">
+    <SceneViewer Scene="timeline" ShowHeader="true" ViewerId="3" Class="custom-instance" OnReady="Ready"
+                 Style="height:100%; --bugviewer-panel-width:420px; --bugviewer-control-size:38px;" />
+</section>
+
+@code {
+    private int readyCount;
+    private void Ready() => readyCount++;
+    private static readonly SceneMesh triangle = new()
+    {
+        Id = "triangle", Vertices = [[-1, -1, 0], [1, -1, 0], [0, 1, 0]], Triangles = [[0, 1, 2]],
+        Colors = [ColorRgba.Red], ColorMode = MeshColoring.UniformColor
+    };
+    private readonly SceneRequest timeline = new()
+    {
+        Title = "Stepped scene", Heading = "Style fixture",
+        Steps = Enumerable.Range(0, 4).Select(i => new SceneRequest { Title = "Stepped scene", Heading = "Style fixture", Meshes = [triangle], ShowMeshBorders = false }).ToList()
+    };
+    private readonly SceneRequest plots = new()
+    {
+        Kind = PresentationKind.TwoDimensional, Title = "Stepped plot",
+        Steps = Enumerable.Range(0, 3).Select(i => new SceneRequest
+        {
+            Kind = PresentationKind.TwoDimensional, Title = "Stepped plot", Plot = new PlotRequest()
+        }).ToList()
+    };
+}

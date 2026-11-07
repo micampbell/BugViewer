@@ -1,0 +1,138 @@
+.bugviewer-root {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-sizing: border-box;
+    font-family: var(--bugviewer-font-family, "Segoe UI", sans-serif);
+    font-size: var(--bugviewer-font-size, 14px);
+    font-weight: 400;
+    font-style: normal;
+    line-height: var(--bugviewer-line-height, 1.4);
+    letter-spacing: normal;
+    text-align: start;
+    text-transform: none;
+    color: var(--bugviewer-panel-foreground, var(--colorNeutralForeground1, #242424));
+    /* Fluent's controls use these typography tokens rather than inherited fonts. */
+    --fontFamilyBase: var(--bugviewer-font-family, "Segoe UI", sans-serif);
+    --fontSizeBase300: var(--bugviewer-font-size, 14px);
+    --lineHeightBase300: var(--bugviewer-line-height, 1.4);
+}
+
+.bugviewer-canvas { display: block; width: 100%; height: 100%; box-sizing: border-box; margin: 0; padding: 0; border: 0; }
+.bugviewer-popover-body { max-height: 70vh; overflow-y: auto; }
+.bugviewer-popover :where(label, input[type="color"], h2, p, ul, li) {
+    box-sizing: border-box;
+    font: inherit;
+    color: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+    float: none;
+}
+.bugviewer-popover label { display: block; margin: 0; padding: 0; }
+/* Fluent fields and selects place these native elements in slots in the light DOM.
+   Host label/button rules can reach them even though the controls use Shadow DOM. */
+.bugviewer-root ::deep fluent-field > label[slot="label"] {
+    display: flex;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--bugviewer-panel-foreground, var(--colorNeutralForeground1, #242424));
+}
+.bugviewer-root ::deep fluent-radio-group label[slot="label"] { color: var(--bugviewer-panel-foreground, var(--colorNeutralForeground2, #616161)); }
+.bugviewer-root ::deep fluent-field > label[slot="label"][disabled] { color: var(--colorNeutralForegroundDisabled, #bdbdbd); }
+.bugviewer-root ::deep button[slot="control"] {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+    box-shadow: none;
+}
+.bugviewer-popover input[type="color"] { display: block; width: 100%; min-width: 0; max-width: 100%; height: 28px; margin: 0; padding: 2px; border: 1px solid var(--bugviewer-control-border, #b8b8b8); border-radius: 4px; background: transparent; box-shadow: none; }
+.bugviewer-popover h2 { margin: 0 0 .5em; padding: 0; font-size: 1.2em; font-weight: 600; }
+.bugviewer-popover p { margin: .5em 0; padding: 0; }
+.bugviewer-popover ul { margin: .5em 0; padding: 0 0 0 1.5em; list-style: disc; }
+.bugviewer-popover li { display: list-item; margin: .25em 0; padding: 0; }
+
+.bugviewer-error-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    box-sizing: border-box;
+    padding: 2rem;
+    text-align: center;
+    color: var(--colorPaletteRedForeground1, #b10e1c);
+    background: color-mix(in srgb, var(--bugviewer-panel-background, #fff) 94%, transparent);
+}
+
+.bugviewer-root ::deep .bugviewer-toolbar {
+    animation: bugviewer-toolbar-fade 5s ease-in-out forwards;
+}
+
+.bugviewer-popover {
+    position: absolute;
+    top: 4px;
+    z-index: 1000;
+    box-sizing: border-box;
+    pointer-events: auto;
+    border: 1px solid var(--bugviewer-control-border, var(--colorNeutralStroke1, #d1d1d1));
+    border-radius: 4px;
+    background: var(--bugviewer-panel-background, var(--colorNeutralBackground1, #fff));
+    color: var(--bugviewer-panel-foreground, var(--colorNeutralForeground1, #242424));
+    box-shadow: 0 8px 16px rgba(0, 0, 0, .18);
+}
+
+.bugviewer-popover-content {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 1em;
+    font: inherit;
+    -webkit-font-smoothing: antialiased;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+}
+
+/* The default toolbar is horizontal at the top-left. Keep each panel in the
+       viewer's positioning context, immediately to the right of its own button. */
+.bugviewer-options-popover {
+    left: 44px;
+    width: min(var(--bugviewer-panel-width, 360px), calc(100% - 48px));
+}
+
+.bugviewer-help-popover {
+    left: 80px;
+    width: min(300px, calc(100% - 84px));
+}
+
+.bugviewer-root ::deep .bugviewer-toolbar:hover:not(.bugviewer-mouse-down),
+.bugviewer-root ::deep .bugviewer-toolbar.bugviewer-popover-open {
+    animation: none;
+    opacity: 1 !important;
+}
+
+@keyframes bugviewer-toolbar-fade {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0.001;
+    }
+}
