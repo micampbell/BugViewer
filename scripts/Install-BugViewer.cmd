@@ -1,4 +1,5 @@
 @echo off
+rem This file must retain CRLF line endings for cmd.exe label handling.
 setlocal EnableExtensions DisableDelayedExpansion
 set "siteUrl=https://micampbell.github.io/BugViewer/"
 set "browser=Edge"
