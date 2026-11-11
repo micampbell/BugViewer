@@ -648,6 +648,11 @@ namespace BugViewer
                 Options.ShowAxes = !Options.ShowAxes;
                 return;
             }
+            if (e.Key == "z")
+            {
+                if (!e.Repeat) Options.ShowBackFaces = !Options.ShowBackFaces;
+                return;
+            }
             if (e.Key == "b")
             {
                 Options.ShowEdgesAt = Options.ShowEdgesAt switch

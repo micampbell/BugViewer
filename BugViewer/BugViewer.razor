@@ -96,6 +96,7 @@
                         <FluentAccordion>
                             <FluentAccordionItem Header="Display">
                                 <FluentStack Orientation="Orientation.Vertical">
+                                    <FluentCheckbox @bind-Value="Options.ShowBackFaces" Label="Show back faces (F)" />
                                     <FluentCheckbox @bind-Value="Options.ShowAxes" Label="Show Axes (X)" />
                                     <FluentCheckbox @bind-Value="Options.ShowViewCube" Label="Show View Cube" />
                                     <span>Mesh Faces (T)</span>
@@ -105,7 +106,6 @@
                                         <FluentRadio Value="@MeshFaceDisplay.Surfaces" Disabled="@(!CanShowPrimitiveSurfaces)">Surfaces</FluentRadio>
                                         <FluentRadio Value="@MeshFaceDisplay.None">None</FluentRadio>
                                     </FluentRadioGroup>
-                                    <FluentSwitch @bind-Value="Options.ShowBackFaces" Label="Show back faces" />
                                     <span>Show Border of (B)</span>
                                     <FluentRadioGroup TValue="ShowEdgesAtOption" @bind-Value="Options.ShowEdgesAt"
                                                       Orientation="Orientation.Horizontal">
@@ -238,6 +238,7 @@
                             <li><strong>,</strong> Toggle Options Panel</li>
                             <li><strong>T</strong> Cycle Mesh Faces: Triangles / Surfaces / None</li>
                             <li><strong>X</strong> Toggle Showing Grid and Axes</li>
+                            <li><strong>F</strong> Toggle Back Faces</li>
                             <li><strong>B</strong> Cycle Mesh Edges: Edges / Borders / None</li>
                         </ul>
                     </div>

@@ -41,6 +41,12 @@ static Task<SceneRequest> Export(SceneRequest request, int start, int end, int s
         .GetMethod("ExportAsync", BindingFlags.Static | BindingFlags.NonPublic)!;
     return (Task<SceneRequest>)method.Invoke(null, [request, start, end, stride, cancellationToken])!;
 }
+static Task<SceneRequest> ExportBounded(SceneRequest request, int start, int end, int stride, int limit, CancellationToken cancellationToken = default)
+{
+    var method = typeof(SceneRequest).Assembly.GetType("BugViewer.SceneRangeExporter")!
+        .GetMethod("ExportBoundedAsync", BindingFlags.Static | BindingFlags.NonPublic)!;
+    return (Task<SceneRequest>)method.Invoke(null, [request, start, end, stride, limit, cancellationToken])!;
+}
 static SceneMesh Triangle(string id, MeshColoring mode = MeshColoring.PerTriangle) => new()
 {
     Id = id, Vertices = [[0,0,0],[2,0,0],[0,2,0]], Triangles = [[2,0,1]],
@@ -169,6 +175,57 @@ Assert(!barrierGroup.Meshes.Any(mesh => mesh.Id == "step0")
     && !barrierGroup.Paths.Any(path => path.Id.StartsWith("step-paths-step-1"))
     && barrierGroup.Paths.Any(path => path.Id.StartsWith("step-paths-step-2")),
     "Step-group export crossed a null-transform history barrier.");
+var boundedSource = new SceneRequest { StepGroups = [new SceneStepGroup
+{
+    Meshes = Enumerable.Range(0, 6).Select(i => (SceneMesh?)Triangle($"bounded-{i}")).ToList(),
+    PathSource = new SceneStepPathSource { Id = "bounded-paths", Paths = Enumerable.Range(0, 6)
+        .Select(i => (IEnumerable<ScenePoint>)new[] { new ScenePoint(i, 0, 0), new ScenePoint(i, 1, 0) }).ToArray() },
+    Transforms = Enumerable.Repeat<SceneTransform?>(SceneTransform.Identity, 6).ToArray()
+}] };
+var bounded = RoundTrip(await ExportBounded(boundedSource, 4, 5, 1, 3));
+Assert(bounded.HistoryOmission == new SceneHistoryOmission(5, 3) && bounded.StepGroups[0].Count == 2,
+    "Bounded range did not persist omission metadata or selected step count.");
+Assert(SceneGeometry.ResolveStepElements(bounded.StepGroups[0], bounded.StepGroups[0].Meshes, 0)
+    .Select(item => item.Element.Id).ToHashSet().SetEquals(["bounded-2", "bounded-3", "bounded-4"]),
+    "Bounded range did not retain the newest earlier meshes and selected mesh.");
+Assert(bounded.StepGroups[0].ResolvePathIndices(0).Where(i => bounded.StepGroups[0].PathSource!.Paths[i].Any())
+    .SequenceEqual([3, 4]), "Bounded range did not apply the shared limit to paths.");
+var reexported = RoundTrip(await ExportBounded(bounded, 1, 1, 1, 0));
+Assert(reexported.HistoryOmission is not null && SceneGeometry.ResolveStepElements(reexported.StepGroups[0], reexported.StepGroups[0].Meshes, 0)
+    .Select(item => item.Element.Id).SequenceEqual(["bounded-5"]), "Re-export lost its offset or omission warning.");
+var noHistory = RoundTrip(await ExportBounded(boundedSource, 4, 5, 2, 0));
+Assert(noHistory.HistoryOmission is not null && noHistory.Steps.Single().Meshes.Select(mesh => mesh.Id)
+    .ToHashSet().SetEquals(["bounded-4", "bounded-5"]), "Grouped stride retained omitted history or lost selected objects.");
+var fullHistory = RoundTrip(await ExportBounded(boundedSource, 4, 5, 1, 20));
+Assert(fullHistory.HistoryOmission is null && SceneGeometry.ResolveStepElements(fullHistory.StepGroups[0], fullHistory.StepGroups[0].Meshes, 0).Count() == 5,
+    "Sufficient history was omitted or incorrectly warned about.");
+var boundedBarrier = RoundTrip(await ExportBounded(restored, 2, 3, 1, 0));
+Assert(boundedBarrier.HistoryOmission is null && SceneGeometry.ResolveStepElements(boundedBarrier.StepGroups[0], boundedBarrier.StepGroups[0].Meshes, 0)
+    .Select(item => item.Element.Id).SequenceEqual(["step2"]), "A barrier incorrectly retained or warned about invisible earlier objects.");
+using (var boundedCancellation = new CancellationTokenSource())
+{
+    boundedCancellation.Cancel();
+    try { await ExportBounded(boundedSource, 4, 5, 1, 2, boundedCancellation.Token); throw new Exception("Canceled bounded export succeeded."); }
+    catch (OperationCanceledException) { }
+}
+var largeTimeline = new SceneRequest { StepGroups = [new SceneStepGroup { PathSource = new SceneStepPathSource
+{
+    Id = "large", Paths = Enumerable.Range(0, 100_005).Select(i => (IEnumerable<ScenePoint>)new[]
+        { new ScenePoint(i, 0, 0), new ScenePoint(i, 1, 0) }).ToArray(), HistoryStepLimit = 100_005
+} }] };
+var largeAllocationStart = GC.GetTotalAllocatedBytes(true);
+var largeClock = System.Diagnostics.Stopwatch.StartNew();
+var largeBounded = await ExportBounded(largeTimeline, 100_000, 100_004, 1, 50_000);
+var preparationMilliseconds = largeClock.ElapsedMilliseconds;
+var preparationAllocated = GC.GetTotalAllocatedBytes(true) - largeAllocationStart;
+Assert(largeBounded.HistoryOmission is not null && largeBounded.StepGroups[0].PathSource!.Paths.Count(path => path.Any()) == 50_005,
+    "Large ranged save did not enforce its history limit.");
+largeClock.Restart();
+using (var largeStream = new MemoryStream())
+{
+    await largeBounded.SaveAsync(largeStream);
+    Console.WriteLine($"Large range: preparation {preparationMilliseconds} ms, {preparationAllocated / 1048576.0:F1} MiB allocated; serialization {largeClock.ElapsedMilliseconds} ms, {largeStream.Length / 1048576.0:F1} MiB file.");
+}
 var shortHistory = new SceneRequest { StepGroups = [new SceneStepGroup { PathSource = new SceneStepPathSource
 {
     Id = "short-history", HistoryStepLimit = 1,
@@ -390,6 +447,12 @@ await renderer.Dispatcher.InvokeAsync(async () =>
         saved.Position = 0;
         Assert(Json(SceneRequest.Load(saved)) == Json(candidate), "Saving after switching lost source steps.");
     }
+    await Open(bounded, "bounded.bugscene");
+    Assert(typeof(SceneViewer).GetField("fileWarning", flags)!.GetValue(loader) is string warning
+        && warning.Contains("before saved step 5"), "Opening an incomplete scene did not show its history warning.");
+    await Open(single, "single.bugscene");
+    Assert(typeof(SceneViewer).GetField("fileWarning", flags)!.GetValue(loader) is null,
+        "Opening a complete scene retained the prior warning.");
     foreach (var file in new[] { new MemoryBrowserFile("bad.json", Encoding.UTF8.GetBytes("not json")),
         new MemoryBrowserFile("oversized.json", [], long.MaxValue) })
     {
@@ -510,6 +573,18 @@ await renderer.Dispatcher.InvokeAsync(async () =>
     using var rangedDownload = new MemoryStream(fileRuntime.Downloads.Last().Data);
     Assert(Json(SceneRequest.Load(rangedDownload)) == Json(historicalGroup), "Save As did not export the selected grouped range.");
     Assert(Json(await loader.GetSceneAsync()) == Json(restored), "Saving a range changed the active scene.");
+    await Open(boundedSource, "bounded-source.bugscene");
+    await loader.ShowSaveAsAsync();
+    typeof(SceneViewer).GetField("saveStartStep", flags)!.SetValue(loader, "5");
+    typeof(SceneViewer).GetField("saveEndStep", flags)!.SetValue(loader, "6");
+    typeof(SceneViewer).GetField("saveMaximumEarlierObjects", flags)!.SetValue(loader, "0");
+    await FileCommand("ConfirmSaveAsAsync");
+    Assert(typeof(SceneViewer).GetField("fileWarning", flags)!.GetValue(loader) is string saveWarning
+        && saveWarning.Contains("before saved step 5"), "Saving omitted history without warning the user.");
+    using (var boundedDownload = new MemoryStream(fileRuntime.Downloads.Last().Data))
+        Assert(SceneRequest.Load(boundedDownload).HistoryOmission == new SceneHistoryOmission(5, 0),
+            "The saved file lost its omission warning.");
+    Assert(Json(await loader.GetSceneAsync()) == Json(boundedSource), "Bounded saving changed the active source.");
     await Open(plots, "plots.json");
     await loader.ShowSaveAsAsync();
     typeof(SceneViewer).GetField("saveStepStride", flags)!.SetValue(loader, "2");

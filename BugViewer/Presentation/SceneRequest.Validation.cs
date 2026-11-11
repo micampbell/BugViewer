@@ -28,8 +28,10 @@ public partial record SceneRequest
         if (!ancestors.Add(this)) throw new InvalidDataException("Scene steps contain a cycle.");
         try
         {
-            if (Format != "BugViewer.SceneRequest" || Version != 1)
+            if (Format != "BugViewer.SceneRequest" || (Version != 1 && Version != 2))
                 throw new InvalidDataException($"Unsupported scene format '{Format}' or version {Version}.");
+            if (HistoryOmission is { } omission && (Version < 2 || omission.StartStep < 1 || omission.MaximumEarlierObjects < 0))
+                throw new InvalidDataException("Scene history omission metadata is invalid.");
             if (!Enum.IsDefined(Kind) || !Enum.IsDefined(AutoResetCamera) || !Enum.IsDefined(ShowSurfacesAs)
                 || InitialStep < 0 || Meshes is null || Paths is null || PathBatches is null
                 || PointSets is null || Steps is null || StepGroups is null || Billboards is null
@@ -57,7 +59,10 @@ public partial record SceneRequest
             foreach (var batch in PathBatches) { if (batch is null) throw new InvalidDataException("A path batch is null."); Id(batch.Id, pathIds); }
             foreach (var group in StepGroups)
             {
-                if (group is null || group.Meshes is null) throw new InvalidDataException("A step group is invalid.");
+                if (group is null || group.Meshes is null || group.StepOffset < 0 || group.DisplayStepCount < 1
+                    || (long)group.StepOffset + (group.DisplayStepCount ?? 0) > int.MaxValue
+                    || Version < 2 && (group.StepOffset != 0 || group.DisplayStepCount is not null))
+                    throw new InvalidDataException("A step group is invalid.");
                 foreach (var mesh in group.Meshes)
                     if (mesh is not null) { ValidateMesh(mesh, meshIds); yield return true; }
                 if (group.Transforms is not null)

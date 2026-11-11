@@ -37,11 +37,12 @@ public partial class SceneViewer
     private int loadPercent;
     private bool isBusy, disposed, fileOperationCanCancel;
     private string? fileOperationStatus;
-    private string? openedFileName, fileError;
+    private string? openedFileName, fileError, fileWarning;
     private ElementReference saveAsDialog, saveAsInput;
     private readonly string saveAsTitleId = $"scene-save-title-{Guid.NewGuid():N}";
     private string saveAsName = "";
     private string saveStartStep = "1", saveEndStep = "1", saveStepStride = "1";
+    private string saveMaximumEarlierObjects = "50000";
     private string? saveAsError;
     private bool showSaveAsAfterRender;
 
@@ -128,6 +129,7 @@ public partial class SceneViewer
         saveStartStep = "1";
         saveEndStep = Math.Max(1, StepCount).ToString();
         saveStepStride = "1";
+        saveMaximumEarlierObjects = "50000";
         saveAsError = null;
         showSaveAsAfterRender = true;
         return InvokeAsync(StateHasChanged);
@@ -142,7 +144,7 @@ public partial class SceneViewer
 
     /// <summary>Completes a save after the browser's file picker returns a destination.</summary>
     [JSInvokable]
-    public async Task ConfirmPickedSceneSaveAsync(string name, string start, string end, string stride, IJSObjectReference? handle)
+    public async Task ConfirmPickedSceneSaveAsync(string name, string start, string end, string stride, IJSObjectReference? handle, string maximumEarlierObjects = "50000")
     {
         try
         {
@@ -152,6 +154,7 @@ public partial class SceneViewer
                 saveStartStep = start;
                 saveEndStep = end;
                 saveStepStride = stride;
+                saveMaximumEarlierObjects = maximumEarlierObjects;
                 if (handle is not null && !name.EndsWith(".bugscene", StringComparison.OrdinalIgnoreCase))
                 {
                     saveAsError = "Choose a file name ending in .bugscene.";
@@ -202,6 +205,11 @@ public partial class SceneViewer
             saveAsError = $"Enter a start and end between 1 and {StepCount}, with the start no greater than the end, and a positive stride.";
             return;
         }
+        if (StepCount > 0 && (!int.TryParse(saveMaximumEarlierObjects, out var maximum) || maximum < 0))
+        {
+            saveAsError = "Enter a nonnegative maximum number of earlier objects.";
+            return;
+        }
         name = SceneFileName(name);
         await files.CloseSaveAsAsync(saveAsDialog);
         await SaveSceneCoreAsync(name, start, end, stride, handle);
@@ -226,7 +234,8 @@ public partial class SceneViewer
             var scene = await GetSceneAsync();
             saving.Token.ThrowIfCancellationRequested();
             if (StepCount > 0)
-                scene = await SceneRangeExporter.ExportAsync(scene, start - 1, end - 1, stride, saving.Token);
+                scene = await SceneRangeExporter.ExportBoundedAsync(scene, start - 1, end - 1, stride,
+                    int.Parse(saveMaximumEarlierObjects), saving.Token);
             fileOperationStatus = "Writing scene…";
             await RefreshFileOperationAsync();
             saving.Token.ThrowIfCancellationRequested();
@@ -240,6 +249,7 @@ public partial class SceneViewer
             if (handle is null) await files.DownloadAsync(name, stream);
             else await files.WriteFileAsync(handle, stream);
             openedFileName = name;
+            fileWarning = HistoryWarning(scene.HistoryOmission);
         }
         catch (OperationCanceledException) when (disposed || saving.IsCancellationRequested) { }
         catch (Exception exception) when (IsFileException(exception))
@@ -272,6 +282,7 @@ public partial class SceneViewer
         lastRequest = null;
         openedFileName = null;
         fileError = null;
+        fileWarning = HistoryWarning(scene.HistoryOmission);
         await OnParametersSetAsync();
         StateHasChanged();
     });
@@ -294,4 +305,7 @@ public partial class SceneViewer
     /// <summary>Saves the complete request to a local file.</summary>
     public async Task SaveSceneAsync(string path, CancellationToken cancellationToken = default) =>
         await (await GetSceneAsync()).SaveAsync(path, cancellationToken);
+
+    private static string? HistoryWarning(SceneHistoryOmission? omission) => omission is null ? null :
+        $"Some objects from before saved step {omission.StartStep} are missing because the file was limited to {omission.MaximumEarlierObjects:N0} earlier objects.";
 }

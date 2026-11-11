@@ -18,7 +18,7 @@ public partial record SceneRequest
     public Guid RequestId { get; init; } = Guid.NewGuid();
     /// <summary>File format identifier. Use the default value when creating requests.</summary>
     [JsonRequired] public string Format { get; init; } = "BugViewer.SceneRequest";
-    /// <summary>File schema version. Currently 1.</summary>
+    /// <summary>File schema version. New requests default to 1; ranged indexed saves use version 2.</summary>
     [JsonRequired] public int Version { get; init; } = 1;
     /// <summary>Saved display settings, or null to use viewer defaults.</summary>
     public BugViewerOptions? Options { get; init; }
@@ -26,6 +26,9 @@ public partial record SceneRequest
     public CameraState? Camera { get; init; }
     /// <summary>Zero-based step to display when the request is opened.</summary>
     public int InitialStep { get; init; }
+    /// <summary>Describes earlier visible history omitted from a ranged save, if any.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SceneHistoryOmission? HistoryOmission { get; init; }
     /// <summary>Text labels in the 3D scene.</summary>
     public List<TextBillboard> Billboards { get; init; } = [];
     /// <summary>Selects the 3D renderer or 2D plot viewer.</summary>
@@ -61,6 +64,12 @@ public partial record SceneRequest
 /// <summary>Indexed mesh and path sources with optional transforms and null-transform history barriers.</summary>
 public sealed class SceneStepGroup
 {
+    /// <summary>Index in the source timeline corresponding to the first displayed step.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int StepOffset { get; init; }
+    /// <summary>Number of displayed steps, or null to derive it from the source.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DisplayStepCount { get; init; }
     /// <summary>Source meshes by step. Null entries preserve empty step slots.</summary>
     public List<SceneMesh?> Meshes { get; init; } = [];
     /// <summary>Indexed source paths and their history settings.</summary>
@@ -68,7 +77,7 @@ public sealed class SceneStepGroup
     /// <summary>Per-step transforms. A null list displays all sources; a null entry displays only that step and starts a history barrier.</summary>
     public IReadOnlyList<SceneTransform?>? Transforms { get; init; }
     /// <summary>Number of steps across all sources and transforms.</summary>
-    public int Count => Math.Max(Math.Max(Meshes.Count, PathSource?.Count ?? 0), Transforms?.Count ?? 0);
+    public int Count => DisplayStepCount ?? Math.Max(0, Math.Max(Math.Max(Meshes.Count, PathSource?.Count ?? 0), Transforms?.Count ?? 0) - StepOffset);
 
     private readonly List<int> nullTransformIndices = [];
     private int transformsInspectedThrough = -1;
@@ -92,6 +101,7 @@ public sealed class SceneStepGroup
     /// <summary>Returns source path indices visible at a step, respecting history limits and transform barriers.</summary>
     public IEnumerable<int> ResolvePathIndices(int stepIndex)
     {
+        stepIndex += StepOffset;
         if (PathSource is not { } source || source.HistoryStepLimit == 0
             || source.Count == 0 || stepIndex < 0)
             yield break;
@@ -132,6 +142,9 @@ public sealed class SceneStepGroup
             yield return index;
     }
 }
+
+/// <summary>Records that a ranged save omitted visible objects from earlier steps.</summary>
+public sealed record SceneHistoryOmission(int StartStep, int MaximumEarlierObjects);
 
 /// <summary>Indexed double-precision paths whose coordinates are transformed only when resolving a visible step.</summary>
 public sealed class SceneStepPathSource

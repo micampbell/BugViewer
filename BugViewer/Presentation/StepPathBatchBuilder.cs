@@ -9,9 +9,10 @@ public static class StepPathBatchBuilder
     public static LineData? Build(SceneStepGroup group, SceneStepPathSource source, int stepIndex)
     {
         var transforms = group.Transforms;
-        SceneTransform? transform = transforms is not null && stepIndex < transforms.Count
-            && transforms[stepIndex] is not null
-            ? transforms[stepIndex]
+        var sourceStepIndex = stepIndex + group.StepOffset;
+        SceneTransform? transform = transforms is not null && sourceStepIndex < transforms.Count
+            && transforms[sourceStepIndex] is not null
+            ? transforms[sourceStepIndex]
             : null;
         var vertices = new List<NumericsVector3>();
         var thicknesses = new List<float>();

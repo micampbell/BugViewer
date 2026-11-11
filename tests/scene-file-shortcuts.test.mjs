@@ -205,7 +205,7 @@ test('native save picker opens synchronously, restricts the extension and passes
     let options;
     h.window.showSaveFilePicker = args => { options = args; return Promise.resolve({ name: 'picked.bugscene' }); };
     const values = { '[data-save-name]': 'old.bugscene.json', '[data-save-start]': '1',
-        '[data-save-end]': '4', '[data-save-stride]': '2' };
+        '[data-save-end]': '4', '[data-save-stride]': '2', '[data-save-maximum-earlier]': '37' };
     const form = { dataset: { stepCount: '4' }, matches: () => true,
         querySelector: selector => ({ value: values[selector] }) };
     const event = new Event('submit', { cancelable: true });
@@ -218,6 +218,7 @@ test('native save picker opens synchronously, restricts the extension and passes
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(calls[0][0], 'ConfirmPickedSceneSaveAsync');
     assert.deepEqual(calls[0].slice(1, 5), ['picked.bugscene', '1', '4', '2']);
+    assert.equal(calls[0][6], '37');
     v.binding.dispose();
 });
 

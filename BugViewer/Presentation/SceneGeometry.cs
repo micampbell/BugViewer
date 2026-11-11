@@ -10,6 +10,7 @@ public static class SceneGeometry
         SceneStepGroup group, IReadOnlyList<T?> elements, int stepIndex) where T : class
     {
         if (stepIndex < 0) yield break;
+        stepIndex += group.StepOffset;
         var transforms = group.Transforms;
         if (transforms is null)
         {

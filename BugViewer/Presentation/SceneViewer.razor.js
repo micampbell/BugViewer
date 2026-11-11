@@ -68,14 +68,16 @@ class SceneFileControls {
             const start = form.querySelector('[data-save-start]')?.value ?? '1';
             const end = form.querySelector('[data-save-end]')?.value ?? '1';
             const stride = form.querySelector('[data-save-stride]')?.value ?? '1';
+            const maximumEarlier = form.querySelector('[data-save-maximum-earlier]')?.value ?? '50000';
             const validNumber = value => /^[+-]?\d+$/.test(value.trim()) && Number.isSafeInteger(Number(value));
             const invalid = !name || /[<>:"/\\|?*\x00-\x1f\x7f-\x9f]/.test(name) || name.endsWith('.') ||
                 (count > 0 && (![start, end, stride].every(validNumber) || Number(start) < 1 ||
-                    Number(end) < Number(start) || Number(end) > count || Number(stride) < 1 || Number(stride) > 2147483647));
+                    Number(end) < Number(start) || Number(end) > count || Number(stride) < 1 || Number(stride) > 2147483647 ||
+                    !validNumber(maximumEarlier) || Number(maximumEarlier) < 0 || Number(maximumEarlier) > 2147483647));
             if (this.#picking) return;
             // .NET owns validation and the fallback download; no native picker is shown for invalid input.
             if (invalid || typeof window.showSaveFilePicker !== 'function') {
-                dotNet.invokeMethodAsync('ConfirmPickedSceneSaveAsync', name, start, end, stride, null)
+                dotNet.invokeMethodAsync('ConfirmPickedSceneSaveAsync', name, start, end, stride, null, maximumEarlier)
                     .catch(error => console.error('Could not start scene save:', error));
                 return;
             }
@@ -99,7 +101,7 @@ class SceneFileControls {
                         return;
                     }
                     await dotNet.invokeMethodAsync('ConfirmPickedSceneSaveAsync', handle.name, start, end, stride,
-                        DotNet.createJSObjectReference(handle));
+                        DotNet.createJSObjectReference(handle), maximumEarlier);
                 })
                 .catch(async error => {
                     if (error.name === 'AbortError') return;
