@@ -1,2 +1,6 @@
 # Keep CRLF in the Git blob so the directly downloaded batch file runs in cmd.exe.
-/scripts/Install-BugViewer.cmd -text
+/scripts/Install-BugViewer*.cmd -text
+
+# Keep LF for macOS and Linux scripts
+/scripts/*.sh text eol=lf
+/scripts/*.command text eol=lf

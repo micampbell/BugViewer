@@ -8,19 +8,18 @@ set "checkOnly="
 
 :arguments
 if "%~1"=="" goto argumentsDone
-if /i "%~1"=="--chrome" (
-    set "browser=Chrome"
-    set "exe=chrome.exe"
+if /i "%~1"=="--edge" (
+    set "browser=Edge"
+    set "exe=msedge.exe"
 ) else if /i "%~1"=="--check" (
     set "checkOnly=1"
 ) else if /i "%~1"=="--help" (
-    echo Usage: Install-BugViewer.cmd [--chrome] [--check]
-    echo   --chrome  Install using Chrome instead of Edge.
+    echo Usage: Install-BugViewerEdge.cmd [--check]
     echo   --check   Check the browser and deployed manifest without opening windows.
     exit /b 0
 ) else (
     echo Unknown option.
-    echo Usage: Install-BugViewer.cmd [--chrome] [--check]
+    echo Usage: Install-BugViewerEdge.cmd [--check]
     exit /b 1
 )
 shift
@@ -33,7 +32,7 @@ if not defined browserPath call :findBrowser "HKLM\Software\Microsoft\Windows\Cu
 if not defined browserPath call :findBrowser "HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\%exe%"
 if not defined browserPath for /f "delims=" %%F in ('where "%exe%" 2^>nul') do if not defined browserPath set "browserPath=%%F"
 if not defined browserPath (
-    echo %browser% was not found. Install it or run this script with --chrome.
+    echo %browser% was not found. Please install Microsoft Edge.
     goto failure
 )
 
